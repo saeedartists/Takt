@@ -5,11 +5,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import {
-  DEFAULT_COLORS,
-  DEFAULT_MULTIPLIERS,
-  ThemeProvider as OvokThemeProvider,
-} from '@ovok/native';
+import { DEFAULT_COLORS, DEFAULT_MULTIPLIERS, OvokThemeProvider } from '@/lib/ovok-theme-provider';
 import { SampleDataBanner } from '@/components/sample-data-banner';
 import { installOvokMocks } from '@/lib/mock-server';
 import { ovokClient } from '@/lib/ovok-client';

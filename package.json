@@ -7,7 +7,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "prebuild": "expo prebuild",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "expo export --platform web"
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "^0.4.2",
