@@ -39,6 +39,13 @@ const meta = (daysAgo = 0): FhirResource['meta'] => ({
   lastUpdated: isoDaysAgo(daysAgo),
 });
 
+const isoAt = (daysAgo: number, hour: number, minute: number): string => {
+  const d = new Date(NOW);
+  d.setDate(d.getDate() - daysAgo);
+  d.setHours(hour, minute, 0, 0);
+  return d.toISOString();
+};
+
 /* ------------------------------------------------------------------ */
 /* Patients                                                            */
 /* ------------------------------------------------------------------ */
@@ -449,6 +456,219 @@ export const QUESTIONNAIRES: FhirResource[] = [
   },
 ];
 
+
+
+/* ------------------------------------------------------------------ */
+/* Medication adherence fixtures for Takt                              */
+/* ------------------------------------------------------------------ */
+
+export const MEDICATIONS: FhirResource[] = [
+  {
+    resourceType: 'Medication',
+    id: 'med-ramipril',
+    meta: meta(20),
+    status: 'active',
+    code: { text: 'Ramipril' },
+    form: { text: 'Tablet' },
+    extension: [
+      {
+        url: 'https://actimi.com/fhir/takt/strength',
+        valueString: '5 mg',
+      },
+    ],
+  },
+  {
+    resourceType: 'Medication',
+    id: 'med-metformin',
+    meta: meta(20),
+    status: 'active',
+    code: { text: 'Metformin' },
+    form: { text: 'Tablet' },
+    extension: [
+      {
+        url: 'https://actimi.com/fhir/takt/strength',
+        valueString: '850 mg',
+      },
+    ],
+  },
+];
+
+export const MEDICATION_REQUESTS: FhirResource[] = [
+  {
+    resourceType: 'MedicationRequest',
+    id: 'mr-ramipril',
+    meta: meta(20),
+    status: 'active',
+    intent: 'order',
+    subject: { reference: 'Patient/pat-001' },
+    medicationReference: { reference: 'Medication/med-ramipril' },
+    authoredOn: isoDaysAgo(20).slice(0, 10),
+    dosageInstruction: [
+      {
+        timing: {
+          repeat: {
+            frequency: 1,
+            period: 1,
+            periodUnit: 'd',
+            timeOfDay: ['08:00:00'],
+          },
+        },
+      },
+    ],
+    dispenseRequest: { quantity: { value: 28, unit: 'tablets' } },
+  },
+  {
+    resourceType: 'MedicationRequest',
+    id: 'mr-metformin',
+    meta: meta(18),
+    status: 'active',
+    intent: 'order',
+    subject: { reference: 'Patient/pat-001' },
+    medicationReference: { reference: 'Medication/med-metformin' },
+    authoredOn: isoDaysAgo(18).slice(0, 10),
+    dosageInstruction: [
+      {
+        timing: {
+          repeat: {
+            frequency: 1,
+            period: 1,
+            periodUnit: 'd',
+            timeOfDay: ['08:00:00', '20:00:00'],
+          },
+        },
+      },
+    ],
+    dispenseRequest: { quantity: { value: 56, unit: 'tablets' } },
+  },
+];
+
+export const MEDICATION_ADMINS: FhirResource[] = [
+  {
+    resourceType: 'MedicationAdministration',
+    id: 'ma-1',
+    meta: meta(1),
+    status: 'completed',
+    subject: { reference: 'Patient/pat-001' },
+    medicationReference: { reference: 'Medication/med-ramipril' },
+    request: { reference: 'MedicationRequest/mr-ramipril' },
+    effectiveDateTime: isoAt(1, 8, 4),
+    extension: [
+      {
+        url: 'https://actimi.com/fhir/takt/scheduled-time',
+        valueDateTime: isoAt(1, 8, 0),
+      },
+    ],
+  },
+  {
+    resourceType: 'MedicationAdministration',
+    id: 'ma-2',
+    meta: meta(1),
+    status: 'completed',
+    subject: { reference: 'Patient/pat-001' },
+    medicationReference: { reference: 'Medication/med-metformin' },
+    request: { reference: 'MedicationRequest/mr-metformin' },
+    effectiveDateTime: isoAt(1, 8, 12),
+    extension: [
+      {
+        url: 'https://actimi.com/fhir/takt/scheduled-time',
+        valueDateTime: isoAt(1, 8, 0),
+      },
+    ],
+  },
+  {
+    resourceType: 'MedicationAdministration',
+    id: 'ma-3',
+    meta: meta(1),
+    status: 'not-done',
+    subject: { reference: 'Patient/pat-001' },
+    medicationReference: { reference: 'Medication/med-metformin' },
+    request: { reference: 'MedicationRequest/mr-metformin' },
+    effectiveDateTime: isoAt(1, 20, 25),
+    statusReason: [
+      {
+        coding: [
+          {
+            system: 'http://terminology.hl7.org/CodeSystem/reason-medication-not-given',
+            code: 'patient-refusal',
+            display: 'Skipped',
+          },
+        ],
+      },
+    ],
+    extension: [
+      {
+        url: 'https://actimi.com/fhir/takt/scheduled-time',
+        valueDateTime: isoAt(1, 20, 0),
+      },
+    ],
+  },
+  {
+    resourceType: 'MedicationAdministration',
+    id: 'ma-4',
+    meta: meta(2),
+    status: 'completed',
+    subject: { reference: 'Patient/pat-001' },
+    medicationReference: { reference: 'Medication/med-ramipril' },
+    request: { reference: 'MedicationRequest/mr-ramipril' },
+    effectiveDateTime: isoAt(2, 8, 3),
+    extension: [
+      {
+        url: 'https://actimi.com/fhir/takt/scheduled-time',
+        valueDateTime: isoAt(2, 8, 0),
+      },
+    ],
+  },
+  {
+    resourceType: 'MedicationAdministration',
+    id: 'ma-5',
+    meta: meta(2),
+    status: 'completed',
+    subject: { reference: 'Patient/pat-001' },
+    medicationReference: { reference: 'Medication/med-metformin' },
+    request: { reference: 'MedicationRequest/mr-metformin' },
+    effectiveDateTime: isoAt(2, 8, 6),
+    extension: [
+      {
+        url: 'https://actimi.com/fhir/takt/scheduled-time',
+        valueDateTime: isoAt(2, 8, 0),
+      },
+    ],
+  },
+];
+
+export const CONSENTS: FhirResource[] = [
+  {
+    resourceType: 'Consent',
+    id: 'consent-takt-1',
+    meta: meta(3),
+    status: 'active',
+    patient: { reference: 'Patient/pat-001' },
+    dateTime: isoDaysAgo(3),
+    scope: {
+      coding: [
+        {
+          system: 'http://terminology.hl7.org/CodeSystem/consentscope',
+          code: 'patient-privacy',
+        },
+      ],
+    },
+    category: [
+      {
+        coding: [
+          {
+            system: 'http://loinc.org',
+            code: '59284-0',
+            display: 'Patient Consent',
+          },
+        ],
+      },
+    ],
+    policyRule: {
+      text: 'takt-consent-v1',
+    },
+  },
+];
+
 /* ------------------------------------------------------------------ */
 /* Seed table                                                          */
 /* ------------------------------------------------------------------ */
@@ -463,4 +683,8 @@ export const SEED: Record<string, FhirResource[]> = {
   Practitioner: PRACTITIONERS,
   Observation: OBSERVATIONS,
   Questionnaire: QUESTIONNAIRES,
+  Medication: MEDICATIONS,
+  MedicationRequest: MEDICATION_REQUESTS,
+  MedicationAdministration: MEDICATION_ADMINS,
+  Consent: CONSENTS,
 };

@@ -1,0 +1,127 @@
+import { useRouter } from 'expo-router';
+import { Pressable, Text, View } from 'react-native';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorState,
+  ListGroup,
+  ListRow,
+  LoadingState,
+  PageHeader,
+  PageShell,
+  SectionHeader,
+  Stack,
+  categoryColors,
+  radius,
+  spacing,
+  typography,
+  useTokens,
+} from '@/components/ui';
+import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
+import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
+import { useLocale } from '@/lib/takt/l10n';
+
+export default function MedicationsScreen() {
+  const { c } = useTokens();
+  const { t } = useLocale();
+  const router = useRouter();
+
+  const patient = usePrimaryPatient();
+  const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
+  const plans = useMedicationPlans(patientRef);
+
+  const active = plans.plans.filter((plan) => plan.request.status === 'active').length;
+  const paused = plans.plans.filter((plan) => plan.request.status === 'on-hold').length;
+  const archived = plans.plans.filter((plan) => plan.request.status === 'stopped').length;
+
+  const statusLabel = (status: string): string => {
+    if (status === 'on-hold') return t('pausedMeds');
+    if (status === 'stopped') return t('archivedMeds');
+    return t('activeMeds');
+  };
+
+  const cadenceLabel = (plan: (typeof plans.plans)[number]): string => {
+    if (plan.cadence === 'daily') return t('cadenceDaily');
+    if (plan.cadence === 'weekdays') return t('cadenceWeekdays');
+    return t('cadenceSpecificDays');
+  };
+
+  return (
+    <PageShell>
+      <PageHeader
+        title={t('medications')}
+        action={<Button label={t('addMedication')} onPress={() => router.push('/medications/new')} />}
+      />
+
+      <Stack>
+        <Card>
+          <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
+            <Text style={[typography.headline, { color: c.textSecondary }]}>{t('regimen')}</Text>
+            <View style={{ flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' }}>
+              <Badge label={`${active.toString()} ${t('activeMeds')}`} tone="success" />
+              <Badge label={`${paused.toString()} ${t('pausedMeds')}`} tone="warning" />
+              <Badge label={`${archived.toString()} ${t('archivedMeds')}`} tone="destructive" />
+            </View>
+          </View>
+        </Card>
+
+        <View>
+          <SectionHeader title={t('regimen')} />
+          {patient.isLoading || plans.isLoading ? (
+            <LoadingState label={t('loadingMeds')} />
+          ) : patient.error || plans.error ? (
+            <ErrorState
+              description={t('loadMedicationsError')}
+              onRetry={() => {
+                void patient.refetch();
+                void plans.requestsQuery.refetch();
+                void plans.medicationsQuery.refetch();
+              }}
+            />
+          ) : plans.plans.length === 0 ? (
+            <EmptyState
+              title={t('noMedsYet')}
+              description={t('addMedicationCadenceHint')}
+              action={<Button label={t('addMedication')} onPress={() => router.push('/medications/new')} />}
+            />
+          ) : (
+            <ListGroup>
+              {plans.plans.map((plan, index) => (
+                <ListRow
+                  key={plan.request.id}
+                  isFirst={index === 0}
+                  title={plan.label}
+                  subtitle={`${cadenceLabel(plan)} · ${plan.times.join(', ')} · ${plan.form || t('formNotSet')}`}
+                  value={statusLabel(plan.request.status)}
+                  leading={
+                    <View
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: radius.full,
+                        backgroundColor: `${categoryColors.medication}1F`,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={[typography.caption, { color: categoryColors.medication, fontWeight: '700' }]}>M</Text>
+                    </View>
+                  }
+                  onPress={() =>
+                    router.push({ pathname: '/medications/[id]', params: { id: plan.request.id } })
+                  }
+                />
+              ))}
+            </ListGroup>
+          )}
+        </View>
+
+        <Pressable onPress={() => router.push('/report')} style={{ alignSelf: 'flex-start' }}>
+          <Text style={[typography.subhead, { color: c.accent }]}>{t('openReport')}</Text>
+        </Pressable>
+      </Stack>
+    </PageShell>
+  );
+}

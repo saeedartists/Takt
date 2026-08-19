@@ -1,26 +1,40 @@
 {
   "expo": {
-    "name": "Ovok App",
-    "slug": "ovok-app",
-    "scheme": "ovok-app",
+    "name": "Takt",
+    "slug": "takt",
+    "scheme": "takt",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ovok.app"
+      "bundleIdentifier": "com.actimi.takt"
     },
     "android": {
-      "package": "com.ovok.app"
+      "package": "com.actimi.takt",
+      "permissions": [
+        "SCHEDULE_EXACT_ALARM"
+      ]
     },
     "web": {
       "bundler": "metro"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          "color": "#B4611C",
+          "sounds": []
+        }
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "notification": {
+      "color": "#B4611C"
     }
   }
 }
