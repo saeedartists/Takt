@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import {
   Badge,
   Button,
@@ -32,21 +32,43 @@ export default function MedicationsScreen() {
   const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
   const plans = useMedicationPlans(patientRef);
 
-  const active = plans.plans.filter((plan) => plan.request.status === 'active').length;
-  const paused = plans.plans.filter((plan) => plan.request.status === 'on-hold').length;
-  const archived = plans.plans.filter((plan) => plan.request.status === 'stopped').length;
-
-  const statusLabel = (status: string): string => {
-    if (status === 'on-hold') return t('pausedMeds');
-    if (status === 'stopped') return t('archivedMeds');
-    return t('activeMeds');
-  };
+  const activePlans = plans.plans.filter((plan) => plan.request.status === 'active');
+  const pausedPlans = plans.plans.filter((plan) => plan.request.status === 'on-hold');
+  const archivedPlans = plans.plans.filter((plan) => plan.request.status === 'stopped');
 
   const cadenceLabel = (plan: (typeof plans.plans)[number]): string => {
     if (plan.cadence === 'daily') return t('cadenceDaily');
     if (plan.cadence === 'weekdays') return t('cadenceWeekdays');
     return t('cadenceSpecificDays');
   };
+
+  const renderList = (rows: typeof plans.plans) => (
+    <ListGroup>
+      {rows.map((plan, index) => (
+        <ListRow
+          key={plan.request.id}
+          isFirst={index === 0}
+          title={plan.label}
+          subtitle={`${cadenceLabel(plan)} · ${plan.times.join(', ')} · ${plan.form || t('formNotSet')}`}
+          leading={
+            <View
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: radius.full,
+                backgroundColor: `${categoryColors.medication}1F`,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={[typography.caption, { color: categoryColors.medication, fontWeight: '700' }]}>M</Text>
+            </View>
+          }
+          onPress={() => router.push({ pathname: '/medications/[id]', params: { id: plan.request.id } })}
+        />
+      ))}
+    </ListGroup>
+  );
 
   return (
     <PageShell>
@@ -57,18 +79,18 @@ export default function MedicationsScreen() {
 
       <Stack>
         <Card>
-          <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
+          <View style={{ padding: spacing(4), gap: spacing(3) }}>
             <Text style={[typography.headline, { color: c.textSecondary }]}>{t('regimen')}</Text>
             <View style={{ flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' }}>
-              <Badge label={`${active.toString()} ${t('activeMeds')}`} tone="success" />
-              <Badge label={`${paused.toString()} ${t('pausedMeds')}`} tone="warning" />
-              <Badge label={`${archived.toString()} ${t('archivedMeds')}`} tone="destructive" />
+              <Badge label={`${activePlans.length.toString()} ${t('activeMeds')}`} tone="success" />
+              <Badge label={`${pausedPlans.length.toString()} ${t('pausedMeds')}`} tone="warning" />
+              <Badge label={`${archivedPlans.length.toString()} ${t('archivedMeds')}`} tone="destructive" />
             </View>
+            <Button kind="secondary" label={t('openReport')} onPress={() => router.push('/report')} />
           </View>
         </Card>
 
         <View>
-          <SectionHeader title={t('regimen')} />
           {patient.isLoading || plans.isLoading ? (
             <LoadingState label={t('loadingMeds')} />
           ) : patient.error || plans.error ? (
@@ -87,40 +109,30 @@ export default function MedicationsScreen() {
               action={<Button label={t('addMedication')} onPress={() => router.push('/medications/new')} />}
             />
           ) : (
-            <ListGroup>
-              {plans.plans.map((plan, index) => (
-                <ListRow
-                  key={plan.request.id}
-                  isFirst={index === 0}
-                  title={plan.label}
-                  subtitle={`${cadenceLabel(plan)} · ${plan.times.join(', ')} · ${plan.form || t('formNotSet')}`}
-                  value={statusLabel(plan.request.status)}
-                  leading={
-                    <View
-                      style={{
-                        width: 30,
-                        height: 30,
-                        borderRadius: radius.full,
-                        backgroundColor: `${categoryColors.medication}1F`,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Text style={[typography.caption, { color: categoryColors.medication, fontWeight: '700' }]}>M</Text>
-                    </View>
-                  }
-                  onPress={() =>
-                    router.push({ pathname: '/medications/[id]', params: { id: plan.request.id } })
-                  }
-                />
-              ))}
-            </ListGroup>
+            <Stack>
+              {activePlans.length > 0 ? (
+                <View>
+                  <SectionHeader title={t('activeMeds')} />
+                  {renderList(activePlans)}
+                </View>
+              ) : null}
+
+              {pausedPlans.length > 0 ? (
+                <View>
+                  <SectionHeader title={t('pausedMeds')} />
+                  {renderList(pausedPlans)}
+                </View>
+              ) : null}
+
+              {archivedPlans.length > 0 ? (
+                <View>
+                  <SectionHeader title={t('archivedMeds')} />
+                  {renderList(archivedPlans)}
+                </View>
+              ) : null}
+            </Stack>
           )}
         </View>
-
-        <Pressable onPress={() => router.push('/report')} style={{ alignSelf: 'flex-start' }}>
-          <Text style={[typography.subhead, { color: c.accent }]}>{t('openReport')}</Text>
-        </Pressable>
       </Stack>
     </PageShell>
   );

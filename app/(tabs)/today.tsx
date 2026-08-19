@@ -23,7 +23,7 @@ import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useRecordDose, useUndoDose } from '@/lib/hooks/use-takt-mutations';
-import { buildDoseOccurrencesForDay, adherenceSummary, doseSubtitle, upcomingCount } from '@/lib/takt/schedule';
+import { adherenceSummary, buildDoseOccurrencesForDay, doseSubtitle, upcomingCount } from '@/lib/takt/schedule';
 import { useLocale } from '@/lib/takt/l10n';
 import { scheduleSnoozeReminder } from '@/lib/takt/reminders';
 import { startOfDay } from '@/lib/takt/time';
@@ -72,6 +72,12 @@ export default function TodayScreen() {
   const summary = adherenceSummary(todayDoses);
   const toCome = upcomingCount(todayDoses);
   const dueNow = todayDoses.filter((dose) => dose.state === 'due').length;
+
+  const nextActionDose = useMemo(
+    () => todayDoses.find((dose) => dose.state === 'due') ?? todayDoses.find((dose) => dose.state === 'scheduled') ?? null,
+    [todayDoses],
+  );
+
   const completionPct =
     todayDoses.length > 0
       ? Math.round((todayDoses.filter((dose) => dose.state === 'taken').length / todayDoses.length) * 100)
@@ -155,17 +161,20 @@ export default function TodayScreen() {
             <Text style={[typography.headline, { color: c.textSecondary }]}>{t('rhythmToday')}</Text>
 
             <View style={styles.summaryRow}>
-              <Text
-                style={[
-                  typography.metricSm,
-                  {
-                    color: categoryColors.medication,
-                    fontVariant: ['tabular-nums'],
-                  },
-                ]}
-              >
-                {`${summary.taken}/${todayDoses.length}`}
-              </Text>
+              <View style={{ gap: spacing(1) }}>
+                <Text
+                  style={[
+                    typography.metricSm,
+                    {
+                      color: categoryColors.medication,
+                      fontVariant: ['tabular-nums'],
+                    },
+                  ]}
+                >
+                  {`${summary.taken}/${todayDoses.length}`}
+                </Text>
+                <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('takenToday')}</Text>
+              </View>
               <Badge label={`${completionPct.toString()}% ${t('completion')}`} tone="accent" />
             </View>
 
@@ -186,11 +195,29 @@ export default function TodayScreen() {
               <Badge label={`${toCome.toString()} ${t('toCome')}`} tone="neutral" />
               <Badge label={`${summary.denominator.toString()} ${t('logged')}`} tone="success" />
             </View>
+
+            {nextActionDose ? (
+              <View style={[styles.focusCard, { backgroundColor: c.surfaceRaised, borderColor: c.separator }]}>
+                <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('nextDose')}</Text>
+                <Text numberOfLines={1} style={[typography.headline, { color: c.textPrimary }]}>
+                  {nextActionDose.label}
+                </Text>
+                <Text style={[typography.subhead, { color: c.textSecondary }]}>{doseSubtitle(nextActionDose)}</Text>
+                <Button
+                  label={t('confirmTaken')}
+                  onPress={() => void takeAction(nextActionDose, 'taken')}
+                  disabled={nextActionDose.state !== 'due'}
+                />
+              </View>
+            ) : null}
           </View>
         </Card>
 
         <View>
-          <SectionHeader title={t('today')} />
+          <SectionHeader
+            title={t('timeline')}
+            action={<Button kind="secondary" label={t('addMedication')} onPress={() => router.push('/medications/new')} />}
+          />
           {patient.isLoading || plans.isLoading || events.isLoading ? (
             <LoadingState label={t('loadingDoses')} />
           ) : patient.error || plans.error || events.error ? (
@@ -228,43 +255,46 @@ export default function TodayScreen() {
                           },
                         ]}
                       >
-                        <View style={{ flex: 1, minWidth: 0, gap: spacing(1.5) }}>
-                          <Text numberOfLines={1} style={[typography.body, { color: c.textPrimary }]}>
-                            {dose.label}
-                          </Text>
-                          <Text style={[typography.footnote, { color: c.textSecondary }]}>
-                            {doseSubtitle(dose)}
-                          </Text>
-                          <Badge label={stateLabel(dose.state)} tone={stateTone(dose.state)} />
-                        </View>
+                        <View style={[styles.rowRail, { backgroundColor: railColor(dose.state, c) }]} />
 
-                        {(dose.state === 'due' || dose.state === 'scheduled') && (
-                          <View style={styles.actionColumn}>
-                            <ActionPill
-                              label={t('confirmTaken')}
-                              color={categoryColors.medication}
-                              onPress={() => void takeAction(dose, 'taken')}
-                            />
-                            <ActionPill
-                              label={t('markSkipped')}
-                              color={c.warning}
-                              onPress={() => void takeAction(dose, 'skipped')}
-                            />
-                            <ActionPill
-                              label={t('snooze')}
-                              color={c.accent}
-                              onPress={() => void scheduleSnoozeReminder(dose.label)}
-                            />
+                        <View style={{ flex: 1, minWidth: 0, gap: spacing(2) }}>
+                          <View style={{ gap: spacing(1) }}>
+                            <Text numberOfLines={1} style={[typography.body, { color: c.textPrimary }]}>
+                              {dose.label}
+                            </Text>
+                            <Text style={[typography.footnote, { color: c.textSecondary }]}>
+                              {doseSubtitle(dose)}
+                            </Text>
                           </View>
-                        )}
 
-                        {canUndo(dose) && (
-                          <ActionPill
-                            label={t('undo')}
-                            color={c.accent}
-                            onPress={() => void undoDose.mutateAsync(dose.eventId!)}
-                          />
-                        )}
+                          <Badge label={stateLabel(dose.state)} tone={stateTone(dose.state)} />
+
+                          {dose.state === 'due' ? (
+                            <View style={{ gap: spacing(2) }}>
+                              <Button label={t('confirmTaken')} onPress={() => void takeAction(dose, 'taken')} />
+                              <View style={styles.actionRow}>
+                                <ActionPill
+                                  label={t('markSkipped')}
+                                  color={c.warning}
+                                  onPress={() => void takeAction(dose, 'skipped')}
+                                />
+                                <ActionPill
+                                  label={t('snooze')}
+                                  color={c.accent}
+                                  onPress={() => void scheduleSnoozeReminder(dose.label)}
+                                />
+                              </View>
+                            </View>
+                          ) : null}
+
+                          {canUndo(dose) ? (
+                            <ActionPill
+                              label={t('undo')}
+                              color={c.accent}
+                              onPress={() => void undoDose.mutateAsync(dose.eventId!)}
+                            />
+                          ) : null}
+                        </View>
                       </View>
                     ))}
                   </View>
@@ -277,6 +307,17 @@ export default function TodayScreen() {
     </PageShell>
   );
 }
+
+const railColor = (
+  state: DoseState,
+  colors: ReturnType<typeof useTokens>['c'],
+): string => {
+  if (state === 'taken') return colors.success;
+  if (state === 'due') return colors.warning;
+  if (state === 'missed') return colors.destructive;
+  if (state === 'skipped') return colors.warning;
+  return colors.separator;
+};
 
 const ActionPill = ({
   label,
@@ -325,6 +366,12 @@ const styles = StyleSheet.create({
     gap: spacing(2),
     flexWrap: 'wrap',
   },
+  focusCard: {
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing(3),
+    gap: spacing(2),
+  },
   timeHeader: {
     paddingHorizontal: spacing(4),
     paddingTop: spacing(3),
@@ -333,13 +380,19 @@ const styles = StyleSheet.create({
   row: {
     paddingHorizontal: spacing(4),
     paddingVertical: spacing(3),
-    gap: spacing(2),
+    gap: spacing(3),
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
-  actionColumn: {
-    gap: spacing(1.5),
-    alignItems: 'flex-end',
+  rowRail: {
+    width: 4,
+    borderRadius: radius.full,
+    minHeight: 52,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: spacing(2),
+    flexWrap: 'wrap',
   },
   action: {
     minHeight: MIN_TOUCH_TARGET,

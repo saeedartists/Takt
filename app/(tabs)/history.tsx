@@ -11,6 +11,7 @@ import {
   PageHeader,
   PageShell,
   SectionHeader,
+  Sparkline,
   Stack,
   categoryColors,
   spacing,
@@ -56,6 +57,8 @@ export default function HistoryScreen() {
     };
   }, [history]);
 
+  const trend = useMemo(() => history.map((day) => day.adherencePct), [history]);
+
   const missed = useMemo(
     () =>
       history
@@ -93,48 +96,27 @@ export default function HistoryScreen() {
             }}
           />
         ) : history.length === 0 ? (
-          <EmptyState
-            title={t('noAdherenceHistory')}
-            description={t('historyNeedsSchedule')}
-          />
+          <EmptyState title={t('noAdherenceHistory')} description={t('historyNeedsSchedule')} />
         ) : (
           <>
             <Card>
               <View style={{ padding: spacing(4), gap: spacing(3) }}>
-                <Text style={[typography.headline, { color: c.textSecondary }]}>{t('adherenceWindow')}</Text>
-                <Text
-                  style={[
-                    typography.metricSm,
-                    {
-                      color: categoryColors.medication,
-                      fontVariant: ['tabular-nums'],
-                    },
-                  ]}
-                >
-                  {`${totals.adherencePct.toString()}%`}
-                </Text>
-                <Text style={[typography.subhead, { color: c.textSecondary }]}>
-                  {t('takenOnSchedule')}
-                </Text>
-
-                <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing(1.2) }}>
-                  {history.map((day) => (
-                    <View
-                      key={day.key}
-                      style={{
-                        flex: 1,
-                        minHeight: 8,
-                        height: Math.max(8, day.adherencePct),
-                        borderRadius: 4,
-                        backgroundColor:
-                          day.missed > 0
-                            ? `${c.destructive}66`
-                            : `${categoryColors.medication}AA`,
-                      }}
-                    />
-                  ))}
+                <Text style={[typography.headline, { color: c.textSecondary }]}>{t('adherenceTrend')}</Text>
+                <View style={styles.metricRow}>
+                  <Text
+                    style={[
+                      typography.metricSm,
+                      {
+                        color: categoryColors.medication,
+                        fontVariant: ['tabular-nums'],
+                      },
+                    ]}
+                  >
+                    {`${totals.adherencePct.toString()}%`}
+                  </Text>
+                  <Badge label={t('takenOnSchedule')} tone="accent" />
                 </View>
-
+                <Sparkline values={trend} category="medication" height={72} />
                 <View style={{ flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' }}>
                   <Badge label={`${totals.taken.toString()} ${t('statusTaken')}`} tone="success" />
                   <Badge label={`${totals.skipped.toString()} ${t('statusSkipped')}`} tone="warning" />
@@ -150,12 +132,7 @@ export default function HistoryScreen() {
               ) : (
                 <ListGroup>
                   {missed.map((item, index) => (
-                    <ListRow
-                      key={item.id}
-                      isFirst={index === 0}
-                      title={item.title}
-                      subtitle={item.subtitle}
-                    />
+                    <ListRow key={item.id} isFirst={index === 0} title={item.title} subtitle={item.subtitle} />
                   ))}
                 </ListGroup>
               )}
@@ -166,3 +143,12 @@ export default function HistoryScreen() {
     </PageShell>
   );
 }
+
+const styles = {
+  metricRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    gap: spacing(2),
+  },
+};
