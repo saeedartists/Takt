@@ -8,6 +8,13 @@ export type FhirReference = {
   display?: string;
 };
 
+export type FhirExtension = {
+  url?: string;
+  valueString?: string;
+  valueInteger?: number;
+  valueDateTime?: string;
+};
+
 export type WeekdayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 
 export type PatientResource = {
@@ -24,12 +31,7 @@ export type MedicationResource = {
   status?: string;
   code?: { text?: string };
   form?: { text?: string };
-  extension?: Array<{
-    url?: string;
-    valueString?: string;
-    valueInteger?: number;
-    valueDateTime?: string;
-  }>;
+  extension?: FhirExtension[];
 };
 
 export type MedicationRequestResource = {
@@ -40,6 +42,7 @@ export type MedicationRequestResource = {
   subject: FhirReference;
   medicationReference?: FhirReference;
   authoredOn?: string;
+  extension?: FhirExtension[];
   dosageInstruction?: Array<{
     timing?: {
       repeat?: {
@@ -71,10 +74,7 @@ export type MedicationAdministrationResource = {
     coding?: Array<{ code?: string; display?: string; system?: string }>;
     text?: string;
   }>;
-  extension?: Array<{
-    url?: string;
-    valueDateTime?: string;
-  }>;
+  extension?: FhirExtension[];
 };
 
 export type ConsentResource = {
@@ -94,6 +94,11 @@ export type DoseState = 'scheduled' | 'due' | 'taken' | 'skipped' | 'missed';
 
 export type MedicationCadence = 'daily' | 'weekdays' | 'custom';
 
+export type PausePeriod = {
+  start: string;
+  end?: string;
+};
+
 export type MedicationPlan = {
   request: MedicationRequestResource;
   medication: MedicationResource | null;
@@ -104,6 +109,9 @@ export type MedicationPlan = {
   cadence: MedicationCadence;
   dayOfWeek: WeekdayCode[];
   supplyCount?: number;
+  createdAt?: string;
+  archivedAt?: string;
+  pauseHistory: PausePeriod[];
 };
 
 export type DoseOccurrence = {

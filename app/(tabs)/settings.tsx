@@ -1,10 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Text, View } from 'react-native';
 import {
   Badge,
   Button,
   Card,
+  ErrorState,
   ListGroup,
   ListRow,
   PageHeader,
@@ -16,13 +18,38 @@ import {
   typography,
   useTokens,
 } from '@/components/ui';
+import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
+import { useWithdrawConsent } from '@/lib/hooks/use-takt-mutations';
 import { CONSENT_STORAGE_KEY } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
+import { useReminderPreferences } from '@/lib/takt/preferences';
+
+const SNOOZE_OPTIONS = [5, 10, 15, 30] as const;
 
 export default function SettingsTabScreen() {
   const router = useRouter();
   const { c } = useTokens();
   const { locale, setLocale, t } = useLocale();
+  const patient = usePrimaryPatient();
+  const withdrawConsent = useWithdrawConsent();
+  const reminderPrefs = useReminderPreferences();
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
+
+  const patientRef = patient.data ? `Patient/${patient.data.id}` : null;
+
+  const withdraw = async () => {
+    setWithdrawError(null);
+
+    try {
+      if (patientRef) {
+        await withdrawConsent.mutateAsync(patientRef);
+      }
+      await AsyncStorage.removeItem(CONSENT_STORAGE_KEY);
+      router.replace('/consent');
+    } catch {
+      setWithdrawError(t('withdrawConsentError'));
+    }
+  };
 
   return (
     <PageShell>
@@ -37,13 +64,35 @@ export default function SettingsTabScreen() {
                 value={locale}
                 onChange={(next) => void setLocale(next as 'de' | 'en')}
                 options={[
-                  { value: 'de', label: 'Deutsch' },
                   { value: 'en', label: 'English' },
+                  { value: 'de', label: 'Deutsch' },
                 ]}
               />
               <Badge label={locale === 'de' ? t('languageActiveDe') : t('languageActiveEn')} tone="accent" />
             </View>
           </Card>
+        </View>
+
+        <View>
+          <SectionHeader title={t('reminders')} />
+          <Card>
+            <View style={{ padding: spacing(4), gap: spacing(3) }}>
+              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('snoozeAfter')}</Text>
+              <SegmentedControl
+                value={(reminderPrefs.data?.snoozeMinutes ?? 15).toString()}
+                onChange={(next) => void reminderPrefs.setSnoozeMinutes(Number.parseInt(next, 10))}
+                options={SNOOZE_OPTIONS.map((minutes) => ({
+                  value: minutes.toString(),
+                  label: `${minutes.toString()}m`,
+                }))}
+              />
+              <Badge
+                label={t('snoozeActive').replace('{minutes}', (reminderPrefs.data?.snoozeMinutes ?? 15).toString())}
+                tone="neutral"
+              />
+            </View>
+          </Card>
+          {reminderPrefs.saveError ? <ErrorState description={t('saveReminderPrefError')} /> : null}
         </View>
 
         <View>
@@ -57,14 +106,14 @@ export default function SettingsTabScreen() {
         <Card>
           <View style={{ padding: spacing(4), gap: spacing(3) }}>
             <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('safetyNote')}</Text>
+            <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('aboutTakt')}</Text>
             <Button
               label={t('withdrawConsent')}
               kind="destructive"
-              onPress={() => {
-                void AsyncStorage.removeItem(CONSENT_STORAGE_KEY);
-                router.replace('/consent');
-              }}
+              onPress={() => void withdraw()}
+              disabled={withdrawConsent.isPending || patient.isLoading}
             />
+            {withdrawError ? <Text style={[typography.footnote, { color: c.destructive }]}>{withdrawError}</Text> : null}
           </View>
         </Card>
       </Stack>

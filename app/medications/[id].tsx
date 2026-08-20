@@ -110,6 +110,11 @@ export default function EditMedicationScreen() {
   }
 
   const save = async () => {
+    if (!name.trim()) {
+      setError(t('addMedicationNameError'));
+      return;
+    }
+
     const times = parseTimeList(timesInput);
     if (times.length === 0) {
       setError(t('invalidTimesError'));
@@ -125,20 +130,28 @@ export default function EditMedicationScreen() {
       cadence === 'daily' ? WEEKDAY_ORDER : cadence === 'weekdays' ? WEEKDAYS_ONLY : selectedDays;
 
     setError(null);
-    await updatePlan.mutateAsync({
-      patientRef,
-      name,
-      form,
-      strength,
-      cadence,
-      dayOfWeek,
-      times,
-      supplyCount: supply ? Number.parseInt(supply, 10) : undefined,
-      status,
-      request: plan.request,
-      medication: plan.medication!,
-    });
-    router.replace('/(tabs)/medications');
+
+    const parsedSupply = Number.parseInt(supply, 10);
+    const supplyCount = Number.isFinite(parsedSupply) && parsedSupply > 0 ? parsedSupply : undefined;
+
+    try {
+      await updatePlan.mutateAsync({
+        patientRef,
+        name,
+        form,
+        strength,
+        cadence,
+        dayOfWeek,
+        times,
+        supplyCount,
+        status,
+        request: plan.request,
+        medication: plan.medication!,
+      });
+      router.replace('/(tabs)/medications');
+    } catch {
+      setError(t('saveChangesError'));
+    }
   };
 
   const dayLabel = (day: WeekdayCode): string => {

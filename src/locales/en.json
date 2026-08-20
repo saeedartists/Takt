@@ -126,5 +126,20 @@
   "imprintDepartment": "imprintDepartment",
   "imprintCity": "imprintCity",
   "imprintEmail": "imprintEmail",
-  "imprintDraftNotice": "imprintDraftNotice"
+  "imprintDraftNotice": "imprintDraftNotice",
+  "consentPermissionsHint": "consentPermissionsHint",
+  "reportExtraMedications": "reportExtraMedications",
+  "reportExtraMissedRows": "reportExtraMissedRows",
+  "loadReportError": "loadReportError",
+  "doseActionError": "doseActionError",
+  "snoozeError": "snoozeError",
+  "undoDoseError": "undoDoseError",
+  "historyCorrectionError": "historyCorrectionError",
+  "markTakenFromHistory": "markTakenFromHistory",
+  "withdrawConsentError": "withdrawConsentError",
+  "reminders": "reminders",
+  "snoozeAfter": "snoozeAfter",
+  "snoozeActive": "snoozeActive",
+  "saveReminderPrefError": "saveReminderPrefError",
+  "aboutTakt": "aboutTakt"
 }

@@ -33,6 +33,9 @@ const esc = (value: string): string =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 
+const REPORT_MEDICATION_LIMIT = 20;
+const REPORT_MISSED_LIMIT = 12;
+
 export default function ReportScreen() {
   const { c } = useTokens();
   const { t, formatDate, locale } = useLocale();
@@ -99,11 +102,17 @@ export default function ReportScreen() {
         patient.data.name?.[0]?.family ?? ''
       }`.trim();
 
-      const medicationRows = summary.byMedication
+      const visibleMeds = summary.byMedication.slice(0, REPORT_MEDICATION_LIMIT);
+      const hiddenMeds = Math.max(0, summary.byMedication.length - visibleMeds.length);
+
+      const visibleMissed = summary.missedRows.slice(0, REPORT_MISSED_LIMIT);
+      const hiddenMissed = Math.max(0, summary.missedRows.length - visibleMissed.length);
+
+      const medicationRows = visibleMeds
         .map((row) => `<tr><td>${esc(row.label)}</td><td style=\"text-align:right\">${row.pct}%</td></tr>`)
         .join('');
 
-      const missedRows = summary.missedRows
+      const missedRows = visibleMissed
         .map((row) => `<tr><td>${esc(row.label)}</td><td style=\"text-align:right\">${esc(row.date)}</td></tr>`)
         .join('');
 
@@ -113,14 +122,16 @@ export default function ReportScreen() {
   <head>
     <meta charset="utf-8" />
     <style>
-      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #0E1218; padding: 24px; }
-      h1 { margin: 0 0 8px 0; font-size: 24px; }
-      .meta { color: #5C646F; margin-bottom: 18px; }
-      .score { font-size: 36px; color: #B4611C; margin: 10px 0 18px; }
-      table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-      th, td { border-bottom: 1px solid #E8E6E3; padding: 8px 0; font-size: 14px; }
+      @page { size: A4; margin: 18px; }
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #0E1218; }
+      h1 { margin: 0 0 6px 0; font-size: 22px; }
+      .meta { color: #5C646F; margin-bottom: 14px; font-size: 12px; line-height: 1.4; }
+      .score { font-size: 30px; color: #B4611C; margin: 6px 0 14px; font-weight: 700; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+      th, td { border-bottom: 1px solid #E8E6E3; padding: 5px 0; font-size: 12px; line-height: 1.3; }
       th { text-align: left; color: #5C646F; font-weight: 600; }
-      .small { color: #5C646F; font-size: 12px; margin-top: 12px; }
+      .small { color: #5C646F; font-size: 11px; margin-top: 8px; line-height: 1.35; }
+      .muted { color: #5C646F; font-size: 11px; margin: 2px 0 8px; }
     </style>
   </head>
   <body>
@@ -134,11 +145,13 @@ export default function ReportScreen() {
       <thead><tr><th>${esc(t('medications'))}</th><th style="text-align:right">${esc(t('completion'))}</th></tr></thead>
       <tbody>${medicationRows}</tbody>
     </table>
+    ${hiddenMeds > 0 ? `<div class=\"muted\">${esc(t('reportExtraMedications').replace('{count}', hiddenMeds.toString()))}</div>` : ''}
 
     <table>
       <thead><tr><th>${esc(t('missedDoses'))}</th><th style="text-align:right">${esc(t('dateLabel'))}</th></tr></thead>
       <tbody>${missedRows || `<tr><td colspan=\"2\">${esc(t('reportNoMissedInPeriod'))}</td></tr>`}</tbody>
     </table>
+    ${hiddenMissed > 0 ? `<div class=\"muted\">${esc(t('reportExtraMissedRows').replace('{count}', hiddenMissed.toString()))}</div>` : ''}
 
     <div class="small">${esc(t('reportPdfDisclaimer'))}</div>
   </body>
@@ -220,11 +233,15 @@ export default function ReportScreen() {
 
         <View>
           <SectionHeader title={t('reportPerMedication')} />
-          <ListGroup>
-            {summary.byMedication.map((row, index) => (
-              <ListRow key={row.id} isFirst={index === 0} title={row.label} value={`${row.pct.toString()}%`} />
-            ))}
-          </ListGroup>
+          {summary.byMedication.length === 0 ? (
+            <EmptyState title={t('noAdherenceHistory')} description={t('historyNeedsSchedule')} />
+          ) : (
+            <ListGroup>
+              {summary.byMedication.map((row, index) => (
+                <ListRow key={row.id} isFirst={index === 0} title={row.label} value={`${row.pct.toString()}%`} />
+              ))}
+            </ListGroup>
+          )}
         </View>
       </Stack>
     </PageShell>

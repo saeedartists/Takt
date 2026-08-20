@@ -11,6 +11,7 @@ import type {
   MedicationPlan,
   MedicationRequestResource,
   MedicationResource,
+  PausePeriod,
   WeekdayCode,
 } from '@/lib/takt/types';
 
@@ -21,6 +22,42 @@ const readStrength = (medication: MedicationResource | null): string => {
   const codeText = medication.code?.text ?? '';
   const match = codeText.match(/\b(\d+\s?(mg|mcg|µg|g|ml))\b/i);
   return match?.[1] ?? '';
+};
+
+const readRequestExtensionString = (request: MedicationRequestResource, url: string): string | undefined =>
+  request.extension?.find((x) => x.url === url)?.valueString;
+
+const readRequestExtensionDateTime = (request: MedicationRequestResource, url: string): string | undefined =>
+  request.extension?.find((x) => x.url === url)?.valueDateTime;
+
+const readPauseHistory = (request: MedicationRequestResource): PausePeriod[] => {
+  const raw = readRequestExtensionString(request, TAKT_EXT.pauseHistory);
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter((item): item is PausePeriod => {
+        if (!item || typeof item !== 'object') return false;
+        const candidate = item as { start?: unknown; end?: unknown };
+        if (typeof candidate.start !== 'string') return false;
+        if (candidate.end !== undefined && typeof candidate.end !== 'string') return false;
+        return true;
+      })
+      .map((item) => ({ start: item.start, end: item.end }))
+      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+  } catch {
+    return [];
+  }
+};
+
+const readCreatedAt = (request: MedicationRequestResource): string | undefined => {
+  const ext = readRequestExtensionDateTime(request, TAKT_EXT.requestCreatedAt);
+  if (ext) return ext;
+  if (request.authoredOn) return `${request.authoredOn}T00:00:00.000Z`;
+  return undefined;
 };
 
 const readTimes = (request: MedicationRequestResource): string[] => {
@@ -75,13 +112,16 @@ export const useMedicationPlans = (patientRef?: string) => {
       return {
         request,
         medication,
-        label: medication?.code?.text ?? 'Medication',
+        label: medication?.code?.text ?? request.medicationReference?.display ?? 'Medication',
         form: medication?.form?.text ?? '',
         strength: readStrength(medication),
         times: readTimes(request),
         cadence: readCadence(dayOfWeek),
         dayOfWeek,
         supplyCount: request.dispenseRequest?.quantity?.value,
+        createdAt: readCreatedAt(request),
+        archivedAt: readRequestExtensionDateTime(request, TAKT_EXT.archivedAt),
+        pauseHistory: readPauseHistory(request),
       };
     });
   }, [medicationsQuery.data?.entry, requestsQuery.data?.entry]);

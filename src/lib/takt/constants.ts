@@ -1,6 +1,9 @@
 export const TAKT_EXT = {
   strength: 'https://actimi.com/fhir/takt/strength',
   scheduledTime: 'https://actimi.com/fhir/takt/scheduled-time',
+  requestCreatedAt: 'https://actimi.com/fhir/takt/request-created-at',
+  pauseHistory: 'https://actimi.com/fhir/takt/pause-history',
+  archivedAt: 'https://actimi.com/fhir/takt/archived-at',
 } as const;
 
 export const TAKT_CONSENT_VERSION = 'takt-consent-v1';

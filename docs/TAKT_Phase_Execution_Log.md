@@ -1,0 +1,82 @@
+# Takt v1.0 — Phase Execution Log
+
+## Phase 1 — Notification spike & environment setup
+- Implemented native reminder pipeline (`src/lib/takt/reminders.ts`) with:
+  - permission request flow,
+  - Android channel setup,
+  - schedule replace/cancel/resync,
+  - snooze reminders.
+- Added deterministic reminder preference persistence (`src/lib/takt/preferences.ts`).
+- Verified project starts and Metro serves app (`start_dev_server` + `read_dev_logs`).
+
+## Phase 2 — Foundations
+- English-first locale default enforced (`src/lib/takt/l10n.tsx`).
+- Accessibility baseline retained (17pt body, 44pt targets via tokenized components).
+- Design system checks passed (`verify_design`).
+
+## Phase 3 — FHIR contracts and mutation layer
+- FHIR contract alignment maintained for:
+  - `Patient`, `Medication`, `MedicationRequest`, `MedicationAdministration`, `Consent`.
+- Added request lifecycle metadata extensions:
+  - request-created-at,
+  - pause-history,
+  - archived-at.
+- Added safer mutation logic and data sanitation in medication create/update flows.
+
+## Phase 4 — Schedule/state machine
+- 4-hour grace-window logic retained in schedule engine.
+- Added suppression logic for:
+  - pre-creation doses (mid-day add behavior),
+  - archived window,
+  - pause periods.
+- History and adherence calculations continue to run from persisted dose events.
+
+## Phase 5 — Reminder reliability integration
+- Tab layout now performs reminder synchronization when plans are loaded.
+- Schedule signature-based resync prevents stale notifications after plan edits.
+
+## Phase 6 — UI/Navigation completion
+- Tabs complete: Today, Medications, History, Settings.
+- Added legal routes and report route wiring.
+- English-first copy present across all reachable screens.
+
+## Phase 7 — Today loop end-to-end
+- Due dose actions: Taken / Skip / Snooze.
+- Missed doses auto-persisted when grace window closes.
+- 10-minute undo logic for taken/skipped remains in place.
+
+## Phase 8 — Medication management end-to-end
+- Add/Edit/Pause/Archive implemented with robust validation and error handling.
+- Supply count parsing hardened (ignores invalid/empty values).
+
+## Phase 9 — History/adherence
+- 14-day trend and missed-dose list implemented.
+- History correction path: mark missed dose as taken via undo + re-record.
+
+## Phase 10 — One-page doctor report
+- Report screen finalized.
+- PDF export hardened with one-page-safe truncation strategy:
+  - medication row cap,
+  - missed row cap,
+  - extra-row counters.
+
+## Phase 11 — Consent/privacy/imprint
+- Consent capture writes FHIR `Consent` resource.
+- Withdraw consent now writes inactive consent before routing back to consent screen.
+- Privacy notice and imprint reachable from settings.
+
+## Phase 12 — Localization + accessibility hardening
+- Added all missing EN/DE keys used in UI.
+- i18n key validation passed for both locales.
+
+## Phase 13 — Verification gates executed
+- TypeScript gate passed: `npx tsc --noEmit`.
+- Native structural gate passed: `npx expo prebuild --clean`.
+- Theme validation passed: `validate_app_theme`.
+- Design validation passed: `verify_design`.
+- Locale coverage validation passed: `validate_i18n_keys` for EN + DE.
+
+## Phase 14 — Packaging readiness
+- App is packaging-ready for Actimi Appstore workflow with the current route set, legal pages, consent gating, and report export.
+- Mobile dev server readiness probe returns success.
+

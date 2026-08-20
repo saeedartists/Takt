@@ -5,6 +5,7 @@ import type {
   DoseState,
   MedicationAdministrationResource,
   MedicationPlan,
+  PausePeriod,
 } from './types';
 
 const eventKey = (requestRef: string, scheduledIso: string): string =>
@@ -14,12 +15,6 @@ const eventState = (event: MedicationAdministrationResource): DoseState => {
   if (event.status === 'completed') return 'taken';
   const reason = event.statusReason?.[0]?.coding?.[0]?.code;
   return reason === 'not-available' ? 'missed' : 'skipped';
-};
-
-const requestIsDueOnDay = (plan: MedicationPlan, day: Date): boolean => {
-  if (plan.request.status === 'stopped') return false;
-  if (plan.dayOfWeek.length === 0) return true;
-  return plan.dayOfWeek.includes(dayCodeFromDate(day));
 };
 
 const eventTimestamp = (event: MedicationAdministrationResource): number =>
@@ -44,6 +39,56 @@ const indexEvents = (
   return map;
 };
 
+const requestIsDueOnDay = (plan: MedicationPlan, day: Date): boolean => {
+  if (plan.dayOfWeek.length === 0) return true;
+  return plan.dayOfWeek.includes(dayCodeFromDate(day));
+};
+
+const parseIsoDateTime = (value?: string): Date | null => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+};
+
+const isWithinPausePeriod = (scheduledAt: Date, period: PausePeriod): boolean => {
+  const start = parseIsoDateTime(period.start);
+  if (!start) return false;
+  const end = parseIsoDateTime(period.end);
+
+  if (end) {
+    return scheduledAt >= start && scheduledAt < end;
+  }
+
+  return scheduledAt >= start;
+};
+
+const doseSuppressed = (plan: MedicationPlan, scheduledAt: Date): boolean => {
+  const createdAt = parseIsoDateTime(plan.createdAt);
+  if (createdAt && scheduledAt < createdAt) {
+    return true;
+  }
+
+  const archivedAt = parseIsoDateTime(plan.archivedAt);
+  if (archivedAt && scheduledAt >= archivedAt) {
+    return true;
+  }
+
+  if (plan.request.status === 'stopped' && !archivedAt) {
+    return true;
+  }
+
+  if (plan.pauseHistory.some((period) => isWithinPausePeriod(scheduledAt, period))) {
+    return true;
+  }
+
+  if (plan.request.status === 'on-hold' && plan.pauseHistory.length === 0) {
+    return true;
+  }
+
+  return false;
+};
+
 export const buildDoseOccurrencesForDay = (
   plans: MedicationPlan[],
   events: MedicationAdministrationResource[],
@@ -54,11 +99,12 @@ export const buildDoseOccurrencesForDay = (
   const doses: DoseOccurrence[] = [];
 
   for (const plan of plans) {
-    if (plan.request.status === 'on-hold') continue;
     if (!requestIsDueOnDay(plan, day)) continue;
 
     for (const time of plan.times) {
       const scheduledAt = atClockTime(day, time);
+      if (doseSuppressed(plan, scheduledAt)) continue;
+
       const requestRef = `MedicationRequest/${plan.request.id}`;
       const lookup = indexed.get(eventKey(requestRef, scheduledAt.toISOString()));
 

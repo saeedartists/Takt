@@ -95,18 +95,26 @@ export default function AddMedicationScreen() {
       cadence === 'daily' ? WEEKDAY_ORDER : cadence === 'weekdays' ? WEEKDAYS_ONLY : selectedDays;
 
     setError(null);
-    await createPlan.mutateAsync({
-      patientRef,
-      name,
-      form,
-      strength,
-      cadence,
-      dayOfWeek,
-      times,
-      supplyCount: Number.parseInt(supply, 10),
-    });
 
-    router.replace('/(tabs)/medications');
+    const parsedSupply = Number.parseInt(supply, 10);
+    const supplyCount = Number.isFinite(parsedSupply) && parsedSupply > 0 ? parsedSupply : undefined;
+
+    try {
+      await createPlan.mutateAsync({
+        patientRef,
+        name,
+        form,
+        strength,
+        cadence,
+        dayOfWeek,
+        times,
+        supplyCount,
+      });
+
+      router.replace('/(tabs)/medications');
+    } catch {
+      setError(t('saveMedicationError'));
+    }
   };
 
   const dayLabel = (day: WeekdayCode): string => {

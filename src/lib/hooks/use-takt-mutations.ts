@@ -7,10 +7,12 @@ import { PRIMARY_PATIENT_STORAGE_KEY, TAKT_CONSENT_VERSION, TAKT_EXT } from '@/l
 import { normalizeWeekdayCodes, sortTimes, toTimeOfDay, WEEKDAY_ORDER, WEEKDAYS_ONLY } from '@/lib/takt/time';
 import type {
   ConsentResource,
+  FhirExtension,
   MedicationAdministrationResource,
   MedicationCadence,
   MedicationRequestResource,
   MedicationResource,
+  PausePeriod,
   WeekdayCode,
 } from '@/lib/takt/types';
 
@@ -63,6 +65,91 @@ const cadenceRepeat = (
   timeOfDay: sortTimes(times).map(toTimeOfDay),
 });
 
+const getExtension = (extensions: FhirExtension[] | undefined, url: string): FhirExtension | undefined =>
+  extensions?.find((x) => x.url === url);
+
+const upsertExtension = (extensions: FhirExtension[], next: FhirExtension): FhirExtension[] => {
+  const index = extensions.findIndex((x) => x.url === next.url);
+  if (index >= 0) {
+    const updated = [...extensions];
+    updated[index] = next;
+    return updated;
+  }
+  return [...extensions, next];
+};
+
+const removeExtension = (extensions: FhirExtension[], url: string): FhirExtension[] =>
+  extensions.filter((x) => x.url !== url);
+
+const readPauseHistory = (extensions: FhirExtension[] | undefined): PausePeriod[] => {
+  const raw = getExtension(extensions, TAKT_EXT.pauseHistory)?.valueString;
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter((item): item is PausePeriod => {
+        if (!item || typeof item !== 'object') return false;
+        const x = item as { start?: unknown; end?: unknown };
+        if (typeof x.start !== 'string') return false;
+        if (x.end !== undefined && typeof x.end !== 'string') return false;
+        return true;
+      })
+      .map((item) => ({ start: item.start, end: item.end }))
+      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+  } catch {
+    return [];
+  }
+};
+
+const applyStatusMetadata = (
+  request: MedicationRequestResource,
+  nextStatus: 'active' | 'on-hold' | 'stopped',
+): FhirExtension[] => {
+  const nowIso = new Date().toISOString();
+  let extensions = [...(request.extension ?? [])];
+
+  if (!getExtension(extensions, TAKT_EXT.requestCreatedAt)) {
+    extensions = upsertExtension(extensions, {
+      url: TAKT_EXT.requestCreatedAt,
+      valueDateTime: request.authoredOn ? `${request.authoredOn}T00:00:00.000Z` : nowIso,
+    });
+  }
+
+  const pauseHistory = readPauseHistory(extensions);
+  const previousStatus = request.status;
+
+  if (previousStatus !== 'on-hold' && nextStatus === 'on-hold') {
+    pauseHistory.push({ start: nowIso });
+  }
+
+  if (previousStatus === 'on-hold' && nextStatus !== 'on-hold') {
+    const openIndex = [...pauseHistory].reverse().findIndex((period) => !period.end);
+    if (openIndex >= 0) {
+      const absoluteIndex = pauseHistory.length - 1 - openIndex;
+      pauseHistory[absoluteIndex] = { ...pauseHistory[absoluteIndex], end: nowIso };
+    }
+  }
+
+  extensions = upsertExtension(extensions, {
+    url: TAKT_EXT.pauseHistory,
+    valueString: JSON.stringify(pauseHistory),
+  });
+
+  if (nextStatus === 'stopped') {
+    extensions = upsertExtension(extensions, {
+      url: TAKT_EXT.archivedAt,
+      valueDateTime: nowIso,
+    });
+  } else {
+    extensions = removeExtension(extensions, TAKT_EXT.archivedAt);
+  }
+
+  return extensions;
+};
+
 export const useCreateMedicationPlan = () => {
   const qc = useQueryClient();
   return useMutation({
@@ -83,15 +170,26 @@ export const useCreateMedicationPlan = () => {
         }),
       });
 
+      const nowIso = new Date().toISOString();
       const medicationRequest = await ovokFetch<MedicationRequestResource>('/fhir/R4/MedicationRequest', {
         method: 'POST',
         body: JSON.stringify({
           resourceType: 'MedicationRequest',
           status: 'active',
           intent: 'order',
-          authoredOn: new Date().toISOString().slice(0, 10),
+          authoredOn: nowIso.slice(0, 10),
           subject: { reference: input.patientRef },
           medicationReference: { reference: `Medication/${medication.id}` },
+          extension: [
+            {
+              url: TAKT_EXT.requestCreatedAt,
+              valueDateTime: nowIso,
+            },
+            {
+              url: TAKT_EXT.pauseHistory,
+              valueString: '[]',
+            },
+          ],
           dosageInstruction: [
             {
               timing: {
@@ -99,7 +197,7 @@ export const useCreateMedicationPlan = () => {
               },
             },
           ],
-          ...(typeof input.supplyCount === 'number'
+          ...(typeof input.supplyCount === 'number' && Number.isFinite(input.supplyCount)
             ? {
                 dispenseRequest: {
                   quantity: {
@@ -140,6 +238,8 @@ export const useUpdateMedicationPlan = () => {
         }),
       });
 
+      const extensions = applyStatusMetadata(input.request, input.status);
+
       const medicationRequest = await ovokFetch<MedicationRequestResource>(
         `/fhir/R4/MedicationRequest/${input.request.id}`,
         {
@@ -147,6 +247,7 @@ export const useUpdateMedicationPlan = () => {
           body: JSON.stringify({
             ...input.request,
             status: input.status,
+            extension: extensions,
             dosageInstruction: [
               {
                 timing: {
@@ -154,7 +255,7 @@ export const useUpdateMedicationPlan = () => {
                 },
               },
             ],
-            ...(typeof input.supplyCount === 'number'
+            ...(typeof input.supplyCount === 'number' && Number.isFinite(input.supplyCount)
               ? {
                   dispenseRequest: {
                     quantity: {
