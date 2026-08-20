@@ -5,5 +5,8 @@ export const TAKT_EXT = {
 
 export const TAKT_CONSENT_VERSION = 'takt-consent-v1';
 export const CONSENT_STORAGE_KEY = `takt:consent:${TAKT_CONSENT_VERSION}`;
+export const PRIMARY_PATIENT_STORAGE_KEY = 'takt:primary-patient-id:v1';
+export const REMINDER_PREFS_STORAGE_KEY = 'takt:reminder-preferences:v1';
 
 export const DEFAULT_GRACE_HOURS = 4;
+export const DEFAULT_SNOOZE_MINUTES = 15;

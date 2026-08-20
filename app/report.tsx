@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   EmptyState,
+  ErrorState,
   ListGroup,
   ListRow,
   LoadingState,
@@ -34,7 +35,7 @@ const esc = (value: string): string =>
 
 export default function ReportScreen() {
   const { c } = useTokens();
-  const { t } = useLocale();
+  const { t, formatDate, locale } = useLocale();
   const patient = usePrimaryPatient();
   const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
   const plans = useMedicationPlans(patientRef);
@@ -74,15 +75,18 @@ export default function ReportScreen() {
         .filter((dose) => dose.state === 'missed')
         .map((dose) => ({
           label: dose.label,
-          date: `${day.date.toLocaleDateString()} ${dose.scheduledAt.toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          })}`,
+          date: `${formatDate(day.date, { year: 'numeric', month: 'short', day: 'numeric' })} ${new Intl.DateTimeFormat(
+            locale === 'de' ? 'de-DE' : 'en-US',
+            {
+              hour: '2-digit',
+              minute: '2-digit',
+            },
+          ).format(dose.scheduledAt)}`,
         })),
     );
 
     return { pct, byMedication, missedRows };
-  }, [history, plans.plans]);
+  }, [formatDate, history, locale, plans.plans]);
 
   const exportPdf = async () => {
     if (!patient.data) return;
@@ -96,11 +100,11 @@ export default function ReportScreen() {
       }`.trim();
 
       const medicationRows = summary.byMedication
-        .map((row) => `<tr><td>${esc(row.label)}</td><td style="text-align:right">${row.pct}%</td></tr>`)
+        .map((row) => `<tr><td>${esc(row.label)}</td><td style=\"text-align:right\">${row.pct}%</td></tr>`)
         .join('');
 
       const missedRows = summary.missedRows
-        .map((row) => `<tr><td>${esc(row.label)}</td><td style="text-align:right">${esc(row.date)}</td></tr>`)
+        .map((row) => `<tr><td>${esc(row.label)}</td><td style=\"text-align:right\">${esc(row.date)}</td></tr>`)
         .join('');
 
       const html = `
@@ -121,7 +125,9 @@ export default function ReportScreen() {
   </head>
   <body>
     <h1>${esc(t('reportPdfHeading'))}</h1>
-    <div class="meta">${esc(t('patientLabel'))}: ${esc(patientName || 'N/A')}<br/>${esc(t('dateLabel'))}: ${esc(new Date().toLocaleDateString())}<br/>${esc(t('windowLabel'))}: ${esc(t('adherenceWindow'))}</div>
+    <div class="meta">${esc(t('patientLabel'))}: ${esc(patientName || 'N/A')}<br/>${esc(t('dateLabel'))}: ${esc(
+        formatDate(new Date(), { year: 'numeric', month: 'short', day: 'numeric' }),
+      )}<br/>${esc(t('windowLabel'))}: ${esc(t('adherenceWindow'))}</div>
     <div class="score">${summary.pct}% ${esc(t('takenOnSchedule'))}</div>
 
     <table>
@@ -159,6 +165,22 @@ export default function ReportScreen() {
     );
   }
 
+  if (patient.error || plans.error || events.error) {
+    return (
+      <PageShell>
+        <ErrorState
+          description={t('loadReportError')}
+          onRetry={() => {
+            void patient.refetch();
+            void plans.requestsQuery.refetch();
+            void plans.medicationsQuery.refetch();
+            void events.refetch();
+          }}
+        />
+      </PageShell>
+    );
+  }
+
   if (!patient.data) {
     return (
       <PageShell>
@@ -178,7 +200,7 @@ export default function ReportScreen() {
               {t('patientLabel')}: {patient.data.name?.[0]?.given?.join(' ') ?? ''} {patient.data.name?.[0]?.family ?? ''}
             </Text>
             <Text style={[typography.subhead, { color: c.textSecondary }]}>
-              {t('dateLabel')}: {new Date().toLocaleDateString()}
+              {t('dateLabel')}: {formatDate(new Date(), { year: 'numeric', month: 'short', day: 'numeric' })}
             </Text>
             <Text style={[typography.title2, { color: c.textPrimary, marginTop: spacing(1) }]}>
               {summary.pct}% {t('takenOnSchedule')}

@@ -22,6 +22,9 @@ const requestIsDueOnDay = (plan: MedicationPlan, day: Date): boolean => {
   return plan.dayOfWeek.includes(dayCodeFromDate(day));
 };
 
+const eventTimestamp = (event: MedicationAdministrationResource): number =>
+  event.effectiveDateTime ? new Date(event.effectiveDateTime).getTime() : 0;
+
 const indexEvents = (
   events: MedicationAdministrationResource[],
 ): Map<string, MedicationAdministrationResource> => {
@@ -30,7 +33,13 @@ const indexEvents = (
     const requestRef = event.request?.reference;
     const scheduled = event.extension?.find((x) => x.url === TAKT_EXT.scheduledTime)?.valueDateTime;
     if (!requestRef || !scheduled) continue;
-    map.set(eventKey(requestRef, scheduled), event);
+
+    const key = eventKey(requestRef, scheduled);
+    const current = map.get(key);
+
+    if (!current || eventTimestamp(event) >= eventTimestamp(current)) {
+      map.set(key, event);
+    }
   }
   return map;
 };

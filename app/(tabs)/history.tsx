@@ -1,12 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import {
   Badge,
+  Button,
   Card,
   EmptyState,
   ErrorState,
-  ListGroup,
-  ListRow,
   LoadingState,
   PageHeader,
   PageShell,
@@ -21,18 +20,21 @@ import {
 import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
+import { useRecordDose, useUndoDose } from '@/lib/hooks/use-takt-mutations';
 import { useLocale } from '@/lib/takt/l10n';
 import { buildHistory } from '@/lib/takt/schedule';
-import { formatShortDate } from '@/lib/takt/time';
 
 export default function HistoryScreen() {
   const { c } = useTokens();
-  const { t } = useLocale();
+  const { t, formatDate, formatTime } = useLocale();
 
   const patient = usePrimaryPatient();
   const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
   const plans = useMedicationPlans(patientRef);
   const events = useDoseEvents(patientRef);
+  const recordDose = useRecordDose();
+  const undoDose = useUndoDose();
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const history = useMemo(
     () => buildHistory(plans.plans, (events.data?.entry ?? []).map((x) => x.resource), 14),
@@ -68,15 +70,40 @@ export default function HistoryScreen() {
             .map((dose) => ({
               id: dose.id,
               title: dose.label,
-              subtitle: `${formatShortDate(day.date)} · ${dose.scheduledAt.toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}`,
+              subtitle: `${formatDate(day.date, { month: 'short', day: 'numeric' })} · ${formatTime(
+                dose.scheduledAt,
+              )}`,
+              requestId: dose.requestId,
+              scheduledAt: dose.scheduledAt,
+              medicationRef: dose.medicationRef,
+              eventId: dose.eventId,
             })),
         )
         .slice(0, 30),
-    [history],
+    [formatDate, formatTime, history],
   );
+
+  const markTaken = async (item: (typeof missed)[number]) => {
+    if (!patientRef) return;
+
+    setActionError(null);
+
+    try {
+      if (item.eventId) {
+        await undoDose.mutateAsync(item.eventId);
+      }
+
+      await recordDose.mutateAsync({
+        patientRef,
+        medicationRef: item.medicationRef,
+        requestRef: `MedicationRequest/${item.requestId}`,
+        scheduledAt: item.scheduledAt,
+        action: 'taken',
+      });
+    } catch {
+      setActionError(t('historyCorrectionError'));
+    }
+  };
 
   return (
     <PageShell>
@@ -130,13 +157,26 @@ export default function HistoryScreen() {
               {missed.length === 0 ? (
                 <EmptyState title={t('allCaughtUp')} description={t('greatRhythm')} />
               ) : (
-                <ListGroup>
-                  {missed.map((item, index) => (
-                    <ListRow key={item.id} isFirst={index === 0} title={item.title} subtitle={item.subtitle} />
+                <Stack>
+                  {missed.map((item) => (
+                    <Card key={item.id}>
+                      <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
+                        <Text style={[typography.body, { color: c.textPrimary }]}>{item.title}</Text>
+                        <Text style={[typography.footnote, { color: c.textSecondary }]}>{item.subtitle}</Text>
+                        <Button
+                          kind="secondary"
+                          label={t('markTakenFromHistory')}
+                          onPress={() => void markTaken(item)}
+                          disabled={recordDose.isPending || undoDose.isPending}
+                        />
+                      </View>
+                    </Card>
                   ))}
-                </ListGroup>
+                </Stack>
               )}
             </View>
+
+            {actionError ? <Text style={[typography.footnote, { color: c.destructive }]}>{actionError}</Text> : null}
           </>
         )}
       </Stack>

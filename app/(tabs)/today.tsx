@@ -1,5 +1,5 @@
 import { Link, useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   Badge,
@@ -23,6 +23,7 @@ import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useRecordDose, useUndoDose } from '@/lib/hooks/use-takt-mutations';
+import { useReminderPreferences } from '@/lib/takt/preferences';
 import { adherenceSummary, buildDoseOccurrencesForDay, doseSubtitle, upcomingCount } from '@/lib/takt/schedule';
 import { useLocale } from '@/lib/takt/l10n';
 import { scheduleSnoozeReminder } from '@/lib/takt/reminders';
@@ -47,7 +48,7 @@ const stateTone = (state: DoseState): 'neutral' | 'accent' | 'success' | 'warnin
 export default function TodayScreen() {
   const router = useRouter();
   const { c } = useTokens();
-  const { t } = useLocale();
+  const { t, formatDate, formatTime } = useLocale();
 
   const patient = usePrimaryPatient();
   const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
@@ -56,7 +57,9 @@ export default function TodayScreen() {
   const events = useDoseEvents(patientRef);
   const recordDose = useRecordDose();
   const undoDose = useUndoDose();
+  const reminderPrefs = useReminderPreferences();
   const autoMarkedMissed = useRef<Set<string>>(new Set());
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const todayDoses = useMemo(
     () =>
@@ -87,13 +90,13 @@ export default function TodayScreen() {
   const grouped = useMemo(() => {
     const buckets = new Map<string, DoseOccurrence[]>();
     for (const dose of todayDoses) {
-      const key = dose.scheduledAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const key = formatTime(dose.scheduledAt);
       const list = buckets.get(key) ?? [];
       list.push(dose);
       buckets.set(key, list);
     }
     return [...buckets.entries()].map(([time, doses]) => ({ time, doses }));
-  }, [todayDoses]);
+  }, [formatTime, todayDoses]);
 
   useEffect(() => {
     if (!patientRef) return;
@@ -124,13 +127,29 @@ export default function TodayScreen() {
 
   const takeAction = async (dose: DoseOccurrence, action: 'taken' | 'skipped') => {
     if (!patientRef) return;
-    await recordDose.mutateAsync({
-      patientRef,
-      medicationRef: dose.medicationRef,
-      requestRef: `MedicationRequest/${dose.requestId}`,
-      scheduledAt: dose.scheduledAt,
-      action,
-    });
+    setActionError(null);
+
+    try {
+      await recordDose.mutateAsync({
+        patientRef,
+        medicationRef: dose.medicationRef,
+        requestRef: `MedicationRequest/${dose.requestId}`,
+        scheduledAt: dose.scheduledAt,
+        action,
+      });
+    } catch {
+      setActionError(t('doseActionError'));
+    }
+  };
+
+  const snoozeDose = async (dose: DoseOccurrence) => {
+    setActionError(null);
+
+    try {
+      await scheduleSnoozeReminder(dose.label, reminderPrefs.data?.snoozeMinutes ?? 15);
+    } catch {
+      setActionError(t('snoozeError'));
+    }
   };
 
   const stateLabel = (state: DoseState): string => {
@@ -145,7 +164,7 @@ export default function TodayScreen() {
     <PageShell>
       <PageHeader
         title={t('today')}
-        subtitle={new Date().toLocaleDateString()}
+        subtitle={formatDate(new Date(), { weekday: 'long', month: 'long', day: 'numeric' })}
         action={
           <Link href="/report" asChild>
             <Pressable style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
@@ -206,10 +225,12 @@ export default function TodayScreen() {
                 <Button
                   label={t('confirmTaken')}
                   onPress={() => void takeAction(nextActionDose, 'taken')}
-                  disabled={nextActionDose.state !== 'due'}
+                  disabled={nextActionDose.state !== 'due' || recordDose.isPending}
                 />
               </View>
             ) : null}
+
+            {actionError ? <Text style={[typography.footnote, { color: c.destructive }]}>{actionError}</Text> : null}
           </View>
         </Card>
 
@@ -271,17 +292,23 @@ export default function TodayScreen() {
 
                           {dose.state === 'due' ? (
                             <View style={{ gap: spacing(2) }}>
-                              <Button label={t('confirmTaken')} onPress={() => void takeAction(dose, 'taken')} />
+                              <Button
+                                label={t('confirmTaken')}
+                                onPress={() => void takeAction(dose, 'taken')}
+                                disabled={recordDose.isPending}
+                              />
                               <View style={styles.actionRow}>
                                 <ActionPill
                                   label={t('markSkipped')}
                                   color={c.warning}
                                   onPress={() => void takeAction(dose, 'skipped')}
+                                  disabled={recordDose.isPending}
                                 />
                                 <ActionPill
-                                  label={t('snooze')}
+                                  label={`${t('snooze')} ${reminderPrefs.data?.snoozeMinutes ?? 15}m`}
                                   color={c.accent}
-                                  onPress={() => void scheduleSnoozeReminder(dose.label)}
+                                  onPress={() => void snoozeDose(dose)}
+                                  disabled={recordDose.isPending || reminderPrefs.isLoading}
                                 />
                               </View>
                             </View>
@@ -291,7 +318,8 @@ export default function TodayScreen() {
                             <ActionPill
                               label={t('undo')}
                               color={c.accent}
-                              onPress={() => void undoDose.mutateAsync(dose.eventId!)}
+                              onPress={() => void undoDose.mutateAsync(dose.eventId!).catch(() => setActionError(t('undoDoseError')))}
+                              disabled={undoDose.isPending}
                             />
                           ) : null}
                         </View>
@@ -308,10 +336,7 @@ export default function TodayScreen() {
   );
 }
 
-const railColor = (
-  state: DoseState,
-  colors: ReturnType<typeof useTokens>['c'],
-): string => {
+const railColor = (state: DoseState, colors: ReturnType<typeof useTokens>['c']): string => {
   if (state === 'taken') return colors.success;
   if (state === 'due') return colors.warning;
   if (state === 'missed') return colors.destructive;
@@ -323,21 +348,25 @@ const ActionPill = ({
   label,
   color,
   onPress,
+  disabled,
 }: {
   label: string;
   color: string;
   onPress: () => void;
+  disabled?: boolean;
 }) => (
   <Pressable
     accessibilityRole="button"
     accessibilityLabel={label}
+    accessibilityState={{ disabled: Boolean(disabled) }}
+    disabled={disabled}
     onPress={onPress}
     style={({ pressed }) => [
       styles.action,
       {
         backgroundColor: `${color}1F`,
         borderColor: `${color}44`,
-        opacity: pressed ? 0.62 : 1,
+        opacity: disabled ? 0.45 : pressed ? 0.62 : 1,
       },
     ]}
   >
