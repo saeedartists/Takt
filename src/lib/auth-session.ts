@@ -4,8 +4,8 @@ import { ovokFetch, OvokFetchError } from './ovok-fetch';
 export type SessionGateResult =
   | { kind: 'mock' }
   | { kind: 'needs-config' }
+  | { kind: 'backend-unreachable' }
   | { kind: 'unauthenticated' }
-  | { kind: 'backend-unreachable'; detail?: string }
   | { kind: 'authenticated' };
 
 export const resolveSessionGate = async (): Promise<SessionGateResult> => {
@@ -20,10 +20,7 @@ export const resolveSessionGate = async (): Promise<SessionGateResult> => {
       if (error.status === 401 || error.status === 403) {
         return { kind: 'unauthenticated' };
       }
-
-      if (error.status >= 500 || error.status === 404) {
-        return { kind: 'backend-unreachable', detail: String(error.status) };
-      }
+      return { kind: 'backend-unreachable' };
     }
 
     return { kind: 'backend-unreachable' };

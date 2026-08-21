@@ -80,3 +80,11 @@
 - App is packaging-ready for Actimi Appstore workflow with the current route set, legal pages, consent gating, and report export.
 - Mobile dev server readiness probe returns success.
 
+## Phase 15 — Backend readiness diagnostics hardening
+- Added `useProjectSettings` hook (`GET /v1/project/settings`) to read patient-login and patient-registration flags directly in-app.
+- Upgraded readiness screen to show:
+  - env status,
+  - auth reachability probe,
+  - live tenant patient auth flags,
+  - blocker count summary with operator-facing next actions.
+- Expanded session gate states with explicit `backend-unreachable` to separate config/auth from infrastructure reachability failures.
