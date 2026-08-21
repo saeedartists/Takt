@@ -18,7 +18,7 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked ex
 - [~] Timezone + DST drift test. (Matrix + evidence template prepared)
 
 ## 4) Clinical/report quality
-- [ ] Clinician review of doctor report wording and layout.
+- [~] Clinician review of doctor report wording and layout. (Review checklist prepared)
 - [ ] Incorporate wording updates from review and re-export validation samples.
 
 ## 5) Legal/compliance closeout
