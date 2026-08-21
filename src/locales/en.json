@@ -162,5 +162,11 @@
   "setupCurrentApiUrl": "Current API URL",
   "setupCurrentTenantCode": "Current tenant code",
   "setupMissingValue": "— missing —",
-  "setupOpenSignIn": "Open sign-in"
+  "setupOpenSignIn": "Open sign-in",
+  "accountSectionTitle": "Account",
+  "signOut": "Sign out",
+  "reminderNotificationTitle": "Medication reminder",
+  "reminderNotificationBody": "{label}{suffix} due at {time}",
+  "doseSnoozedTitle": "Dose snoozed",
+  "doseSnoozedBody": "{label} reminder in {minutes} minutes"
 }

@@ -168,4 +168,11 @@ export const de = {
     setupMissingValue: '— fehlt —',
     setupOpenSignIn: 'Anmeldung öffnen',
     aboutTakt: 'Takt hält Ihre Therapie im Rhythmus: Erinnern, Protokollieren und ein einseitiger Arztbericht.',
-  } as const;
+  
+    accountSectionTitle: 'Konto',
+    signOut: 'Abmelden',
+    reminderNotificationTitle: 'Medikamenten-Erinnerung',
+    reminderNotificationBody: '{label}{suffix} fällig um {time}',
+    doseSnoozedTitle: 'Dosis verschoben',
+    doseSnoozedBody: '{label} Erinnerung in {minutes} Minuten',
+} as const;

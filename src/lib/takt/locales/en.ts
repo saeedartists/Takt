@@ -169,4 +169,11 @@ export const en = {
     setupMissingValue: '— missing —',
     setupOpenSignIn: 'Open sign-in',
     aboutTakt: 'Takt keeps your therapy in rhythm: reminders, logging, and a one-page doctor report.',
-  } as const;
+  
+    accountSectionTitle: 'Account',
+    signOut: 'Sign out',
+    reminderNotificationTitle: 'Medication reminder',
+    reminderNotificationBody: '{label}{suffix} due at {time}',
+    doseSnoozedTitle: 'Dose snoozed',
+    doseSnoozedBody: '{label} reminder in {minutes} minutes',
+} as const;

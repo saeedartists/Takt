@@ -3,6 +3,7 @@ import { useEffect, useMemo } from 'react';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { addDays, atClockTime, dayCodeFromDate, startOfDay } from './time';
+import { useLocale } from './l10n';
 import type { MedicationPlan } from './types';
 
 const STORAGE_KEY = 'takt:scheduled-notification-ids:v1';
@@ -24,12 +25,19 @@ type ReminderSeed = {
   body: string;
 };
 
+const formatTemplate = (template: string, vars: Record<string, string>): string =>
+  Object.entries(vars).reduce((acc, [k, v]) => acc.replaceAll(`{${k}}`, v), template);
+
 const canScheduleOnDay = (plan: MedicationPlan, date: Date): boolean => {
   if (plan.request.status !== 'active') return false;
   return plan.dayOfWeek.includes(dayCodeFromDate(date));
 };
 
-const buildReminderSeeds = (plans: MedicationPlan[], horizonDays = 21): ReminderSeed[] => {
+const buildReminderSeeds = (
+  plans: MedicationPlan[],
+  copy: { title: string; body: string },
+  horizonDays = 21,
+): ReminderSeed[] => {
   const now = new Date();
   const floor = new Date(now.getTime() + 60_000);
   const days = Array.from({ length: horizonDays }, (_, i) => addDays(startOfDay(now), i));
@@ -44,8 +52,12 @@ const buildReminderSeeds = (plans: MedicationPlan[], horizonDays = 21): Reminder
         const suffix = plan.strength ? ` (${plan.strength})` : '';
         rows.push({
           triggerAt,
-          title: 'Medication reminder',
-          body: `${plan.label}${suffix} due at ${time}`,
+          title: copy.title,
+          body: formatTemplate(copy.body, {
+            label: plan.label,
+            suffix,
+            time,
+          }),
         });
       }
     }
@@ -91,12 +103,15 @@ const writeScheduledIds = async (ids: string[]): Promise<void> => {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
 };
 
-const replaceSchedule = async (plans: MedicationPlan[]): Promise<void> => {
+const replaceSchedule = async (
+  plans: MedicationPlan[],
+  copy: { title: string; body: string },
+): Promise<void> => {
   await ensureChannel();
   const previousIds = await readScheduledIds();
   await Promise.all(previousIds.map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => undefined)));
 
-  const seeds = buildReminderSeeds(plans);
+  const seeds = buildReminderSeeds(plans, copy);
   const nextIds: string[] = [];
 
   for (const seed of seeds) {
@@ -118,12 +133,19 @@ const replaceSchedule = async (plans: MedicationPlan[]): Promise<void> => {
   await writeScheduledIds(nextIds);
 };
 
-export const scheduleSnoozeReminder = async (label: string, delayMinutes = 15): Promise<void> => {
+export const scheduleSnoozeReminder = async (
+  label: string,
+  delayMinutes = 15,
+  copy?: { title: string; body: string },
+): Promise<void> => {
   await ensureChannel();
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: 'Dose snoozed',
-      body: `${label} reminder in ${delayMinutes.toString()} minutes`,
+      title: copy?.title ?? 'Dose snoozed',
+      body:
+        copy?.body
+          ? formatTemplate(copy.body, { label, minutes: delayMinutes.toString() })
+          : `${label} reminder in ${delayMinutes.toString()} minutes`,
       sound: 'default',
     },
     trigger: {
@@ -139,6 +161,7 @@ export const useReminderSync = (
   plans: MedicationPlan[],
   enabled: boolean,
 ): void => {
+  const { t } = useLocale();
   const signature = useMemo(
     () =>
       JSON.stringify(
@@ -165,7 +188,10 @@ export const useReminderSync = (
     void (async () => {
       const granted = await requestReminderPermissions();
       if (!granted || cancelled) return;
-      await replaceSchedule(plans);
+      await replaceSchedule(plans, {
+        title: t('reminderNotificationTitle'),
+        body: t('reminderNotificationBody'),
+      });
     })();
 
     return () => {

@@ -146,7 +146,10 @@ export default function TodayScreen() {
     setActionError(null);
 
     try {
-      await scheduleSnoozeReminder(dose.label, reminderPrefs.data?.snoozeMinutes ?? 15);
+      await scheduleSnoozeReminder(dose.label, reminderPrefs.data?.snoozeMinutes ?? 15, {
+        title: t('doseSnoozedTitle'),
+        body: t('doseSnoozedBody'),
+      });
     } catch {
       setActionError(t('snoozeError'));
     }

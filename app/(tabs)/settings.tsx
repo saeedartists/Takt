@@ -113,8 +113,8 @@ export default function SettingsTabScreen() {
         {env.ovokMockEnabled ? null : (
           <Card>
             <View style={{ padding: spacing(4), gap: spacing(3) }}>
-              <Text style={[typography.subhead, { color: c.textSecondary }]}>Account</Text>
-              <Button label="Sign out" kind="secondary" onPress={signOut} />
+              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('accountSectionTitle')}</Text>
+              <Button label={t('signOut')} kind="secondary" onPress={signOut} />
             </View>
           </Card>
         )}
