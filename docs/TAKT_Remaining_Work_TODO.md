@@ -12,10 +12,10 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked ex
 - [ ] Capture evidence package (screens + request/response traces + pass/fail notes).
 
 ## 3) Reminder reliability certification (real-device)
-- [ ] iOS overnight reminder test with app closed and phone locked.
-- [ ] Android overnight reminder test with app closed and phone locked.
-- [ ] Reboot persistence test.
-- [ ] Timezone + DST drift test.
+- [~] iOS overnight reminder test with app closed and phone locked. (Matrix + evidence template prepared)
+- [~] Android overnight reminder test with app closed and phone locked. (Matrix + evidence template prepared)
+- [~] Reboot persistence test. (Matrix + evidence template prepared)
+- [~] Timezone + DST drift test. (Matrix + evidence template prepared)
 
 ## 4) Clinical/report quality
 - [ ] Clinician review of doctor report wording and layout.
@@ -40,4 +40,4 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked ex
 
 ## Work started now
 ✅ Completed item 1.1 in this iteration (interactive readiness checklist shipped).
-➡️ Next recommended execution item: **2.2 patient A/B isolation test preparation** while tenant auth-setting unblock is pending.
+➡️ Next recommended execution item: **3. execute reminder reliability certification on real devices using the prepared matrix and evidence log**.
