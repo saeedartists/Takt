@@ -1,28 +1,10 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { env } from './env';
+import { ovokClient } from './ovok-client';
 
 /*
- * Mobile ovok-fetch — differs from the web variant because RN doesn't
- * have credentialed cookie sessions in the same way. We store an
- * access token in AsyncStorage under 'ovok:access-token' and send it
- * as a Bearer header. The login screen (M3) writes to that key; sign
- * out clears it.
- *
- * If-Match optimistic concurrency is the same as web.
+ * Mobile ovok-fetch — attaches the current Medplum/Ovok access token
+ * from OvokClient storage and refreshes if it is near expiry.
  */
-
-const ACCESS_TOKEN_KEY = 'ovok:access-token';
-
-export const setAccessToken = async (token: string | null): Promise<void> => {
-  if (token) {
-    await AsyncStorage.setItem(ACCESS_TOKEN_KEY, token);
-  } else {
-    await AsyncStorage.removeItem(ACCESS_TOKEN_KEY);
-  }
-};
-
-export const getAccessToken = (): Promise<string | null> =>
-  AsyncStorage.getItem(ACCESS_TOKEN_KEY);
 
 export type OvokFetchOptions = RequestInit & {
   ifMatch?: string;
@@ -48,12 +30,19 @@ export async function ovokFetch<T = unknown>(
   const { ifMatch, throwOnError = true, headers, ...rest } = options;
   const url = `${env.ovokApiUrl}${path}`;
 
-  const token = await getAccessToken();
+  try {
+    await ovokClient.refreshIfExpired(60);
+  } catch {
+    // Best-effort refresh. If refresh fails, request may still succeed
+    // for public endpoints or return a meaningful 401/403.
+  }
+
+  const token = ovokClient.getAccessToken();
   const finalHeaders: Record<string, string> = {
     'content-type': 'application/json',
     ...(headers as Record<string, string> | undefined),
   };
-  if (token) finalHeaders['authorization'] = `Bearer ${token}`;
+  if (token) finalHeaders.authorization = `Bearer ${token}`;
   if (ifMatch) finalHeaders['if-match'] = ifMatch;
   if (env.ovokTenantCode) finalHeaders['x-tenant-code'] = env.ovokTenantCode;
 

@@ -21,6 +21,10 @@ function AppStack() {
   return (
     <Stack>
       <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="setup" options={{ title: t('setupTitle') }} />
+      <Stack.Screen name="auth/sign-in" options={{ title: t('authSignInTitle') }} />
+      <Stack.Screen name="auth/register" options={{ title: t('authRegisterTitle') }} />
+      <Stack.Screen name="auth/reset-password" options={{ title: t('authResetPasswordTitle') }} />
       <Stack.Screen name="consent" options={{ title: t('consentRouteTitle') }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="medications/new" options={{ title: t('addMedicationRouteTitle') }} />

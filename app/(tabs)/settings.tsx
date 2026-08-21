@@ -19,10 +19,12 @@ import {
   useTokens,
 } from '@/components/ui';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
+import { ovokClient } from '@/lib/ovok-client';
 import { useWithdrawConsent } from '@/lib/hooks/use-takt-mutations';
 import { CONSENT_STORAGE_KEY } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
 import { useReminderPreferences } from '@/lib/takt/preferences';
+import { env } from '@/lib/env';
 
 const SNOOZE_OPTIONS = [5, 10, 15, 30] as const;
 
@@ -49,6 +51,11 @@ export default function SettingsTabScreen() {
     } catch {
       setWithdrawError(t('withdrawConsentError'));
     }
+  };
+
+  const signOut = () => {
+    ovokClient.clearActiveLogin();
+    router.replace('/auth/sign-in' as never);
   };
 
   return (
@@ -102,6 +109,15 @@ export default function SettingsTabScreen() {
             <ListRow title={t('imprint')} onPress={() => router.push('/settings/imprint')} />
           </ListGroup>
         </View>
+
+        {env.ovokMockEnabled ? null : (
+          <Card>
+            <View style={{ padding: spacing(4), gap: spacing(3) }}>
+              <Text style={[typography.subhead, { color: c.textSecondary }]}>Account</Text>
+              <Button label="Sign out" kind="secondary" onPress={signOut} />
+            </View>
+          </Card>
+        )}
 
         <Card>
           <View style={{ padding: spacing(4), gap: spacing(3) }}>
