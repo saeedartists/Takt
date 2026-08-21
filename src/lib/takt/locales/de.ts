@@ -167,6 +167,12 @@ export const de = {
     setupCurrentTenantCode: 'Aktueller Tenant-Code',
     setupMissingValue: '— fehlt —',
     setupOpenSignIn: 'Anmeldung öffnen',
+    setupTroubleshootTitle: 'Fehlerbehebung',
+    setupTroubleshootItem1: 'Prüfen Sie, ob in diesem Tenant Patient-Login und Registrierung aktiviert sind.',
+    setupTroubleshootItem2: 'Prüfen Sie, ob der Tenant-Code exakt mit Ihrem Ovok-Projekt übereinstimmt.',
+    setupTroubleshootItem3: 'Wenn die Anmeldung weiterhin fehlschlägt, bitten Sie Ihren Ovok-Admin, die Auth-Routen zu prüfen.',
+    authBackendNotReadyTitle: 'Backend-Authentifizierung ist noch nicht bereit',
+    authBackendNotReadyBody: 'Dieser Tenant ist erreichbar, aber Patient-Anmeldung/Registrierung scheint deaktiviert oder nicht verfügbar zu sein. Bitte kontaktieren Sie Ihren Ovok-Admin.',
     aboutTakt: 'Takt hält Ihre Therapie im Rhythmus: Erinnern, Protokollieren und ein einseitiger Arztbericht.',
   
     accountSectionTitle: 'Konto',

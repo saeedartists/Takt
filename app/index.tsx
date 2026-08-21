@@ -18,7 +18,7 @@ export default function IndexRedirect() {
       const gate = await resolveSessionGate();
       if (!active) return;
 
-      if (gate.kind === 'needs-config') {
+      if (gate.kind === 'needs-config' || gate.kind === 'backend-unreachable') {
         router.replace('/setup' as never);
         return;
       }

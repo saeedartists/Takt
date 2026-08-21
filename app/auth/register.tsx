@@ -5,6 +5,7 @@ import { Alert } from 'react-native';
 import { env } from '@/lib/env';
 import { CONSENT_STORAGE_KEY } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
+import { isBackendAuthNotReady } from '@/lib/takt/auth-errors';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -28,7 +29,12 @@ export default function RegisterScreen() {
             }
           });
         }}
-        onError={(error) => Alert.alert(t('authErrorRegister'), error.message)}
+        onError={(error) =>
+          Alert.alert(
+            isBackendAuthNotReady(error.message) ? t('authBackendNotReadyTitle') : (t('authErrorRegister')),
+            isBackendAuthNotReady(error.message) ? t('authBackendNotReadyBody') : error.message,
+          )
+        }
       >
         <Register.EmailForm.Inputs />
         <Register.EmailForm.RegisterButton />

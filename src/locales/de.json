@@ -168,5 +168,11 @@
   "reminderNotificationTitle": "Medikamenten-Erinnerung",
   "reminderNotificationBody": "{label}{suffix} fällig um {time}",
   "doseSnoozedTitle": "Dosis verschoben",
-  "doseSnoozedBody": "{label} Erinnerung in {minutes} Minuten"
+  "doseSnoozedBody": "{label} Erinnerung in {minutes} Minuten",
+  "setupTroubleshootTitle": "Fehlerbehebung",
+  "setupTroubleshootItem1": "Prüfen Sie, ob in diesem Tenant Patient-Login und Registrierung aktiviert sind.",
+  "setupTroubleshootItem2": "Prüfen Sie, ob der Tenant-Code exakt mit Ihrem Ovok-Projekt übereinstimmt.",
+  "setupTroubleshootItem3": "Wenn die Anmeldung weiterhin fehlschlägt, bitten Sie Ihren Ovok-Admin, die Auth-Routen zu prüfen.",
+  "authBackendNotReadyTitle": "Backend-Authentifizierung ist noch nicht bereit",
+  "authBackendNotReadyBody": "Dieser Tenant ist erreichbar, aber Patient-Anmeldung/Registrierung scheint deaktiviert oder nicht verfügbar zu sein. Bitte kontaktieren Sie Ihren Ovok-Admin."
 }

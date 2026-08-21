@@ -5,6 +5,7 @@ import { Alert } from 'react-native';
 import { env } from '@/lib/env';
 import { CONSENT_STORAGE_KEY } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
+import { isBackendAuthNotReady } from '@/lib/takt/auth-errors';
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -29,7 +30,12 @@ export default function SignInScreen() {
             }
           });
         }}
-        onError={(error) => Alert.alert(t('authErrorSignIn'), error.message)}
+        onError={(error) =>
+          Alert.alert(
+            isBackendAuthNotReady(error.message) ? t('authBackendNotReadyTitle') : (t('authErrorSignIn')),
+            isBackendAuthNotReady(error.message) ? t('authBackendNotReadyBody') : error.message,
+          )
+        }
       >
         <SignIn.EmailForm.Inputs />
         <SignIn.EmailForm.ForgotPassword onPress={() => router.push('/auth/reset-password' as never)} />

@@ -168,5 +168,11 @@
   "reminderNotificationTitle": "Medication reminder",
   "reminderNotificationBody": "{label}{suffix} due at {time}",
   "doseSnoozedTitle": "Dose snoozed",
-  "doseSnoozedBody": "{label} reminder in {minutes} minutes"
+  "doseSnoozedBody": "{label} reminder in {minutes} minutes",
+  "setupTroubleshootTitle": "Troubleshooting",
+  "setupTroubleshootItem1": "Confirm this tenant has patient login and registration enabled.",
+  "setupTroubleshootItem2": "Confirm the tenant code matches your Ovok project exactly.",
+  "setupTroubleshootItem3": "If sign-in still fails, ask your Ovok admin to verify auth routes are available.",
+  "authBackendNotReadyTitle": "Backend auth is not ready yet",
+  "authBackendNotReadyBody": "This tenant is reachable, but patient sign-in/registration appears disabled or unavailable. Please ask your Ovok admin to enable patient auth."
 }

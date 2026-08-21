@@ -36,6 +36,17 @@ export default function SetupScreen() {
           </Card>
         </View>
 
+        <View>
+          <SectionHeader title={t('setupTroubleshootTitle')} />
+          <Card>
+            <View style={{ padding: spacing(4), gap: spacing(2) }}>
+              <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('setupTroubleshootItem1')}</Text>
+              <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('setupTroubleshootItem2')}</Text>
+              <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('setupTroubleshootItem3')}</Text>
+            </View>
+          </Card>
+        </View>
+
         {env.ovokTenantCode ? <Button label={t('setupOpenSignIn')} onPress={() => router.replace('/auth/sign-in' as never)} /> : null}
       </Stack>
     </PageShell>

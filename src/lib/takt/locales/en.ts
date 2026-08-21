@@ -168,6 +168,12 @@ export const en = {
     setupCurrentTenantCode: 'Current tenant code',
     setupMissingValue: '— missing —',
     setupOpenSignIn: 'Open sign-in',
+    setupTroubleshootTitle: 'Troubleshooting',
+    setupTroubleshootItem1: 'Confirm this tenant has patient login and registration enabled.',
+    setupTroubleshootItem2: 'Confirm the tenant code matches your Ovok project exactly.',
+    setupTroubleshootItem3: 'If sign-in still fails, ask your Ovok admin to verify auth routes are available.',
+    authBackendNotReadyTitle: 'Backend auth is not ready yet',
+    authBackendNotReadyBody: 'This tenant is reachable, but patient sign-in/registration appears disabled or unavailable. Please ask your Ovok admin to enable patient auth.',
     aboutTakt: 'Takt keeps your therapy in rhythm: reminders, logging, and a one-page doctor report.',
   
     accountSectionTitle: 'Account',
