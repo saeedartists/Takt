@@ -27,9 +27,9 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked ex
 - [ ] Consent audit trail pack (grant + withdraw traceability evidence).
 
 ## 6) Security + operations
-- [ ] Session/token lifecycle QA matrix.
+- [~] Session/token lifecycle QA matrix. (Matrix prepared)
 - [ ] Malformed payload and error-surfacing checks.
-- [ ] Support runbook: “reminders did not fire”.
+- [~] Support runbook: “reminders did not fire”. (Runbook prepared)
 
 ## 7) Final QA + release gates
 - [ ] Accessibility stress pass (large text + screen reader flows).
@@ -40,4 +40,4 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked ex
 
 ## Work started now
 ✅ Completed item 1.1 in this iteration (interactive readiness checklist shipped).
-➡️ Next recommended execution item: **3. execute reminder reliability certification on real devices using the prepared matrix and evidence log**.
+➡️ Next recommended execution item: **3. execute reminder reliability certification on real devices and fill the evidence log (A1–E1)**.
