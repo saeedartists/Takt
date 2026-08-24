@@ -1,5 +1,5 @@
 import { OvokClient } from '@ovok/core';
-import { ExpoClientStorage } from '@ovok/native';
+import { ExpoClientStorage } from '@medplum/expo-polyfills';
 import { env } from './env';
 
 /*
