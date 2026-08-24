@@ -231,5 +231,9 @@
   "readinessOpenSignIn": "Anmelde-Test öffnen",
   "statusInProgress": "In Arbeit",
   "statusBlocked": "Blockiert",
-  "statusLoading": "Prüfe…"
+  "statusLoading": "Prüfe…",
+  "readinessPatientLogin": "Patienten-Login aktiviert",
+  "readinessPatientRegistration": "Patienten-Registrierung aktiviert",
+  "readinessFlagsBlocked": "Tenant ist erreichbar, aber Patienten-Login und Registrierung sind noch deaktiviert oder nicht verfügbar.",
+  "readinessSettingsUnavailable": "Nicht verfügbar (Settings-Endpunktfehler)"
 }

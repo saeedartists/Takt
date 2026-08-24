@@ -231,5 +231,9 @@
   "readinessOpenSignIn": "Open sign-in test",
   "statusInProgress": "In progress",
   "statusBlocked": "Blocked",
-  "statusLoading": "Checking…"
+  "statusLoading": "Checking…",
+  "readinessPatientLogin": "Patient login enabled",
+  "readinessPatientRegistration": "Patient registration enabled",
+  "readinessFlagsBlocked": "Tenant is reachable, but patient login and registration are still disabled or unavailable.",
+  "readinessSettingsUnavailable": "Unavailable (settings endpoint error)"
 }

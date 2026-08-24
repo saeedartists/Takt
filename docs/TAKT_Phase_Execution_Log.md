@@ -88,3 +88,11 @@
   - live tenant patient auth flags,
   - blocker count summary with operator-facing next actions.
 - Expanded session gate states with explicit `backend-unreachable` to separate config/auth from infrastructure reachability failures.
+
+## Phase 16 — Auth-blocker transparency for operators
+- Readiness now surfaces tenant-flag gating inline:
+  - `PATIENT_LOGIN_ENABLED`
+  - `PATIENT_REGISTRATION_ENABLED`
+- Added explicit blocked copy when tenant is reachable but patient auth flags are disabled/unavailable.
+- Added fallback status for settings endpoint failures (`readinessSettingsUnavailable`) so operators can distinguish tenant misconfiguration from transport failures.
+- Re-verified compilation + native prebuild + i18n key coverage after the readiness update.

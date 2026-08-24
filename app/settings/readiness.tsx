@@ -16,6 +16,7 @@ import {
   useTokens,
 } from '@/components/ui';
 import { resolveSessionGate, type SessionGateResult } from '@/lib/auth-session';
+import { useProjectSettings } from '@/lib/hooks/use-project-settings';
 import { env } from '@/lib/env';
 import { useReadinessChecklist, type ReadinessTaskId } from '@/lib/takt/readiness-checklist';
 import { useLocale } from '@/lib/takt/l10n';
@@ -100,6 +101,7 @@ export default function ReadinessScreen() {
   const { t } = useLocale();
   const [gate, setGate] = useState<SessionGateResult | null>(null);
   const checklist = useReadinessChecklist();
+  const projectSettings = useProjectSettings();
 
   useEffect(() => {
     let active = true;
@@ -124,15 +126,39 @@ export default function ReadinessScreen() {
   const envReady = hasApiUrl && hasTenantCode && mockDisabled;
 
   const authReachable = gate ? gate.kind === 'authenticated' || gate.kind === 'unauthenticated' : false;
+  const patientLoginEnabled = projectSettings.data?.PATIENT_LOGIN_ENABLED ?? false;
+  const patientRegistrationEnabled = projectSettings.data?.PATIENT_REGISTRATION_ENABLED ?? false;
+  const flagsReady = patientLoginEnabled && patientRegistrationEnabled;
+  const flagsAvailable = projectSettings.isSuccess || env.ovokMockEnabled;
 
-  const phase1: PhaseState = envReady && authReachable ? 'in-progress' : envReady ? 'blocked' : 'pending';
+  const phase1: PhaseState = !envReady
+    ? 'pending'
+    : !authReachable
+      ? 'blocked'
+      : !flagsReady
+        ? 'blocked'
+        : checklist.data['auth-live-smoke']
+          ? 'done'
+          : 'in-progress';
 
   const checklistTone: ReadinessTone = checklist.completionPct === 100 ? 'success' : 'neutral';
 
   const blockers = useMemo(() => {
-    const infraBlockers = Number(!envReady) + Number(!authReachable);
+    const infraBlockers =
+      Number(!envReady) +
+      Number(!authReachable) +
+      Number(!flagsReady) +
+      Number(!flagsAvailable && !projectSettings.isLoading);
     return infraBlockers + (checklist.total - checklist.done);
-  }, [authReachable, checklist.done, checklist.total, envReady]);
+  }, [
+    authReachable,
+    checklist.done,
+    checklist.total,
+    envReady,
+    flagsAvailable,
+    flagsReady,
+    projectSettings.isLoading,
+  ]);
 
   return (
     <PageShell>
@@ -143,7 +169,11 @@ export default function ReadinessScreen() {
             <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('readinessSummaryTitle')}</Text>
             <Badge label={t('readinessBlockedCount').replace('{count}', blockers.toString())} tone={blockers === 0 ? 'success' : 'warning'} />
             <Text style={[typography.footnote, { color: c.textSecondary }]}>
-              {authReachable ? t('readinessAuthNeedsSignIn') : t('readinessAuthOffline')}
+              {!authReachable
+                ? t('readinessAuthOffline')
+                : !flagsReady
+                  ? t('readinessFlagsBlocked')
+                  : t('readinessAuthNeedsSignIn')}
             </Text>
           </View>
         </Card>
@@ -170,6 +200,32 @@ export default function ReadinessScreen() {
                   : authReachable
                     ? t('readinessAuthReachable')
                     : t('readinessAuthBlocked')
+              }
+            />
+            <ListRow
+              title={t('readinessBackendFlags')}
+              subtitle={
+                projectSettings.isLoading
+                  ? t('statusLoading')
+                  : flagsAvailable
+                    ? t('statusDone')
+                    : t('readinessSettingsUnavailable')
+              }
+            />
+            <ListRow
+              title={t('readinessPatientLogin')}
+              subtitle={
+                projectSettings.isLoading
+                  ? t('statusLoading')
+                  : yesNo(patientLoginEnabled, t('statusDone'), t('statusBlocked'))
+              }
+            />
+            <ListRow
+              title={t('readinessPatientRegistration')}
+              subtitle={
+                projectSettings.isLoading
+                  ? t('statusLoading')
+                  : yesNo(patientRegistrationEnabled, t('statusDone'), t('statusBlocked'))
               }
             />
           </ListGroup>
