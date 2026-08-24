@@ -11,8 +11,8 @@
 ### 1) Backend auth + access control
 - [!] Enable tenant patient auth settings (`PATIENT_LOGIN_ENABLED`, `PATIENT_REGISTRATION_ENABLED`)  Blocker: settings write path currently returns `key-not-found` in Builder tools.
 - [x] Improve app-side backend readiness diagnostics and routing when live backend is unreachable/misconfigured.
-- [ ] Execute patient isolation verification matrix (User A cannot read User B data).
-- [ ] Capture evidence: request/response logs and signed QA report.
+- [~] Execute patient isolation verification matrix (User A cannot read User B data). (In-app matrix runner shipped)
+- [~] Capture evidence: request/response logs and signed QA report. (Evidence metadata capture in app)
 
 ### 2) Reminder reliability certification
 - [ ] Real-device overnight reminder test (iOS + Android, app closed/locked)

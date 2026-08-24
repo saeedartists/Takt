@@ -96,3 +96,8 @@
 - Added explicit blocked copy when tenant is reachable but patient auth flags are disabled/unavailable.
 - Added fallback status for settings endpoint failures (`readinessSettingsUnavailable`) so operators can distinguish tenant misconfiguration from transport failures.
 - Re-verified compilation + native prebuild + i18n key coverage after the readiness update.
+
+## Phase 17 — Patient A/B isolation execution tooling
+- Added dedicated `Settings → A/B isolation evidence` screen to run all six matrix cases in-app.
+- Added persistent capture fields for tester name, run date, and evidence notes (screenshot/log references).
+- Linked isolation verdict to release readiness task `patient-isolation` so readiness updates automatically when matrix passes.

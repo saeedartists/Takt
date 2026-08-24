@@ -23,8 +23,8 @@
 ## C) Data/FHIR integrity
 - [x] Patient + Medication + MedicationRequest + MedicationAdministration + Consent graph
 - [x] Mutation layer with validation and operation error handling
-- [ ] Live-tenant patient A/B isolation evidence run
-- [ ] Export evidence package (screens + request logs)
+- [~] Live-tenant patient A/B isolation evidence run (matrix runner now in app)
+- [~] Export evidence package (screens + request logs)
 
 ## D) Reminders reliability (device reality)
 - [x] Scheduler and snooze implementation

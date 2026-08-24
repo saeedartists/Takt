@@ -8,8 +8,8 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked ex
 
 ## 2) Live backend verification (highest production risk)
 - [!] Run live sign-in + registration smoke test on connected tenant. (Blocked: tenant patient auth settings currently return `key-not-found` on update path)
-- [ ] Execute patient A/B data-isolation matrix (no cross-patient read/write).
-- [ ] Capture evidence package (screens + request/response traces + pass/fail notes).
+- [~] Execute patient A/B data-isolation matrix (no cross-patient read/write). (In-app matrix tracker + evidence metadata screen shipped)
+- [~] Capture evidence package (screens + request/response traces + pass/fail notes). (Evidence metadata capture now in app)
 
 ## 3) Reminder reliability certification (real-device)
 - [~] iOS overnight reminder test with app closed and phone locked. (Matrix + evidence template prepared)

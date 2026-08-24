@@ -70,6 +70,18 @@ export const useReadinessChecklist = () => {
     },
   });
 
+  const setTask = useMutation({
+    mutationFn: async ({ taskId, done }: { taskId: ReadinessTaskId; done: boolean }) => {
+      const current = await readChecklist();
+      const next = { ...current, [taskId]: done };
+      await writeChecklist(next);
+      return next;
+    },
+    onSuccess: (next) => {
+      queryClient.setQueryData(['takt-readiness-checklist'], next);
+    },
+  });
+
   const reset = useMutation({
     mutationFn: async () => {
       const next = baseState();
@@ -92,7 +104,9 @@ export const useReadinessChecklist = () => {
     done,
     completionPct: total > 0 ? Math.round((done / total) * 100) : 0,
     toggleTask: async (taskId: ReadinessTaskId) => toggle.mutateAsync(taskId),
+    setTaskStatus: async (taskId: ReadinessTaskId, done: boolean) =>
+      setTask.mutateAsync({ taskId, done }),
     resetChecklist: async () => reset.mutateAsync(),
-    isSaving: toggle.isPending || reset.isPending,
+    isSaving: toggle.isPending || reset.isPending || setTask.isPending,
   };
 };
