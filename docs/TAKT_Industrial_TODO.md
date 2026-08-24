@@ -15,11 +15,11 @@
 - [~] Capture evidence: request/response logs and signed QA report. (Evidence metadata capture in app)
 
 ### 2) Reminder reliability certification
-- [ ] Real-device overnight reminder test (iOS + Android, app closed/locked)
-- [ ] Reboot reminder rehydration test
-- [ ] Timezone + DST transition test
+- [~] Real-device overnight reminder test (iOS + Android, app closed/locked) (in-app tracker shipped)
+- [~] Reboot reminder rehydration test (in-app tracker shipped)
+- [~] Timezone + DST transition test (in-app tracker shipped)
 - [ ] Low-power / battery optimization behavior test
-- [ ] Certification report with pass/fail and mitigation notes
+- [~] Certification report with pass/fail and mitigation notes (evidence metadata capture shipped in-app)
 
 ### 3) Compliance/legal closeout
 - [ ] Replace draft imprint values with final legal entity data

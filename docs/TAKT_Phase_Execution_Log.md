@@ -101,3 +101,8 @@
 - Added dedicated `Settings → A/B isolation evidence` screen to run all six matrix cases in-app.
 - Added persistent capture fields for tester name, run date, and evidence notes (screenshot/log references).
 - Linked isolation verdict to release readiness task `patient-isolation` so readiness updates automatically when matrix passes.
+
+## Phase 18 — Reminder reliability certification runner
+- Added `Settings → Reminder reliability certification` with full A1–E1 matrix execution board.
+- Added persistent evidence metadata capture: tester, run date, device/OS, app version, and notes.
+- Synced certification outcomes to readiness blockers (`reminder-ios-closed`, `reminder-android-closed`, `timezone-dst`).

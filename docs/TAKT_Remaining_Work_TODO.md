@@ -12,10 +12,10 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked ex
 - [~] Capture evidence package (screens + request/response traces + pass/fail notes). (Evidence metadata capture now in app)
 
 ## 3) Reminder reliability certification (real-device)
-- [~] iOS overnight reminder test with app closed and phone locked. (Matrix + evidence template prepared)
-- [~] Android overnight reminder test with app closed and phone locked. (Matrix + evidence template prepared)
-- [~] Reboot persistence test. (Matrix + evidence template prepared)
-- [~] Timezone + DST drift test. (Matrix + evidence template prepared)
+- [~] iOS overnight reminder test with app closed and phone locked. (In-app certification tracker shipped; awaiting real-device execution)
+- [~] Android overnight reminder test with app closed and phone locked. (In-app certification tracker shipped; awaiting real-device execution)
+- [~] Reboot persistence test. (In-app certification tracker shipped; awaiting real-device execution)
+- [~] Timezone + DST drift test. (In-app certification tracker shipped; awaiting real-device execution)
 
 ## 4) Clinical/report quality
 - [~] Clinician review of doctor report wording and layout. (Review checklist prepared)

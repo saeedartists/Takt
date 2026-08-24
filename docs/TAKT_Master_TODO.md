@@ -28,9 +28,9 @@
 
 ## D) Reminders reliability (device reality)
 - [x] Scheduler and snooze implementation
-- [ ] iOS app-closed overnight reminder test matrix
-- [ ] Android app-closed overnight reminder test matrix
-- [ ] Reboot/timezone/DST reliability matrix
+- [~] iOS app-closed overnight reminder test matrix (in-app execution board shipped)
+- [~] Android app-closed overnight reminder test matrix (in-app execution board shipped)
+- [~] Reboot/timezone/DST reliability matrix (in-app execution board shipped)
 
 ## E) Security & privacy/compliance
 - [x] Explicit consent + withdraw path
