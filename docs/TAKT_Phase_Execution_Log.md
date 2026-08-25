@@ -130,3 +130,8 @@
 - Added `Settings → Accessibility stress pass` with test cases for large text, screen reader traversal, non-color cues, focus order, and rotation stability.
 - Synced the board state to the readiness checklist `a11y-pass` gate once all checks and evidence fields are complete.
 - Linked Release control center A11y gate to this board for one-tap operator workflow.
+
+## Phase 24 — Evidence capture hardening
+- Added structured evidence-link fields to isolation, accessibility, reminder certification, session QA, and clinician report review boards.
+- Tightened readiness gates so evidence metadata now requires link payloads before pass status is emitted.
+- Aligned consent-audit gate to require evidence links in addition to reviewer identity and date.

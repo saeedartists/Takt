@@ -29,6 +29,7 @@ export type ReportReviewState = {
   reviewerSpecialty: string;
   reviewDate: string;
   sampleCount: string;
+  evidenceLinks: string;
   requiredChanges: string;
   priorityBeforeRelease: string;
   optionalPostV1: string;
@@ -44,6 +45,7 @@ const emptyState = (): ReportReviewState => ({
   reviewerSpecialty: '',
   reviewDate: '',
   sampleCount: '',
+  evidenceLinks: '',
   requiredChanges: '',
   priorityBeforeRelease: '',
   optionalPostV1: '',
@@ -61,6 +63,7 @@ const sanitize = (raw: unknown): ReportReviewState => {
   base.reviewerSpecialty = typeof value.reviewerSpecialty === 'string' ? value.reviewerSpecialty : '';
   base.reviewDate = typeof value.reviewDate === 'string' ? value.reviewDate : '';
   base.sampleCount = typeof value.sampleCount === 'string' ? value.sampleCount : '';
+  base.evidenceLinks = typeof value.evidenceLinks === 'string' ? value.evidenceLinks : '';
   base.requiredChanges = typeof value.requiredChanges === 'string' ? value.requiredChanges : '';
   base.priorityBeforeRelease = typeof value.priorityBeforeRelease === 'string' ? value.priorityBeforeRelease : '';
   base.optionalPostV1 = typeof value.optionalPostV1 === 'string' ? value.optionalPostV1 : '';
@@ -149,7 +152,8 @@ export const useReportReview = () => {
     data.reviewerName.trim().length > 0 &&
     data.reviewerRole.trim().length > 0 &&
     data.reviewDate.trim().length > 0 &&
-    data.sampleCount.trim().length > 0;
+    data.sampleCount.trim().length > 0 &&
+    data.evidenceLinks.trim().length > 0;
 
   const allChecksDone = done === REPORT_REVIEW_CHECKS.length;
   const releasePass = allChecksDone && reviewerMetaComplete && (data.verdict === 'pass' || data.verdict === 'minor-edits');
@@ -181,6 +185,7 @@ export const useReportReview = () => {
           | 'reviewerSpecialty'
           | 'reviewDate'
           | 'sampleCount'
+          | 'evidenceLinks'
           | 'requiredChanges'
           | 'priorityBeforeRelease'
           | 'optionalPostV1'

@@ -26,6 +26,7 @@ export type SessionTokenMatrixState = {
   deviceSummary: string;
   appVersion: string;
   notes: string;
+  evidenceLinks: string;
   cases: Record<SessionQaCaseId, boolean>;
 };
 
@@ -37,6 +38,7 @@ const emptyState = (): SessionTokenMatrixState => ({
   deviceSummary: '',
   appVersion: '',
   notes: '',
+  evidenceLinks: '',
   cases: Object.fromEntries(SESSION_QA_CASES.map((item) => [item.id, false])) as Record<SessionQaCaseId, boolean>,
 });
 
@@ -50,6 +52,7 @@ const sanitize = (raw: unknown): SessionTokenMatrixState => {
   base.deviceSummary = typeof value.deviceSummary === 'string' ? value.deviceSummary : '';
   base.appVersion = typeof value.appVersion === 'string' ? value.appVersion : '';
   base.notes = typeof value.notes === 'string' ? value.notes : '';
+  base.evidenceLinks = typeof value.evidenceLinks === 'string' ? value.evidenceLinks : '';
 
   if (value.cases && typeof value.cases === 'object') {
     const caseMap = value.cases as Record<string, unknown>;
@@ -128,7 +131,8 @@ export const useSessionTokenMatrix = () => {
     data.testerName.trim().length > 0 &&
     data.runDate.trim().length > 0 &&
     data.deviceSummary.trim().length > 0 &&
-    data.appVersion.trim().length > 0;
+    data.appVersion.trim().length > 0 &&
+    data.evidenceLinks.trim().length > 0;
 
   return {
     ...query,
@@ -147,7 +151,7 @@ export const useSessionTokenMatrix = () => {
         },
       }),
     updateMeta: async (
-      delta: Partial<Pick<SessionTokenMatrixState, 'testerName' | 'runDate' | 'deviceSummary' | 'appVersion' | 'notes'>>,
+      delta: Partial<Pick<SessionTokenMatrixState, 'testerName' | 'runDate' | 'deviceSummary' | 'appVersion' | 'evidenceLinks' | 'notes'>>,
     ) => patch(delta),
     reset: async () => reset.mutateAsync(),
     evidenceComplete,

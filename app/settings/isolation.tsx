@@ -133,6 +133,16 @@ export default function IsolationScreen() {
               />
             </Field>
 
+            <Field label={t('isolationEvidenceLinks')}>
+              <Input
+                value={matrix.data.evidenceLinks}
+                onChangeText={(value) => void matrix.updateMeta({ evidenceLinks: value })}
+                placeholder={t('isolationEvidenceLinksPlaceholder')}
+                multiline
+                textAlignVertical="top"
+              />
+            </Field>
+
             <Field label={t('isolationNotes')}>
               <Input
                 value={matrix.data.notes}

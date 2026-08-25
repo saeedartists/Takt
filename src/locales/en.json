@@ -527,5 +527,15 @@
   "a11yGatePass": "Accessibility gate passed.",
   "a11yGateBlocked": "Accessibility gate blocked.",
   "a11yReset": "Reset accessibility matrix",
-  "loadingA11yPass": "Loading accessibility matrix…"
+  "loadingA11yPass": "Loading accessibility matrix…",
+  "isolationEvidenceLinks": "Evidence links",
+  "isolationEvidenceLinksPlaceholder": "Links to screenshots, logs, and denial traces",
+  "a11yEvidenceLinks": "Evidence links",
+  "a11yEvidenceLinksPlaceholder": "Links to screen recordings, screenshots, and issue tickets",
+  "reminderCertEvidenceLinks": "Evidence links",
+  "reminderCertEvidenceLinksPlaceholder": "Links to overnight captures, reboot logs, and timezone proofs",
+  "sessionQaEvidenceLinks": "Evidence links",
+  "sessionQaEvidenceLinksPlaceholder": "Links to auth traces, API logs, and replay recordings",
+  "reportReviewEvidenceLinks": "Evidence links",
+  "reportReviewEvidenceLinksPlaceholder": "Links to exported PDFs and clinician annotation artifacts"
 }

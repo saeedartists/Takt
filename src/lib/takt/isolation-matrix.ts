@@ -16,6 +16,7 @@ export type IsolationMatrixState = {
   testerName: string;
   runDate: string;
   notes: string;
+  evidenceLinks: string;
   cases: Record<IsolationCaseId, boolean>;
 };
 
@@ -25,6 +26,7 @@ const emptyState = (): IsolationMatrixState => ({
   testerName: '',
   runDate: '',
   notes: '',
+  evidenceLinks: '',
   cases: Object.fromEntries(ISOLATION_CASE_IDS.map((id) => [id, false])) as Record<IsolationCaseId, boolean>,
 });
 
@@ -36,6 +38,7 @@ const sanitize = (raw: unknown): IsolationMatrixState => {
   base.testerName = typeof value.testerName === 'string' ? value.testerName : '';
   base.runDate = typeof value.runDate === 'string' ? value.runDate : '';
   base.notes = typeof value.notes === 'string' ? value.notes : '';
+  base.evidenceLinks = typeof value.evidenceLinks === 'string' ? value.evidenceLinks : '';
 
   if (value.cases && typeof value.cases === 'object') {
     const caseMap = value.cases as Record<string, unknown>;
@@ -122,10 +125,13 @@ export const useIsolationMatrix = () => {
           [caseId]: !data.cases[caseId],
         },
       }),
-    updateMeta: async (delta: Partial<Pick<IsolationMatrixState, 'testerName' | 'runDate' | 'notes'>>) =>
+    updateMeta: async (delta: Partial<Pick<IsolationMatrixState, 'testerName' | 'runDate' | 'evidenceLinks' | 'notes'>>) =>
       patch(delta),
     reset: async () => reset.mutateAsync(),
     isPass:
-      done === ISOLATION_CASE_IDS.length && data.testerName.trim().length > 0 && data.runDate.trim().length > 0,
+      done === ISOLATION_CASE_IDS.length &&
+      data.testerName.trim().length > 0 &&
+      data.runDate.trim().length > 0 &&
+      data.evidenceLinks.trim().length > 0,
   };
 };

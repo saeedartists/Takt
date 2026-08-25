@@ -233,6 +233,16 @@ export default function SessionSecurityScreen() {
               />
             </Field>
 
+            <Field label={t('sessionQaEvidenceLinks')}>
+              <Input
+                value={matrix.data.evidenceLinks}
+                onChangeText={(value) => void matrix.updateMeta({ evidenceLinks: value })}
+                placeholder={t('sessionQaEvidenceLinksPlaceholder')}
+                multiline
+                textAlignVertical="top"
+              />
+            </Field>
+
             <Field label={t('sessionQaNotes')}>
               <Input
                 value={matrix.data.notes}

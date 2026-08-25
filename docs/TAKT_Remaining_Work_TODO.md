@@ -42,3 +42,5 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked ex
 ## Work started now
 ✅ Completed item 1.1 in this iteration (interactive readiness checklist shipped).
 ➡️ Next recommended execution item: **3. execute reminder reliability certification on real devices and fill the evidence log (A1–E1)**.
+
+- [~] Evidence package normalization across release boards (screenshots, logs, reviewer signature). (Implemented in-app evidence-links fields + gate enforcement; operator artifacts still need real run uploads each cycle.)

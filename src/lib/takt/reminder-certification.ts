@@ -22,6 +22,7 @@ export type ReminderCertificationState = {
   deviceSummary: string;
   appVersion: string;
   notes: string;
+  evidenceLinks: string;
   cases: Record<ReminderCaseId, boolean>;
 };
 
@@ -33,6 +34,7 @@ const emptyState = (): ReminderCertificationState => ({
   deviceSummary: '',
   appVersion: '',
   notes: '',
+  evidenceLinks: '',
   cases: Object.fromEntries(REMINDER_CASE_IDS.map((id) => [id, false])) as Record<ReminderCaseId, boolean>,
 });
 
@@ -46,6 +48,7 @@ const sanitize = (raw: unknown): ReminderCertificationState => {
   base.deviceSummary = typeof value.deviceSummary === 'string' ? value.deviceSummary : '';
   base.appVersion = typeof value.appVersion === 'string' ? value.appVersion : '';
   base.notes = typeof value.notes === 'string' ? value.notes : '';
+  base.evidenceLinks = typeof value.evidenceLinks === 'string' ? value.evidenceLinks : '';
 
   if (value.cases && typeof value.cases === 'object') {
     const caseMap = value.cases as Record<string, unknown>;
@@ -136,7 +139,7 @@ export const useReminderCertification = () => {
         },
       }),
     updateMeta: async (
-      delta: Partial<Pick<ReminderCertificationState, 'testerName' | 'runDate' | 'deviceSummary' | 'appVersion' | 'notes'>>,
+      delta: Partial<Pick<ReminderCertificationState, 'testerName' | 'runDate' | 'deviceSummary' | 'appVersion' | 'evidenceLinks' | 'notes'>>,
     ) => patch(delta),
     reset: async () => reset.mutateAsync(),
     iosOvernightPass,
@@ -145,6 +148,8 @@ export const useReminderCertification = () => {
     isEvidenceComplete:
       data.testerName.trim().length > 0 &&
       data.runDate.trim().length > 0 &&
-      data.deviceSummary.trim().length > 0,
+      data.deviceSummary.trim().length > 0 &&
+      data.appVersion.trim().length > 0 &&
+      data.evidenceLinks.trim().length > 0,
   };
 };

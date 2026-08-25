@@ -172,6 +172,16 @@ export default function AccessibilityPassScreen() {
               />
             </Field>
 
+            <Field label={t('a11yEvidenceLinks')}>
+              <Input
+                value={matrix.data.evidenceLinks}
+                onChangeText={(value) => void matrix.updateMeta({ evidenceLinks: value })}
+                placeholder={t('a11yEvidenceLinksPlaceholder')}
+                multiline
+                textAlignVertical="top"
+              />
+            </Field>
+
             <Field label={t('a11yNotes')}>
               <Input
                 value={matrix.data.notes}

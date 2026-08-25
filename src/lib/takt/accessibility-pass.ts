@@ -20,6 +20,7 @@ export type AccessibilityPassState = {
   deviceSummary: string;
   assistiveTechUsed: string;
   notes: string;
+  evidenceLinks: string;
   cases: Record<A11yCaseId, boolean>;
 };
 
@@ -31,6 +32,7 @@ const emptyState = (): AccessibilityPassState => ({
   deviceSummary: '',
   assistiveTechUsed: '',
   notes: '',
+  evidenceLinks: '',
   cases: Object.fromEntries(A11Y_CASE_IDS.map((id) => [id, false])) as Record<A11yCaseId, boolean>,
 });
 
@@ -44,6 +46,7 @@ const sanitize = (raw: unknown): AccessibilityPassState => {
   base.deviceSummary = typeof value.deviceSummary === 'string' ? value.deviceSummary : '';
   base.assistiveTechUsed = typeof value.assistiveTechUsed === 'string' ? value.assistiveTechUsed : '';
   base.notes = typeof value.notes === 'string' ? value.notes : '';
+  base.evidenceLinks = typeof value.evidenceLinks === 'string' ? value.evidenceLinks : '';
 
   if (value.cases && typeof value.cases === 'object') {
     const caseMap = value.cases as Record<string, unknown>;
@@ -119,7 +122,8 @@ export const useAccessibilityPass = () => {
     data.testerName.trim().length > 0 &&
     data.runDate.trim().length > 0 &&
     data.deviceSummary.trim().length > 0 &&
-    data.assistiveTechUsed.trim().length > 0;
+    data.assistiveTechUsed.trim().length > 0 &&
+    data.evidenceLinks.trim().length > 0;
 
   return {
     ...query,
@@ -136,7 +140,7 @@ export const useAccessibilityPass = () => {
         },
       }),
     updateMeta: async (
-      delta: Partial<Pick<AccessibilityPassState, 'testerName' | 'runDate' | 'deviceSummary' | 'assistiveTechUsed' | 'notes'>>,
+      delta: Partial<Pick<AccessibilityPassState, 'testerName' | 'runDate' | 'deviceSummary' | 'assistiveTechUsed' | 'evidenceLinks' | 'notes'>>,
     ) => patch(delta),
     reset: async () => reset.mutateAsync(),
     evidenceComplete,

@@ -171,6 +171,16 @@ export default function ReminderCertificationScreen() {
               />
             </Field>
 
+            <Field label={t('reminderCertEvidenceLinks')}>
+              <Input
+                value={cert.data.evidenceLinks}
+                onChangeText={(value) => void cert.updateMeta({ evidenceLinks: value })}
+                placeholder={t('reminderCertEvidenceLinksPlaceholder')}
+                multiline
+                textAlignVertical="top"
+              />
+            </Field>
+
             <Field label={t('reminderCertNotes')}>
               <Input
                 value={cert.data.notes}

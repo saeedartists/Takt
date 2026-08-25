@@ -127,7 +127,10 @@ export const useConsentAudit = () => {
   };
 
   const metadataComplete =
-    data.testerName.trim().length > 0 && data.reviewerRole.trim().length > 0 && data.reviewDate.trim().length > 0;
+    data.testerName.trim().length > 0 &&
+    data.reviewerRole.trim().length > 0 &&
+    data.reviewDate.trim().length > 0 &&
+    data.evidenceLinks.trim().length > 0;
 
   return {
     ...query,

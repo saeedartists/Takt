@@ -172,6 +172,16 @@ export default function ReportReviewScreen() {
                 keyboardType="number-pad"
               />
             </Field>
+
+            <Field label={t('reportReviewEvidenceLinks')}>
+              <Input
+                value={review.data.evidenceLinks}
+                onChangeText={(value) => void review.updateMeta({ evidenceLinks: value })}
+                placeholder={t('reportReviewEvidenceLinksPlaceholder')}
+                multiline
+                textAlignVertical="top"
+              />
+            </Field>
           </View>
         </View>
 
