@@ -116,3 +116,8 @@
 - Added `Settings → Clinician report review` with A/B/C/D checklist from the doctor report review template.
 - Added persistent reviewer metadata capture (name, role, specialty, date, sample count) and verdict (pass / minor edits / fail).
 - Synced readiness task `report-pdf-reviewed` to review gate pass state.
+
+## Phase 21 — Consent audit trail board
+- Added `Settings → Consent audit trail` with persistent evidence checklist and reviewer metadata.
+- Added FHIR Consent traceability panel (grant/withdraw counts + latest event timestamps).
+- Synced readiness task `consent-audit` to consent audit gate state.

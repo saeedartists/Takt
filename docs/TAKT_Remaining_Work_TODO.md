@@ -24,7 +24,7 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked ex
 ## 5) Legal/compliance closeout
 - [ ] Replace draft imprint fields with final legal entity details.
 - [ ] Final legal review of EN/DE privacy + consent copy.
-- [ ] Consent audit trail pack (grant + withdraw traceability evidence).
+- [~] Consent audit trail pack (grant + withdraw traceability evidence). (In-app consent audit board + FHIR trace view shipped)
 
 ## 6) Security + operations
 - [~] Session/token lifecycle QA matrix. (In-app execution board shipped)
