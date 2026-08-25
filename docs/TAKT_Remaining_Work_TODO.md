@@ -4,6 +4,7 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked ex
 
 ## 1) Release-readiness operations (inside app)
 - [x] Add interactive release-readiness checklist with persistent progress in `Settings → Release readiness`.
+- [~] Add release control center that consolidates all critical launch gates in one operator view. (Shipped at `Settings → Release control center`)
 - [ ] Validate checklist UX with non-technical operators (clinician/ops lead) and adjust copy if needed.
 
 ## 2) Live backend verification (highest production risk)

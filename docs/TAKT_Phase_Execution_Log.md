@@ -121,3 +121,7 @@
 - Added `Settings → Consent audit trail` with persistent evidence checklist and reviewer metadata.
 - Added FHIR Consent traceability panel (grant/withdraw counts + latest event timestamps).
 - Synced readiness task `consent-audit` to consent audit gate state.
+
+## Phase 22 — Release control center
+- Added `Settings → Release control center` with one-screen gate status and deep links to each evidence board.
+- Wired gate summary to readiness checklist state and board-level completion counters.
