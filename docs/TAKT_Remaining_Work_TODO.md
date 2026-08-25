@@ -33,7 +33,7 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked ex
 - [~] Support runbook: “reminders did not fire”. (Runbook prepared)
 
 ## 7) Final QA + release gates
-- [ ] Accessibility stress pass (large text + screen reader flows).
+- [~] Accessibility stress pass (large text + screen reader flows). (Board shipped in Settings → Accessibility stress pass; operator run + evidence still to be completed per release cycle.)
 - [ ] Cross-device regression matrix.
 - [ ] Final production dry run sign-off.
 

@@ -111,7 +111,7 @@ export default function ReleaseHubScreen() {
               title={t('releaseHubA11y')}
               subtitle={t('releaseHubA11yHint')}
               value={a11yDone ? t('statusDone') : t('statusPending')}
-              onPress={() => router.push('/settings/readiness' as never)}
+              onPress={() => router.push('/settings/accessibility-pass' as never)}
             />
           </ListGroup>
         </View>

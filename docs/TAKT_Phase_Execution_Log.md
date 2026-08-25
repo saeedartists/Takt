@@ -125,3 +125,8 @@
 ## Phase 22 — Release control center
 - Added `Settings → Release control center` with one-screen gate status and deep links to each evidence board.
 - Wired gate summary to readiness checklist state and board-level completion counters.
+
+## Phase 23 — Accessibility stress pass board
+- Added `Settings → Accessibility stress pass` with test cases for large text, screen reader traversal, non-color cues, focus order, and rotation stability.
+- Synced the board state to the readiness checklist `a11y-pass` gate once all checks and evidence fields are complete.
+- Linked Release control center A11y gate to this board for one-tap operator workflow.
