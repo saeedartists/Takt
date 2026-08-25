@@ -36,6 +36,7 @@ function AppStack() {
       <Stack.Screen name="settings/isolation" options={{ title: t('isolationRouteTitle') }} />
       <Stack.Screen name="settings/reminder-certification" options={{ title: t('reminderCertRouteTitle') }} />
       <Stack.Screen name="settings/session-security" options={{ title: t('sessionQaRouteTitle') }} />
+      <Stack.Screen name="settings/report-review" options={{ title: t('reportReviewRouteTitle') }} />
     </Stack>
   );
 }

@@ -12,7 +12,7 @@
 - [x] Medication create/edit/pause/archive workflow
 - [x] 14-day adherence history + correction path
 - [x] One-page doctor report + PDF export
-- [ ] Real clinician review of report wording and utility
+- [~] Real clinician review of report wording and utility (in-app sign-off board added)
 
 ## B) UX/design quality
 - [x] Calm, low-cognitive-load tab IA (Today / Medications / History / Settings)

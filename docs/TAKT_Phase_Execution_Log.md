@@ -111,3 +111,8 @@
 - Added `Settings → Session and token QA` with ST-01..ST-12 plus malformed payload checks MP-01/MP-02.
 - Added persistent evidence capture: tester, run date, device/OS, app version, notes, and links.
 - Synced readiness checklist task `session-token-qa` to the P0 gate and evidence completeness.
+
+## Phase 20 — Clinician report review sign-off
+- Added `Settings → Clinician report review` with A/B/C/D checklist from the doctor report review template.
+- Added persistent reviewer metadata capture (name, role, specialty, date, sample count) and verdict (pass / minor edits / fail).
+- Synced readiness task `report-pdf-reviewed` to review gate pass state.

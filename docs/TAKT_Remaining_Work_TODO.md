@@ -18,8 +18,8 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked ex
 - [~] Timezone + DST drift test. (In-app certification tracker shipped; awaiting real-device execution)
 
 ## 4) Clinical/report quality
-- [~] Clinician review of doctor report wording and layout. (Review checklist prepared)
-- [ ] Incorporate wording updates from review and re-export validation samples.
+- [~] Clinician review of doctor report wording and layout. (In-app review/sign-off board shipped)
+- [~] Incorporate wording updates from review and re-export validation samples. (Change log capture added to review board)
 
 ## 5) Legal/compliance closeout
 - [ ] Replace draft imprint fields with final legal entity details.
