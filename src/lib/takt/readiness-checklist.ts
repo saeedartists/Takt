@@ -10,6 +10,7 @@ export const READINESS_TASK_IDS = [
   'report-pdf-reviewed',
   'consent-audit',
   'a11y-pass',
+  'session-token-qa',
 ] as const;
 
 export type ReadinessTaskId = (typeof READINESS_TASK_IDS)[number];

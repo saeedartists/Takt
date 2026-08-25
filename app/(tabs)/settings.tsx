@@ -110,6 +110,7 @@ export default function SettingsTabScreen() {
             <ListRow title={t('readinessTitle')} onPress={() => router.push('/settings/readiness')} />
             <ListRow title={t('isolationTitle')} onPress={() => router.push('/settings/isolation')} />
             <ListRow title={t('reminderCertTitle')} onPress={() => router.push('/settings/reminder-certification')} />
+            <ListRow title={t('sessionQaTitle')} onPress={() => router.push('/settings/session-security')} />
           </ListGroup>
         </View>
 

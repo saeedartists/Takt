@@ -40,10 +40,11 @@
 
 ## F) Operations/readiness
 - [~] In-app release readiness board (operators can track completion)
-- [ ] Incident runbook: “reminders did not fire”
+- [~] Incident runbook: “reminders did not fire” (document drafted, pending live drill)
 - [ ] Staged rollout + rollback SOP
 
 ## G) QA & release gates
+- [~] Session/token lifecycle QA execution board (ST-01..ST-12 + malformed payload checks in app)
 - [ ] Cross-device regression matrix execution
 - [ ] Accessibility stress test (dynamic type + SR journey)
 - [ ] Final production dry run and sign-off

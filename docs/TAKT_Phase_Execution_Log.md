@@ -106,3 +106,8 @@
 - Added `Settings → Reminder reliability certification` with full A1–E1 matrix execution board.
 - Added persistent evidence metadata capture: tester, run date, device/OS, app version, and notes.
 - Synced certification outcomes to readiness blockers (`reminder-ios-closed`, `reminder-android-closed`, `timezone-dst`).
+
+## Phase 19 — Session/token security QA runner
+- Added `Settings → Session and token QA` with ST-01..ST-12 plus malformed payload checks MP-01/MP-02.
+- Added persistent evidence capture: tester, run date, device/OS, app version, notes, and links.
+- Synced readiness checklist task `session-token-qa` to the P0 gate and evidence completeness.

@@ -27,8 +27,8 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked ex
 - [ ] Consent audit trail pack (grant + withdraw traceability evidence).
 
 ## 6) Security + operations
-- [~] Session/token lifecycle QA matrix. (Matrix prepared)
-- [ ] Malformed payload and error-surfacing checks.
+- [~] Session/token lifecycle QA matrix. (In-app execution board shipped)
+- [~] Malformed payload and error-surfacing checks. (Tracked in session/token QA board as MP-01 and MP-02)
 - [~] Support runbook: “reminders did not fire”. (Runbook prepared)
 
 ## 7) Final QA + release gates

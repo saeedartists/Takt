@@ -35,7 +35,8 @@ const TASKS: Array<{
     | 'readinessTaskTimezoneTitle'
     | 'readinessTaskReportTitle'
     | 'readinessTaskConsentTitle'
-    | 'readinessTaskA11yTitle';
+    | 'readinessTaskA11yTitle'
+    | 'readinessTaskSessionQaTitle';
   subtitleKey:
     | 'readinessTaskAuthSmokeSubtitle'
     | 'readinessTaskIsolationSubtitle'
@@ -44,7 +45,8 @@ const TASKS: Array<{
     | 'readinessTaskTimezoneSubtitle'
     | 'readinessTaskReportSubtitle'
     | 'readinessTaskConsentSubtitle'
-    | 'readinessTaskA11ySubtitle';
+    | 'readinessTaskA11ySubtitle'
+    | 'readinessTaskSessionQaSubtitle';
 }> = [
   {
     id: 'auth-live-smoke',
@@ -85,6 +87,11 @@ const TASKS: Array<{
     id: 'a11y-pass',
     titleKey: 'readinessTaskA11yTitle',
     subtitleKey: 'readinessTaskA11ySubtitle',
+  },
+  {
+    id: 'session-token-qa',
+    titleKey: 'readinessTaskSessionQaTitle',
+    subtitleKey: 'readinessTaskSessionQaSubtitle',
   },
 ];
 
@@ -282,7 +289,10 @@ export default function ReadinessScreen() {
             <ListRow title={t('readinessRoadmapPhase3')} subtitle={t('statusPending')} />
             <ListRow title={t('readinessRoadmapPhase4')} subtitle={t('statusPending')} />
             <ListRow title={t('readinessRoadmapPhase5')} subtitle={t('statusPending')} />
-            <ListRow title={t('readinessRoadmapPhase6')} subtitle={t('statusPending')} />
+            <ListRow
+              title={t('readinessRoadmapPhase6')}
+              subtitle={checklist.data['session-token-qa'] ? t('statusDone') : t('statusInProgress')}
+            />
           </ListGroup>
         </View>
 
