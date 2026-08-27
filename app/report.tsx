@@ -23,6 +23,7 @@ import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useLocale } from '@/lib/takt/l10n';
+import { buildReportSummary } from '@/lib/takt/report-summary';
 import { buildHistory } from '@/lib/takt/schedule';
 
 const esc = (value: string): string =>
@@ -38,7 +39,7 @@ const REPORT_MISSED_LIMIT = 12;
 
 export default function ReportScreen() {
   const { c } = useTokens();
-  const { t, formatDate, locale } = useLocale();
+  const { t, formatDate, formatDateTime } = useLocale();
   const patient = usePrimaryPatient();
   const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
   const plans = useMedicationPlans(patientRef);
@@ -51,45 +52,22 @@ export default function ReportScreen() {
     [events.data?.entry, plans.plans],
   );
 
-  const summary = useMemo(() => {
-    const totals = history.reduce(
-      (acc, day) => {
-        acc.taken += day.taken;
-        acc.denominator += day.taken + day.skipped + day.missed;
-        return acc;
-      },
-      { taken: 0, denominator: 0 },
-    );
-    const pct = totals.denominator > 0 ? Math.round((totals.taken / totals.denominator) * 100) : 0;
-
-    const byMedication = plans.plans.map((plan) => {
-      const doses = history.flatMap((d) => d.doses).filter((d) => d.requestId === plan.request.id);
-      const taken = doses.filter((d) => d.state === 'taken').length;
-      const denominator = doses.filter((d) => ['taken', 'skipped', 'missed'].includes(d.state)).length;
-      return {
-        id: plan.request.id,
-        label: plan.label,
-        pct: denominator > 0 ? Math.round((taken / denominator) * 100) : 0,
-      };
-    });
-
-    const missedRows = history.flatMap((day) =>
-      day.doses
-        .filter((dose) => dose.state === 'missed')
-        .map((dose) => ({
-          label: dose.label,
-          date: `${formatDate(day.date, { year: 'numeric', month: 'short', day: 'numeric' })} ${new Intl.DateTimeFormat(
-            locale === 'de' ? 'de-DE' : 'en-US',
-            {
-              hour: '2-digit',
-              minute: '2-digit',
-            },
-          ).format(dose.scheduledAt)}`,
-        })),
-    );
-
-    return { pct, byMedication, missedRows };
-  }, [formatDate, history, locale, plans.plans]);
+  const summary = useMemo(
+    () =>
+      buildReportSummary({
+        plans: plans.plans,
+        history,
+        formatMissedDateTime: (value) =>
+          formatDateTime(value, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+      }),
+    [formatDateTime, history, plans.plans],
+  );
 
   const exportPdf = async () => {
     if (!patient.data) return;
@@ -113,7 +91,7 @@ export default function ReportScreen() {
         .join('');
 
       const missedRows = visibleMissed
-        .map((row) => `<tr><td>${esc(row.label)}</td><td style=\"text-align:right\">${esc(row.date)}</td></tr>`)
+        .map((row) => `<tr><td>${esc(row.label)}</td><td style=\"text-align:right\">${esc(row.dateLabel)}</td></tr>`)
         .join('');
 
       const html = `
