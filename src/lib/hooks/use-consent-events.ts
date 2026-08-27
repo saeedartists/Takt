@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { ovokFetch } from '@/lib/ovok-fetch';
+import { FhirRepository } from '@/lib/takt/fhir-repository';
 import type { ConsentResource, FhirBundle } from '@/lib/takt/types';
 
 export const useConsentEvents = (patientRef?: string) =>
@@ -9,7 +9,5 @@ export const useConsentEvents = (patientRef?: string) =>
     enabled: Boolean(patientRef),
     queryKey: ['takt', 'Consent', patientRef],
     queryFn: () =>
-      ovokFetch<FhirBundle<ConsentResource>>(
-        `/fhir/R4/Consent?patient=${encodeURIComponent(patientRef ?? '')}&_count=100&_sort=-date`,
-      ),
+      FhirRepository.searchConsents(`patient=${encodeURIComponent(patientRef ?? '')}&_count=100&_sort=-date`),
   });

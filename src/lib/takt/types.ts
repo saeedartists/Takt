@@ -80,7 +80,7 @@ export type MedicationAdministrationResource = {
 export type ConsentResource = {
   resourceType: 'Consent';
   id?: string;
-  status: string;
+  status: 'active' | 'inactive' | 'draft' | string;
   patient: FhirReference;
   dateTime: string;
   scope: { coding: Array<{ system: string; code: string }> };
@@ -88,6 +88,48 @@ export type ConsentResource = {
   policyRule?: {
     text?: string;
   };
+  extension?: FhirExtension[];
+  provision?: {
+    type?: 'permit' | 'deny' | string;
+    actor?: Array<{
+      role?: { coding?: Array<{ system?: string; code?: string; display?: string }> };
+      reference?: FhirReference;
+    }>;
+  };
+};
+
+export type RelatedPersonResource = {
+  resourceType: 'RelatedPerson';
+  id?: string;
+  active?: boolean;
+  patient: FhirReference;
+  relationship?: Array<{
+    coding?: Array<{ system?: string; code?: string; display?: string }>;
+  }>;
+  name?: Array<{
+    use?: 'official' | 'usual' | 'temp' | 'nickname' | 'anonymous' | 'old' | 'maiden' | string;
+    family?: string;
+    given?: string[];
+  }>;
+  telecom?: Array<{
+    system?: 'phone' | 'fax' | 'email' | 'pager' | 'url' | 'sms' | 'other' | string;
+    value?: string;
+    use?: 'home' | 'work' | 'temp' | 'old' | 'mobile' | string;
+  }>;
+};
+
+export type FamilyGrantStatus = 'granted' | 'revoked';
+
+export type FamilySharingGrant = {
+  id: string;
+  patientRef: string;
+  relatedPersonRef: string;
+  relatedPersonLabel: string;
+  relationshipCode?: string;
+  grantedAt: string;
+  revokedAt?: string;
+  status: FamilyGrantStatus;
+  consent: ConsentResource;
 };
 
 export type DoseState = 'scheduled' | 'due' | 'taken' | 'skipped' | 'missed';

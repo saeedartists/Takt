@@ -40,6 +40,8 @@ function AppStack() {
       <Stack.Screen name="settings/report-review" options={{ title: t('reportReviewRouteTitle') }} />
       <Stack.Screen name="settings/accessibility-pass" options={{ title: t('a11yPassRouteTitle') }} />
       <Stack.Screen name="settings/consent-audit" options={{ title: t('consentAuditRouteTitle') }} />
+      <Stack.Screen name="settings/family-sharing" options={{ title: t('familySharingRouteTitle') }} />
+      <Stack.Screen name="settings/relative-view" options={{ title: t('familySharingRelativeRouteTitle') }} />
     </Stack>
   );
 }

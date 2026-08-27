@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ovokFetch } from '@/lib/ovok-fetch';
+import { FhirRepository } from '@/lib/takt/fhir-repository';
 import { TAKT_EXT } from '@/lib/takt/constants';
 import { fromTimeOfDay, normalizeWeekdayCodes, sortTimes, WEEKDAY_ORDER, WEEKDAYS_ONLY } from '@/lib/takt/time';
 import type {
@@ -89,14 +89,12 @@ export const useMedicationPlans = (patientRef?: string) => {
     enabled: Boolean(patientRef),
     queryKey: ['takt', 'MedicationRequest', patientRef],
     queryFn: () =>
-      ovokFetch<FhirBundle<MedicationRequestResource>>(
-        `/fhir/R4/MedicationRequest?subject=${encodeURIComponent(patientRef ?? '')}&_count=200&_sort=-_lastUpdated`,
-      ),
+      FhirRepository.searchMedicationRequests(`subject=${encodeURIComponent(patientRef ?? '')}&_count=200&_sort=-_lastUpdated`),
   });
 
   const medicationsQuery = useQuery<FhirBundle<MedicationResource>>({
     queryKey: ['takt', 'Medication', 'all'],
-    queryFn: () => ovokFetch<FhirBundle<MedicationResource>>('/fhir/R4/Medication?_count=200'),
+    queryFn: () => FhirRepository.searchMedications('_count=200'),
   });
 
   const plans = useMemo<MedicationPlan[]>(() => {

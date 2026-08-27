@@ -111,6 +111,7 @@ export default function SettingsTabScreen() {
             <ListRow title={t('readinessTitle')} onPress={() => router.push('/settings/readiness')} />
             <ListRow title={t('isolationTitle')} onPress={() => router.push('/settings/isolation')} />
             <ListRow title={t('reportReviewTitle')} onPress={() => router.push('/settings/report-review')} />
+            <ListRow title={t('familySharingTitle')} onPress={() => router.push('/settings/family-sharing' as never)} />
             <ListRow title={t('consentAuditTitle')} onPress={() => router.push('/settings/consent-audit')} />
             <ListRow title={t('a11yPassTitle')} onPress={() => router.push('/settings/accessibility-pass' as never)} />
             <ListRow title={t('reminderCertTitle')} onPress={() => router.push('/settings/reminder-certification')} />
