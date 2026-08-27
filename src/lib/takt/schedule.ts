@@ -8,8 +8,13 @@ import type {
   PausePeriod,
 } from './types';
 
-const eventKey = (requestRef: string, scheduledIso: string): string =>
-  `${requestRef}|${scheduledIso}`;
+export const localScheduledKey = (value: Date): string => {
+  const hours = value.getHours().toString().padStart(2, '0');
+  const minutes = value.getMinutes().toString().padStart(2, '0');
+  return `${isoDateKey(value)}|${hours}:${minutes}`;
+};
+
+const eventKey = (requestRef: string, localKey: string): string => `${requestRef}|${localKey}`;
 
 const eventState = (event: MedicationAdministrationResource): DoseState => {
   if (event.status === 'completed') return 'taken';
@@ -26,10 +31,13 @@ const indexEvents = (
   const map = new Map<string, MedicationAdministrationResource>();
   for (const event of events) {
     const requestRef = event.request?.reference;
-    const scheduled = event.extension?.find((x) => x.url === TAKT_EXT.scheduledTime)?.valueDateTime;
-    if (!requestRef || !scheduled) continue;
+    const scheduledRaw = event.extension?.find((x) => x.url === TAKT_EXT.scheduledTime)?.valueDateTime;
+    if (!requestRef || !scheduledRaw) continue;
 
-    const key = eventKey(requestRef, scheduled);
+    const scheduledAt = new Date(scheduledRaw);
+    if (Number.isNaN(scheduledAt.getTime())) continue;
+
+    const key = eventKey(requestRef, localScheduledKey(scheduledAt));
     const current = map.get(key);
 
     if (!current || eventTimestamp(event) >= eventTimestamp(current)) {
@@ -89,6 +97,26 @@ const doseSuppressed = (plan: MedicationPlan, scheduledAt: Date): boolean => {
   return false;
 };
 
+export const graceWindowCloseAt = (
+  scheduledAt: Date,
+  graceHours = DEFAULT_GRACE_HOURS,
+): Date => new Date(scheduledAt.getTime() + graceHours * 60 * 60 * 1000);
+
+export const resolveDoseState = (
+  scheduledAt: Date,
+  now: Date,
+  event?: MedicationAdministrationResource,
+): DoseState => {
+  if (event) {
+    return eventState(event);
+  }
+
+  const graceLimit = graceWindowCloseAt(scheduledAt);
+  if (now < scheduledAt) return 'scheduled';
+  if (now <= graceLimit) return 'due';
+  return 'missed';
+};
+
 export const buildDoseOccurrencesForDay = (
   plans: MedicationPlan[],
   events: MedicationAdministrationResource[],
@@ -106,19 +134,9 @@ export const buildDoseOccurrencesForDay = (
       if (doseSuppressed(plan, scheduledAt)) continue;
 
       const requestRef = `MedicationRequest/${plan.request.id}`;
-      const lookup = indexed.get(eventKey(requestRef, scheduledAt.toISOString()));
+      const lookup = indexed.get(eventKey(requestRef, localScheduledKey(scheduledAt)));
 
-      let state: DoseState = 'scheduled';
-      if (lookup) {
-        state = eventState(lookup);
-      } else {
-        const graceLimit = new Date(scheduledAt.getTime() + DEFAULT_GRACE_HOURS * 60 * 60 * 1000);
-        if (now >= scheduledAt && now <= graceLimit) {
-          state = 'due';
-        } else if (now > graceLimit) {
-          state = 'missed';
-        }
-      }
+      const state = resolveDoseState(scheduledAt, now, lookup);
 
       doses.push({
         id: `${plan.request.id}-${scheduledAt.toISOString()}`,
@@ -154,20 +172,29 @@ export type HistoryDay = {
   doses: DoseOccurrence[];
 };
 
+export type BuildHistoryOptions = {
+  now?: Date;
+  today?: Date;
+};
+
 export const buildHistory = (
   plans: MedicationPlan[],
   events: MedicationAdministrationResource[],
   days = 14,
+  options?: BuildHistoryOptions,
 ): HistoryDay[] => {
-  const today = startOfDay(new Date());
+  const now = options?.now ?? new Date();
+  const today = startOfDay(options?.today ?? now);
   const rows: HistoryDay[] = [];
+
   for (let i = days - 1; i >= 0; i -= 1) {
     const day = addDays(today, -i);
-    const doses = buildDoseOccurrencesForDay(plans, events, day, new Date());
+    const doses = buildDoseOccurrencesForDay(plans, events, day, now);
     const taken = doses.filter((d) => d.state === 'taken').length;
     const skipped = doses.filter((d) => d.state === 'skipped').length;
     const missed = doses.filter((d) => d.state === 'missed').length;
     const denominator = taken + skipped + missed;
+
     rows.push({
       date: day,
       key: isoDateKey(day),
@@ -178,6 +205,7 @@ export const buildHistory = (
       doses,
     });
   }
+
   return rows;
 };
 
