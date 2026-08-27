@@ -9,6 +9,8 @@
 ## Wave 1 — Release-critical
 
 ### 1) Backend auth + access control
+- [x] Builder output-shape decision documented (`docs/TAKT_Builder_Shape_Decision.md`).
+- [x] Auth blocker investigation documented with endpoint-level evidence (`docs/TAKT_Auth_Blocker_Investigation.md`).
 - [!] Enable tenant patient auth settings (`PATIENT_LOGIN_ENABLED`, `PATIENT_REGISTRATION_ENABLED`)  Blocker: settings write path currently returns `key-not-found` in Builder tools.
 - [x] Improve app-side backend readiness diagnostics and routing when live backend is unreachable/misconfigured.
 - [~] Execute patient isolation verification matrix (User A cannot read User B data). (In-app matrix runner shipped)

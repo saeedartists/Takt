@@ -14,9 +14,9 @@ export default function ResetPasswordWebScreen() {
       <Stack>
         <Card>
           <View style={{ padding: spacing(4), gap: spacing(3) }}>
-            <Text style={[typography.body, { color: c.textPrimary }]}>{t('authResetDescription')}</Text>
-            <Text style={[typography.footnote, { color: c.textSecondary }]}>Reset is available in the mobile app experience.</Text>
-            <Button label={t('authSignInTitle')} onPress={() => router.replace('/auth/sign-in' as never)} />
+            <Text style={[typography.body, { color: c.textPrimary }]}>{t('authBackendNotReadyTitle')}</Text>
+            <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('authBackendNotReadyBody')}</Text>
+            <Button kind="secondary" label={t('authSignInTitle')} onPress={() => router.replace('/auth/sign-in' as never)} />
           </View>
         </Card>
       </Stack>
