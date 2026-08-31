@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs, useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useLocale } from '@/lib/takt/l10n';
 import { useReminderResponseRouting, useReminderSync } from '@/lib/takt/reminders';
+import { resolveSessionGate } from '@/lib/auth-session';
 import { radius, spacing } from '@/theme/tokens';
 import { useTokens } from '@/theme/use-tokens';
 
@@ -18,6 +20,31 @@ export default function TabsLayout() {
 
   useReminderSync(plans.plans, Boolean(patientRef) && !plans.isLoading);
   useReminderResponseRouting(router);
+
+
+  useEffect(() => {
+    let active = true;
+
+    const guard = async () => {
+      const gate = await resolveSessionGate();
+      if (!active) return;
+
+      if (gate.kind === 'needs-config' || gate.kind === 'backend-unreachable') {
+        router.replace('/setup' as never);
+        return;
+      }
+
+      if (gate.kind === 'unauthenticated') {
+        router.replace('/auth/sign-in' as never);
+      }
+    };
+
+    void guard();
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   return (
     <Tabs
