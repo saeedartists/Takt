@@ -1,14 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useLocale } from '@/lib/takt/l10n';
-import { useReminderSync } from '@/lib/takt/reminders';
+import { useReminderResponseRouting, useReminderSync } from '@/lib/takt/reminders';
 import { radius, spacing } from '@/theme/tokens';
 import { useTokens } from '@/theme/use-tokens';
 
 export default function TabsLayout() {
   const { t } = useLocale();
+  const router = useRouter();
   const { c } = useTokens();
 
   const patient = usePrimaryPatient();
@@ -16,6 +17,7 @@ export default function TabsLayout() {
   const plans = useMedicationPlans(patientRef);
 
   useReminderSync(plans.plans, Boolean(patientRef) && !plans.isLoading);
+  useReminderResponseRouting(router);
 
   return (
     <Tabs

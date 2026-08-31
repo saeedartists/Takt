@@ -1,4 +1,4 @@
-import { Link, useRouter } from 'expo-router';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
@@ -26,7 +26,7 @@ import { useRecordDose, useUndoDose } from '@/lib/hooks/use-takt-mutations';
 import { useReminderPreferences } from '@/lib/takt/preferences';
 import { adherenceSummary, buildDoseOccurrencesForDay, doseSubtitle, upcomingCount } from '@/lib/takt/schedule';
 import { useLocale } from '@/lib/takt/l10n';
-import { scheduleSnoozeReminder } from '@/lib/takt/reminders';
+import { reminderDoseKey, scheduleSnoozeReminder } from '@/lib/takt/reminders';
 import { startOfDay } from '@/lib/takt/time';
 import type { DoseOccurrence, DoseState } from '@/lib/takt/types';
 
@@ -50,6 +50,7 @@ export default function TodayScreen() {
   const { c } = useTokens();
   const { t, formatDate, formatTime } = useLocale();
 
+  const params = useLocalSearchParams<{ focus?: string }>();
   const patient = usePrimaryPatient();
   const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
 
@@ -146,10 +147,21 @@ export default function TodayScreen() {
     setActionError(null);
 
     try {
-      await scheduleSnoozeReminder(dose.label, reminderPrefs.data?.snoozeMinutes ?? 15, {
-        title: t('doseSnoozedTitle'),
-        body: t('doseSnoozedBody'),
-      });
+      const result = await scheduleSnoozeReminder(
+        {
+          label: dose.label,
+          delayMinutes: reminderPrefs.data?.snoozeMinutes ?? 15,
+          doseKey: reminderDoseKey(dose.requestId, dose.scheduledAt),
+        },
+        {
+          title: t('doseSnoozedTitle'),
+          body: t('doseSnoozedBody'),
+        },
+      );
+
+      if (!result.scheduled) {
+        setActionError(t('snoozeSingleLimit'));
+      }
     } catch {
       setActionError(t('snoozeError'));
     }
@@ -268,11 +280,19 @@ export default function TodayScreen() {
                     <View style={styles.timeHeader}>
                       <Text style={[typography.headline, { color: c.textPrimary }]}>{bucket.time}</Text>
                     </View>
-                    {bucket.doses.map((dose, index) => (
+                    {bucket.doses.map((dose, index) => {
+                      const isFocused =
+                        typeof params.focus === 'string' &&
+                        params.focus === reminderDoseKey(dose.requestId, dose.scheduledAt);
+
+                      return (
                       <View
                         key={dose.id}
                         style={[
                           styles.row,
+                          isFocused && {
+                            backgroundColor: c.surfaceRaised,
+                          },
                           index > 0 && {
                             borderTopWidth: StyleSheet.hairlineWidth,
                             borderTopColor: c.separator,
@@ -291,7 +311,10 @@ export default function TodayScreen() {
                             </Text>
                           </View>
 
-                          <Badge label={stateLabel(dose.state)} tone={stateTone(dose.state)} />
+                          <View style={styles.stateBadgeRow}>
+                            <Badge label={stateLabel(dose.state)} tone={stateTone(dose.state)} />
+                            {isFocused ? <Badge label={t('reminderContextBadge')} tone="accent" /> : null}
+                          </View>
 
                           {dose.state === 'due' ? (
                             <View style={{ gap: spacing(2) }}>
@@ -327,7 +350,8 @@ export default function TodayScreen() {
                           ) : null}
                         </View>
                       </View>
-                    ))}
+                    );
+                    })}
                   </View>
                 </Card>
               ))}
@@ -422,6 +446,11 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   actionRow: {
+    flexDirection: 'row',
+    gap: spacing(2),
+    flexWrap: 'wrap',
+  },
+  stateBadgeRow: {
     flexDirection: 'row',
     gap: spacing(2),
     flexWrap: 'wrap',

@@ -564,5 +564,11 @@
   "familySharingRelativeGuardrail": "Diese Ansicht ist bewusst nur lesend. Sie zeigt nur heutige Dosen und Status.",
   "familySharingOptionalQuietReminder": "Optionale v1.1-Idee: eine leise Erinnerung, wenn eine Dosis nach 2 Stunden noch unbestätigt ist.",
   "familySharingRelativeNoDosesHint": "Heute sind keine Patientendosen geplant.",
-  "familySharingRelativeBlockedTitle": "In der Angehörigenansicht nicht verfügbar"
+  "familySharingRelativeBlockedTitle": "In der Angehörigenansicht nicht verfügbar",
+  "snoozeSingleLimit": "Snooze wurde für diese Dosis bereits verwendet.",
+  "reminderContextBadge": "Aus Erinnerung",
+  "reminderDiagnosticsTitle": "Reminder-Diagnostik",
+  "reminderDiagnosticsLoading": "Reminder-Diagnostik wird geladen…",
+  "reminderDiagnosticsEmpty": "Noch keine Reminder-Diagnostik vorhanden.",
+  "reminderDiagnosticsRefresh": "Diagnostik aktualisieren"
 }

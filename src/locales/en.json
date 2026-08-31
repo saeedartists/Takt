@@ -564,5 +564,11 @@
   "familySharingRelativeGuardrail": "This screen is read-only by design. It mirrors patient today doses and status only.",
   "familySharingOptionalQuietReminder": "Optional v1.1 design: one quiet reminder when a dose is still unconfirmed after 2 hours.",
   "familySharingRelativeNoDosesHint": "No patient doses scheduled today.",
-  "familySharingRelativeBlockedTitle": "Not available in relative view"
+  "familySharingRelativeBlockedTitle": "Not available in relative view",
+  "snoozeSingleLimit": "Snooze is already used for this dose.",
+  "reminderContextBadge": "From reminder",
+  "reminderDiagnosticsTitle": "Reminder diagnostics",
+  "reminderDiagnosticsLoading": "Loading reminder diagnostics…",
+  "reminderDiagnosticsEmpty": "No reminder diagnostics yet.",
+  "reminderDiagnosticsRefresh": "Refresh diagnostics"
 }

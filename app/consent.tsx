@@ -17,7 +17,7 @@ import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useEnsurePatient, useRecordConsent } from '@/lib/hooks/use-takt-mutations';
 import { CONSENT_STORAGE_KEY } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
-import { requestReminderPermissions } from '@/lib/takt/reminders';
+import { requestReminderPermissionsAtConsent } from '@/lib/takt/reminders';
 import { useTokens } from '@/theme/use-tokens';
 
 export default function ConsentScreen() {
@@ -39,7 +39,7 @@ export default function ConsentScreen() {
         : `Patient/${(await ensurePatient.mutateAsync()).id}`;
 
       await consent.mutateAsync(patientRef);
-      await requestReminderPermissions();
+      await requestReminderPermissionsAtConsent();
       await AsyncStorage.setItem(CONSENT_STORAGE_KEY, 'accepted');
       router.replace('/(tabs)/today');
     } catch {

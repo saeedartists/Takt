@@ -1,14 +1,43 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useMemo } from 'react';
-import { Platform } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { addDays, atClockTime, dayCodeFromDate, startOfDay } from './time';
+import { addDays, atClockTime, dayCodeFromDate, isoDateKey, startOfDay } from './time';
 import { useLocale } from './l10n';
 import type { MedicationPlan } from './types';
 
 const STORAGE_KEY = 'takt:scheduled-notification-ids:v1';
 const CHANNEL_ID = 'takt-dose-reminders';
 const MAX_PENDING_NOTIFICATIONS = 60;
+const REMINDER_PERMISSION_STATE_KEY = 'takt:reminder-permission-state:v1';
+const REMINDER_DIAGNOSTICS_KEY = 'takt:reminder-diagnostics:v1';
+const REMINDER_SNOOZE_GUARD_KEY = 'takt:reminder-snooze-guard:v1';
+
+type ReminderPermissionState = {
+  askedAt?: string;
+  granted: boolean;
+  source: 'consent' | 'system-check';
+};
+
+export type ReminderDiagnosticEvent = {
+  id: string;
+  at: string;
+  kind:
+    | 'permissions.requested'
+    | 'permissions.granted'
+    | 'permissions.denied'
+    | 'schedule.reconcile.start'
+    | 'schedule.reconcile.done'
+    | 'schedule.reconcile.blocked'
+    | 'schedule.resumed'
+    | 'schedule.timezone-changed'
+    | 'schedule.cancelled'
+    | 'notification.opened'
+    | 'snooze.scheduled'
+    | 'snooze.skipped-single-limit';
+  detail?: string;
+};
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -23,10 +52,21 @@ type ReminderSeed = {
   triggerAt: Date;
   title: string;
   body: string;
+  doseKey: string;
+  requestRef: string;
+};
+
+type ReminderNotificationData = {
+  route: '/(tabs)/today';
+  doseKey: string;
+  requestRef: string;
+  scheduledAt: string;
 };
 
 const formatTemplate = (template: string, vars: Record<string, string>): string =>
   Object.entries(vars).reduce((acc, [k, v]) => acc.replaceAll(`{${k}}`, v), template);
+
+const buildDoseKey = (requestId: string, triggerAt: Date): string => `${requestId}|${isoDateKey(triggerAt)}|${triggerAt.getHours().toString().padStart(2, '0')}:${triggerAt.getMinutes().toString().padStart(2, '0')}`;
 
 const canScheduleOnDay = (plan: MedicationPlan, date: Date): boolean => {
   if (plan.request.status !== 'active') return false;
@@ -50,6 +90,7 @@ const buildReminderSeeds = (
         const triggerAt = atClockTime(day, time);
         if (triggerAt <= floor) continue;
         const suffix = plan.strength ? ` (${plan.strength})` : '';
+        const requestId = plan.request.id;
         rows.push({
           triggerAt,
           title: copy.title,
@@ -58,6 +99,8 @@ const buildReminderSeeds = (
             suffix,
             time,
           }),
+          requestRef: `MedicationRequest/${requestId}`,
+          doseKey: buildDoseKey(requestId, triggerAt),
         });
       }
     }
@@ -68,13 +111,90 @@ const buildReminderSeeds = (
     .slice(0, MAX_PENDING_NOTIFICATIONS);
 };
 
-export const requestReminderPermissions = async (): Promise<boolean> => {
+const readJson = async <T>(key: string, fallback: T): Promise<T> => {
+  const raw = await AsyncStorage.getItem(key);
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+};
+
+const writeJson = async <T>(key: string, value: T): Promise<void> => {
+  await AsyncStorage.setItem(key, JSON.stringify(value));
+};
+
+const appendDiagnosticEvent = async (
+  kind: ReminderDiagnosticEvent['kind'],
+  detail?: string,
+): Promise<void> => {
+  const current = await readJson<ReminderDiagnosticEvent[]>(REMINDER_DIAGNOSTICS_KEY, []);
+  const next: ReminderDiagnosticEvent[] = [
+    {
+      id: `${Date.now().toString()}-${Math.random().toString(36).slice(2, 8)}`,
+      at: new Date().toISOString(),
+      kind,
+      detail,
+    },
+    ...current,
+  ].slice(0, 200);
+  await writeJson(REMINDER_DIAGNOSTICS_KEY, next);
+};
+
+export const readReminderDiagnostics = async (): Promise<ReminderDiagnosticEvent[]> =>
+  readJson<ReminderDiagnosticEvent[]>(REMINDER_DIAGNOSTICS_KEY, []);
+
+export const requestReminderPermissionsAtConsent = async (): Promise<boolean> => {
+  await appendDiagnosticEvent('permissions.requested', 'consent-screen');
+
   const existing = await Notifications.getPermissionsAsync();
-  if (existing.granted || existing.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL) {
+  const alreadyGranted =
+    existing.granted || existing.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
+
+  if (alreadyGranted) {
+    await writeJson<ReminderPermissionState>(REMINDER_PERMISSION_STATE_KEY, {
+      askedAt: new Date().toISOString(),
+      granted: true,
+      source: 'system-check',
+    });
+    await appendDiagnosticEvent('permissions.granted', 'already-granted');
     return true;
   }
+
   const requested = await Notifications.requestPermissionsAsync();
-  return requested.granted || requested.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
+  const granted =
+    requested.granted || requested.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
+
+  await writeJson<ReminderPermissionState>(REMINDER_PERMISSION_STATE_KEY, {
+    askedAt: new Date().toISOString(),
+    granted,
+    source: 'consent',
+  });
+
+  await appendDiagnosticEvent(granted ? 'permissions.granted' : 'permissions.denied');
+  return granted;
+};
+
+const canScheduleWithoutPrompt = async (): Promise<boolean> => {
+  const status = await Notifications.getPermissionsAsync();
+  if (status.granted || status.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL) {
+    await writeJson<ReminderPermissionState>(REMINDER_PERMISSION_STATE_KEY, {
+      askedAt: new Date().toISOString(),
+      granted: true,
+      source: 'system-check',
+    });
+    return true;
+  }
+
+  const remembered = await readJson<ReminderPermissionState | null>(REMINDER_PERMISSION_STATE_KEY, null);
+  if (remembered && remembered.granted === false) {
+    await appendDiagnosticEvent('schedule.reconcile.blocked', 'permission-denied-remembered');
+    return false;
+  }
+
+  await appendDiagnosticEvent('schedule.reconcile.blocked', 'permission-missing-no-consent-prompt');
+  return false;
 };
 
 const ensureChannel = async (): Promise<void> => {
@@ -88,38 +208,46 @@ const ensureChannel = async (): Promise<void> => {
   });
 };
 
-const readScheduledIds = async (): Promise<string[]> => {
-  const raw = await AsyncStorage.getItem(STORAGE_KEY);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
-  } catch {
-    return [];
-  }
-};
+const readScheduledIds = async (): Promise<string[]> => readJson<string[]>(STORAGE_KEY, []);
 
 const writeScheduledIds = async (ids: string[]): Promise<void> => {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+  await writeJson(STORAGE_KEY, ids);
 };
 
-const replaceSchedule = async (
+const reconcileSchedule = async (
   plans: MedicationPlan[],
   copy: { title: string; body: string },
 ): Promise<void> => {
+  await appendDiagnosticEvent('schedule.reconcile.start', `plans:${plans.length.toString()}`);
+
+  const canSchedule = await canScheduleWithoutPrompt();
+  if (!canSchedule) {
+    await writeScheduledIds([]);
+    return;
+  }
+
   await ensureChannel();
   const previousIds = await readScheduledIds();
   await Promise.all(previousIds.map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => undefined)));
+  await appendDiagnosticEvent('schedule.cancelled', `count:${previousIds.length.toString()}`);
 
   const seeds = buildReminderSeeds(plans, copy);
   const nextIds: string[] = [];
 
   for (const seed of seeds) {
+    const data: ReminderNotificationData = {
+      route: '/(tabs)/today',
+      doseKey: seed.doseKey,
+      requestRef: seed.requestRef,
+      scheduledAt: seed.triggerAt.toISOString(),
+    };
+
     const id = await Notifications.scheduleNotificationAsync({
       content: {
         title: seed.title,
         body: seed.body,
         sound: 'default',
+        data,
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
@@ -131,22 +259,52 @@ const replaceSchedule = async (
   }
 
   await writeScheduledIds(nextIds);
+  await appendDiagnosticEvent('schedule.reconcile.done', `scheduled:${nextIds.length.toString()}`);
+};
+
+const readSnoozeGuards = async (): Promise<Record<string, string>> =>
+  readJson<Record<string, string>>(REMINDER_SNOOZE_GUARD_KEY, {});
+
+const writeSnoozeGuards = async (value: Record<string, string>): Promise<void> => {
+  await writeJson(REMINDER_SNOOZE_GUARD_KEY, value);
+};
+
+const cleanupSnoozeGuards = (map: Record<string, string>): Record<string, string> => {
+  const floor = Date.now() - 48 * 60 * 60 * 1000;
+  return Object.fromEntries(
+    Object.entries(map).filter(([, at]) => {
+      const timestamp = new Date(at).getTime();
+      return Number.isFinite(timestamp) && timestamp >= floor;
+    }),
+  );
 };
 
 export const scheduleSnoozeReminder = async (
-  label: string,
-  delayMinutes = 15,
+  input: { label: string; delayMinutes?: number; doseKey: string },
   copy?: { title: string; body: string },
-): Promise<void> => {
+): Promise<{ scheduled: boolean }> => {
   await ensureChannel();
+
+  const guards = cleanupSnoozeGuards(await readSnoozeGuards());
+  if (guards[input.doseKey]) {
+    await appendDiagnosticEvent('snooze.skipped-single-limit', input.doseKey);
+    await writeSnoozeGuards(guards);
+    return { scheduled: false };
+  }
+
+  const delayMinutes = input.delayMinutes ?? 15;
+
   await Notifications.scheduleNotificationAsync({
     content: {
       title: copy?.title ?? 'Dose snoozed',
-      body:
-        copy?.body
-          ? formatTemplate(copy.body, { label, minutes: delayMinutes.toString() })
-          : `${label} reminder in ${delayMinutes.toString()} minutes`,
+      body: copy?.body
+        ? formatTemplate(copy.body, { label: input.label, minutes: delayMinutes.toString() })
+        : `${input.label} reminder in ${delayMinutes.toString()} minutes`,
       sound: 'default',
+      data: {
+        route: '/(tabs)/today',
+        doseKey: input.doseKey,
+      },
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
@@ -155,12 +313,15 @@ export const scheduleSnoozeReminder = async (
       channelId: Platform.OS === 'android' ? CHANNEL_ID : undefined,
     },
   });
+
+  guards[input.doseKey] = new Date().toISOString();
+  await writeSnoozeGuards(guards);
+  await appendDiagnosticEvent('snooze.scheduled', `${input.doseKey}|${delayMinutes.toString()}`);
+
+  return { scheduled: true };
 };
 
-export const useReminderSync = (
-  plans: MedicationPlan[],
-  enabled: boolean,
-): void => {
+export const useReminderSync = (plans: MedicationPlan[], enabled: boolean): void => {
   const { t } = useLocale();
   const signature = useMemo(
     () =>
@@ -180,22 +341,123 @@ export const useReminderSync = (
     [plans],
   );
 
+  const timezoneRef = useRef(Intl.DateTimeFormat().resolvedOptions().timeZone);
+
+  const sync = useCallback(async () => {
+    if (!enabled) return;
+    await reconcileSchedule(plans, {
+      title: t('reminderNotificationTitle'),
+      body: t('reminderNotificationBody'),
+    });
+  }, [enabled, plans, t]);
+
+  useEffect(() => {
+    void sync();
+  }, [sync, signature]);
+
   useEffect(() => {
     if (!enabled) return;
 
-    let cancelled = false;
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') return;
 
-    void (async () => {
-      const granted = await requestReminderPermissions();
-      if (!granted || cancelled) return;
-      await replaceSchedule(plans, {
-        title: t('reminderNotificationTitle'),
-        body: t('reminderNotificationBody'),
-      });
-    })();
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (timezone !== timezoneRef.current) {
+        timezoneRef.current = timezone;
+        void appendDiagnosticEvent('schedule.timezone-changed', timezone);
+      } else {
+        void appendDiagnosticEvent('schedule.resumed');
+      }
+
+      void sync();
+    });
 
     return () => {
-      cancelled = true;
+      sub.remove();
     };
-  }, [enabled, signature]);
+  }, [enabled, sync]);
 };
+
+const parseReminderNavigation = (response: Notifications.NotificationResponse): {
+  route: '/(tabs)/today';
+  doseKey?: string;
+  requestRef?: string;
+} | null => {
+  const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+  if (!data) return null;
+  if (data.route !== '/(tabs)/today') return null;
+
+  return {
+    route: '/(tabs)/today',
+    doseKey: typeof data.doseKey === 'string' ? data.doseKey : undefined,
+    requestRef: typeof data.requestRef === 'string' ? data.requestRef : undefined,
+  };
+};
+
+type ReminderRouter = {
+  push: (href: any) => void;
+  replace: (href: any) => void;
+};
+
+export const useReminderResponseRouting = (router: ReminderRouter): void => {
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const target = parseReminderNavigation(response);
+      if (!target) return;
+
+      void appendDiagnosticEvent('notification.opened', target.doseKey ?? target.requestRef);
+      const query = target.doseKey ? `?focus=${encodeURIComponent(target.doseKey)}` : '';
+      router.push(`/(tabs)/today${query}` as never);
+    });
+
+    return () => {
+      sub.remove();
+    };
+  }, [router]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void Notifications.getLastNotificationResponseAsync().then((response) => {
+        if (!response) return;
+        const target = parseReminderNavigation(response);
+        if (!target) return;
+
+        void appendDiagnosticEvent('notification.opened', target.doseKey ?? target.requestRef);
+        const query = target.doseKey ? `?focus=${encodeURIComponent(target.doseKey)}` : '';
+        router.replace(`/(tabs)/today${query}` as never);
+      });
+    }, [router]),
+  );
+};
+
+export const useReminderDiagnostics = (limit = 20) => {
+  const [rows, setRows] = useState<ReminderDiagnosticEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    void readReminderDiagnostics().then((result) => {
+      if (!active) return;
+      setRows(result.slice(0, limit));
+      setLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [limit]);
+
+  return {
+    rows,
+    loading,
+    refetch: async () => {
+      setLoading(true);
+      const result = await readReminderDiagnostics();
+      setRows(result.slice(0, limit));
+      setLoading(false);
+    },
+  };
+};
+
+export const reminderDoseKey = buildDoseKey;
+

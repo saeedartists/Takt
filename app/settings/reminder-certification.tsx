@@ -19,6 +19,7 @@ import {
 import { useReadinessChecklist } from '@/lib/takt/readiness-checklist';
 import { type ReminderCaseId, useReminderCertification } from '@/lib/takt/reminder-certification';
 import { useLocale } from '@/lib/takt/l10n';
+import { useReminderDiagnostics } from '@/lib/takt/reminders';
 
 const CASES: Array<{
   id: ReminderCaseId;
@@ -62,6 +63,7 @@ export default function ReminderCertificationScreen() {
   const { t } = useLocale();
   const checklist = useReadinessChecklist();
   const cert = useReminderCertification();
+  const diagnostics = useReminderDiagnostics(12);
 
   useEffect(() => {
     if (checklist.isLoading) return;
@@ -192,6 +194,30 @@ export default function ReminderCertificationScreen() {
             </Field>
 
             <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('reminderCertEvidenceHint')}</Text>
+          </View>
+        </View>
+
+
+        <View>
+          <SectionHeader title={t('reminderDiagnosticsTitle')} />
+          {diagnostics.loading ? (
+            <LoadingState label={t('reminderDiagnosticsLoading')} />
+          ) : diagnostics.rows.length === 0 ? (
+            <Badge tone="neutral" label={t('reminderDiagnosticsEmpty')} />
+          ) : (
+            <ListGroup>
+              {diagnostics.rows.map((row, index) => (
+                <ListRow
+                  key={row.id}
+                  isFirst={index === 0}
+                  title={row.kind}
+                  subtitle={`${row.at}${row.detail ? ` · ${row.detail}` : ''}`}
+                />
+              ))}
+            </ListGroup>
+          )}
+          <View style={{ marginTop: spacing(2) }}>
+            <Button kind="secondary" label={t('reminderDiagnosticsRefresh')} onPress={() => void diagnostics.refetch()} />
           </View>
         </View>
 
