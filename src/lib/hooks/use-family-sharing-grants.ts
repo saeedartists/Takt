@@ -9,23 +9,38 @@ import {
   toFamilySharingGrant,
   type ViewerRole,
 } from '@/lib/takt/family-sharing';
+import {
+  validateConsentResource,
+  validateRelatedPersonResource,
+} from '@/lib/takt/fhir-validation';
 import type { FamilySharingGrant, RelatedPersonResource } from '@/lib/takt/types';
 
 const refId = (value?: string): string | undefined => value?.split('/')[1];
+
+const relationshipCoding = (relationshipCode: string) => ({
+  system: 'http://terminology.hl7.org/CodeSystem/v3-RoleCode',
+  code: relationshipCode,
+  display:
+    relationshipCode === 'SPS' ? 'spouse' : relationshipCode === 'CGV' ? 'caregiver' : 'relative',
+});
 
 export const useFamilySharingGrants = (patientRef?: string) => {
   const consentQuery = useQuery({
     enabled: Boolean(patientRef),
     queryKey: ['takt', 'family-sharing', 'consent', patientRef],
     queryFn: async () =>
-      FhirRepository.searchConsents(`patient=${encodeURIComponent(patientRef ?? '')}&_count=200&_sort=-date`),
+      FhirRepository.searchConsents(
+        `patient=${encodeURIComponent(patientRef ?? '')}&_count=200&_sort=-date`,
+      ),
   });
 
   const relatedQuery = useQuery({
     enabled: Boolean(patientRef),
     queryKey: ['takt', 'family-sharing', 'related-person', patientRef],
     queryFn: async () =>
-      FhirRepository.searchRelatedPeople(`patient=${encodeURIComponent(patientRef ?? '')}&_count=200&_sort=-_lastUpdated`),
+      FhirRepository.searchRelatedPeople(
+        `patient=${encodeURIComponent(patientRef ?? '')}&_count=200&_sort=-_lastUpdated`,
+      ),
   });
 
   const grants = useMemo<FamilySharingGrant[]>(() => {
@@ -41,8 +56,14 @@ export const useFamilySharingGrants = (patientRef?: string) => {
       .filter((item): item is FamilySharingGrant => Boolean(item));
   }, [consentQuery.data?.entry, relatedQuery.data?.entry]);
 
+  const relatedPeople = useMemo<RelatedPersonResource[]>(
+    () => (relatedQuery.data?.entry ?? []).map((item) => item.resource),
+    [relatedQuery.data?.entry],
+  );
+
   return {
     grants,
+    relatedPeople,
     isLoading: consentQuery.isLoading || relatedQuery.isLoading,
     error: consentQuery.error ?? relatedQuery.error,
     refetch: async () => {
@@ -57,15 +78,58 @@ export const useGrantFamilySharing = () => {
   return useMutation({
     mutationFn: async (input: {
       patientRef: string;
-      relatedPersonRef: string;
-      relationshipCode?: string;
+      givenName: string;
+      familyName: string;
+      relationshipCode: string;
+      email?: string;
       grantedByRef: { reference: string };
     }) => {
-      const consent = buildFamilyShareConsent(input);
-      return FhirRepository.createConsent(consent);
+      const relatedPerson: RelatedPersonResource = {
+        resourceType: 'RelatedPerson',
+        active: true,
+        patient: { reference: input.patientRef },
+        name: [
+          {
+            use: 'official',
+            given: [input.givenName.trim()],
+            family: input.familyName.trim(),
+          },
+        ],
+        relationship: [{ coding: [relationshipCoding(input.relationshipCode)] }],
+        telecom: input.email
+          ? [{ system: 'email', use: 'home', value: input.email.trim().toLowerCase() }]
+          : undefined,
+      };
+
+      const relatedValidation = validateRelatedPersonResource(relatedPerson);
+      if (!relatedValidation.ok) {
+        throw new Error(relatedValidation.issues[0]?.message ?? 'Family member data is invalid.');
+      }
+
+      const createdRelated = await FhirRepository.createRelatedPerson(relatedPerson);
+      if (!createdRelated.id) {
+        throw new Error('Family member was created without an id.');
+      }
+
+      const consent = buildFamilyShareConsent({
+        patientRef: input.patientRef,
+        relatedPersonRef: `RelatedPerson/${createdRelated.id}`,
+        relationshipCode: input.relationshipCode,
+        grantedByRef: input.grantedByRef,
+      });
+
+      const consentValidation = validateConsentResource(consent);
+      if (!consentValidation.ok) {
+        throw new Error(consentValidation.issues[0]?.message ?? 'Family-sharing consent is invalid.');
+      }
+
+      await FhirRepository.createConsent(consent);
     },
     onSuccess: (_data, variables) => {
-      void qc.invalidateQueries({ queryKey: ['takt', 'family-sharing', 'consent', variables.patientRef] });
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['takt', 'family-sharing', 'consent', variables.patientRef] }),
+        qc.invalidateQueries({ queryKey: ['takt', 'family-sharing', 'related-person', variables.patientRef] }),
+      ]);
     },
   });
 };
@@ -83,7 +147,10 @@ export const useRevokeFamilySharing = () => {
         throw new Error('Cannot revoke a family share grant without consent id.');
       }
 
-      const updated = buildFamilyShareRevokeConsent({ consent: input.grant.consent, revokedByRef: input.revokedByRef });
+      const updated = buildFamilyShareRevokeConsent({
+        consent: input.grant.consent,
+        revokedByRef: input.revokedByRef,
+      });
       return FhirRepository.updateConsent(consentId, updated);
     },
     onSuccess: (_data, variables) => {
@@ -95,5 +162,6 @@ export const useRevokeFamilySharing = () => {
 
 export const useViewerRole = (value: ViewerRole = 'patient'): ViewerRole => value;
 
-export const familySharingRelativeIdFromGrant = (grant: FamilySharingGrant): string | undefined =>
-  refId(grant.relatedPersonRef);
+export const familySharingRelativeIdFromGrant = (
+  grant: FamilySharingGrant,
+): string | undefined => refId(grant.relatedPersonRef);

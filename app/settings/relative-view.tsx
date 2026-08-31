@@ -1,3 +1,4 @@
+import { useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import {
@@ -16,10 +17,11 @@ import {
   typography,
   useTokens,
 } from '@/components/ui';
+import { useFamilySharingGrants } from '@/lib/hooks/use-family-sharing-grants';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
-import { useTodayScheduleEvents } from '@/lib/hooks/use-today-schedule-events';
 import { familySharingLockedCapabilities } from '@/lib/takt/family-sharing';
 import { doseSubtitle } from '@/lib/takt/schedule';
+import { useTodayScheduleEvents } from '@/lib/hooks/use-today-schedule-events';
 import { useLocale } from '@/lib/takt/l10n';
 
 const statusKey = (
@@ -35,9 +37,22 @@ const statusKey = (
 export default function RelativeViewScreen() {
   const { c } = useTokens();
   const { t } = useLocale();
+  const params = useLocalSearchParams<{ relatedPersonRef?: string }>();
+
   const patient = usePrimaryPatient();
   const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
   const today = useTodayScheduleEvents(patientRef);
+  const grants = useFamilySharingGrants(patientRef);
+
+  const selectedGrant = useMemo(() => {
+    if (!params.relatedPersonRef) {
+      return grants.grants.find((grant) => grant.status === 'granted') ?? grants.grants[0];
+    }
+    return (
+      grants.grants.find((grant) => grant.relatedPersonRef === params.relatedPersonRef) ??
+      grants.grants[0]
+    );
+  }, [grants.grants, params.relatedPersonRef]);
 
   const lockedLabel = useMemo(
     () =>
@@ -49,7 +64,7 @@ export default function RelativeViewScreen() {
     [t],
   );
 
-  if (patient.isLoading || today.isLoading) {
+  if (patient.isLoading || today.isLoading || grants.isLoading) {
     return (
       <PageShell>
         <LoadingState label={t('familySharingRelativeLoading')} />
@@ -57,7 +72,7 @@ export default function RelativeViewScreen() {
     );
   }
 
-  if (patient.error || today.error) {
+  if (patient.error || today.error || grants.error) {
     return (
       <PageShell>
         <ErrorState
@@ -65,6 +80,7 @@ export default function RelativeViewScreen() {
           onRetry={() => {
             void patient.refetch();
             void today.refetch();
+            void grants.refetch();
           }}
         />
       </PageShell>
@@ -77,7 +93,17 @@ export default function RelativeViewScreen() {
       <Stack>
         <Card>
           <View style={{ gap: spacing(2) }}>
-            <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('familySharingRelativeGuardrail')}</Text>
+            <Text style={[typography.subhead, { color: c.textSecondary }]}>
+              {t('familySharingRelativeGuardrail')}
+            </Text>
+            {selectedGrant ? (
+              <Badge
+                label={t('familySharingViewingAs').replace('{name}', selectedGrant.relatedPersonLabel)}
+                tone={selectedGrant.status === 'granted' ? 'accent' : 'warning'}
+              />
+            ) : (
+              <Badge label={t('familySharingNoGrants')} tone="warning" />
+            )}
             <Badge label={t('familySharingOptionalQuietReminder')} tone="neutral" />
           </View>
         </Card>
