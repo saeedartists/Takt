@@ -10,6 +10,7 @@ import {
   PageHeader,
   PageShell,
   SectionHeader,
+  SegmentedControl,
   Sparkline,
   Stack,
   categoryColors,
@@ -35,10 +36,11 @@ export default function HistoryScreen() {
   const recordDose = useRecordDose();
   const undoDose = useUndoDose();
   const [actionError, setActionError] = useState<string | null>(null);
+  const [windowDays, setWindowDays] = useState<7 | 14 | 30>(14);
 
   const history = useMemo(
-    () => buildHistory(plans.plans, (events.data?.entry ?? []).map((x) => x.resource), 14),
-    [events.data?.entry, plans.plans],
+    () => buildHistory(plans.plans, (events.data?.entry ?? []).map((x) => x.resource), windowDays),
+    [events.data?.entry, plans.plans, windowDays],
   );
 
   const totals = useMemo(() => {
@@ -107,9 +109,27 @@ export default function HistoryScreen() {
 
   return (
     <PageShell>
-      <PageHeader title={t('history')} subtitle={t('adherenceWindow')} />
+      <PageHeader
+        title={t('history')}
+        subtitle={t('adherenceWindowDays').replace('{days}', windowDays.toString())}
+      />
 
       <Stack>
+        <Card>
+          <View style={{ padding: spacing(3), gap: spacing(2) }}>
+            <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('historyWindowLabel')}</Text>
+            <SegmentedControl
+              value={windowDays.toString()}
+              onChange={(next) => setWindowDays(Number.parseInt(next, 10) as 7 | 14 | 30)}
+              options={[
+                { value: '7', label: t('historyWindow7') },
+                { value: '14', label: t('historyWindow14') },
+                { value: '30', label: t('historyWindow30') },
+              ]}
+            />
+          </View>
+        </Card>
+
         {patient.isLoading || plans.isLoading || events.isLoading ? (
           <LoadingState label={t('loadingHistory')} />
         ) : patient.error || plans.error || events.error ? (

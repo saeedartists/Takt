@@ -11,6 +11,7 @@ import {
   PageHeader,
   PageShell,
   SectionHeader,
+  SegmentedControl,
   Stack,
   categoryColors,
   MIN_TOUCH_TARGET,
@@ -61,6 +62,7 @@ export default function TodayScreen() {
   const reminderPrefs = useReminderPreferences();
   const autoMarkedMissed = useRef<Set<string>>(new Set());
   const [actionError, setActionError] = useState<string | null>(null);
+  const [timelineFilter, setTimelineFilter] = useState<'all' | 'due' | 'pending' | 'completed'>('all');
 
   const todayDoses = useMemo(
     () =>
@@ -88,16 +90,23 @@ export default function TodayScreen() {
       : 0;
   const completionWidth = `${completionPct}%` as `${number}%`;
 
+  const filteredTimelineDoses = useMemo(() => {
+    if (timelineFilter === 'all') return todayDoses;
+    if (timelineFilter === 'due') return todayDoses.filter((dose) => dose.state === 'due');
+    if (timelineFilter === 'pending') return todayDoses.filter((dose) => dose.state === 'scheduled' || dose.state === 'due');
+    return todayDoses.filter((dose) => dose.state === 'taken' || dose.state === 'skipped' || dose.state === 'missed');
+  }, [timelineFilter, todayDoses]);
+
   const grouped = useMemo(() => {
     const buckets = new Map<string, DoseOccurrence[]>();
-    for (const dose of todayDoses) {
+    for (const dose of filteredTimelineDoses) {
       const key = formatTime(dose.scheduledAt);
       const list = buckets.get(key) ?? [];
       list.push(dose);
       buckets.set(key, list);
     }
     return [...buckets.entries()].map(([time, doses]) => ({ time, doses }));
-  }, [formatTime, todayDoses]);
+  }, [filteredTimelineDoses, formatTime]);
 
   useEffect(() => {
     if (!patientRef) return;
@@ -254,6 +263,20 @@ export default function TodayScreen() {
             title={t('timeline')}
             action={<Button kind="secondary" label={t('addMedication')} onPress={() => router.push('/medications/new')} />}
           />
+          <Card>
+            <View style={{ padding: spacing(3), gap: spacing(2) }}>
+              <SegmentedControl
+                value={timelineFilter}
+                onChange={(next) => setTimelineFilter(next as 'all' | 'due' | 'pending' | 'completed')}
+                options={[
+                  { value: 'all', label: t('todayFilterAll') },
+                  { value: 'due', label: t('todayFilterDue') },
+                  { value: 'pending', label: t('todayFilterPending') },
+                  { value: 'completed', label: t('todayFilterCompleted') },
+                ]}
+              />
+            </View>
+          </Card>
           {patient.isLoading || plans.isLoading || events.isLoading ? (
             <LoadingState label={t('loadingDoses')} />
           ) : patient.error || plans.error || events.error ? (
@@ -268,7 +291,7 @@ export default function TodayScreen() {
             />
           ) : grouped.length === 0 ? (
             <EmptyState
-              title={t('noDosesToday')}
+              title={timelineFilter === 'all' ? t('noDosesToday') : t('noDosesForFilter')}
               description={t('addMedicationHint')}
               action={<Button label={t('addMedication')} onPress={() => router.push('/medications/new')} />}
             />

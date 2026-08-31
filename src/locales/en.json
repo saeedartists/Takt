@@ -570,5 +570,21 @@
   "reminderDiagnosticsTitle": "Reminder diagnostics",
   "reminderDiagnosticsLoading": "Loading reminder diagnostics…",
   "reminderDiagnosticsEmpty": "No reminder diagnostics yet.",
-  "reminderDiagnosticsRefresh": "Refresh diagnostics"
+  "reminderDiagnosticsRefresh": "Refresh diagnostics",
+  "todayFilterAll": "All",
+  "todayFilterDue": "Due now",
+  "todayFilterPending": "Pending",
+  "todayFilterCompleted": "Completed",
+  "noDosesForFilter": "No doses match this filter",
+  "medsSearchPlaceholder": "Search medications",
+  "medsFilterAll": "All",
+  "medsFilterActive": "Active",
+  "medsFilterPaused": "Paused",
+  "medsFilterArchived": "Archived",
+  "noMedsMatchFilter": "No medications match this filter",
+  "adherenceWindowDays": "Last {days} days",
+  "historyWindowLabel": "History window",
+  "historyWindow7": "7d",
+  "historyWindow14": "14d",
+  "historyWindow30": "30d"
 }

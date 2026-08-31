@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import {
   Badge,
@@ -6,12 +7,14 @@ import {
   Card,
   EmptyState,
   ErrorState,
+  Input,
   ListGroup,
   ListRow,
   LoadingState,
   PageHeader,
   PageShell,
   SectionHeader,
+  SegmentedControl,
   Stack,
   categoryColors,
   radius,
@@ -32,9 +35,25 @@ export default function MedicationsScreen() {
   const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
   const plans = useMedicationPlans(patientRef);
 
-  const activePlans = plans.plans.filter((plan) => plan.request.status === 'active');
-  const pausedPlans = plans.plans.filter((plan) => plan.request.status === 'on-hold');
-  const archivedPlans = plans.plans.filter((plan) => plan.request.status === 'stopped');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused' | 'archived'>('all');
+
+  const filteredPlans = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+    return plans.plans.filter((plan) => {
+      if (statusFilter === 'active' && plan.request.status !== 'active') return false;
+      if (statusFilter === 'paused' && plan.request.status !== 'on-hold') return false;
+      if (statusFilter === 'archived' && plan.request.status !== 'stopped') return false;
+
+      if (!search) return true;
+      const hay = `${plan.label} ${plan.form ?? ''} ${plan.strength ?? ''}`.toLowerCase();
+      return hay.includes(search);
+    });
+  }, [plans.plans, searchTerm, statusFilter]);
+
+  const activePlans = filteredPlans.filter((plan) => plan.request.status === 'active');
+  const pausedPlans = filteredPlans.filter((plan) => plan.request.status === 'on-hold');
+  const archivedPlans = filteredPlans.filter((plan) => plan.request.status === 'stopped');
 
   const cadenceLabel = (plan: (typeof plans.plans)[number]): string => {
     if (plan.cadence === 'daily') return t('cadenceDaily');
@@ -90,6 +109,27 @@ export default function MedicationsScreen() {
           </View>
         </Card>
 
+        <Card>
+          <View style={{ padding: spacing(4), gap: spacing(3) }}>
+            <Input
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+              placeholder={t('medsSearchPlaceholder')}
+              returnKeyType="search"
+            />
+            <SegmentedControl
+              value={statusFilter}
+              onChange={(next) => setStatusFilter(next as 'all' | 'active' | 'paused' | 'archived')}
+              options={[
+                { value: 'all', label: t('medsFilterAll') },
+                { value: 'active', label: t('medsFilterActive') },
+                { value: 'paused', label: t('medsFilterPaused') },
+                { value: 'archived', label: t('medsFilterArchived') },
+              ]}
+            />
+          </View>
+        </Card>
+
         <View>
           {patient.isLoading || plans.isLoading ? (
             <LoadingState label={t('loadingMeds')} />
@@ -108,6 +148,8 @@ export default function MedicationsScreen() {
               description={t('addMedicationCadenceHint')}
               action={<Button label={t('addMedication')} onPress={() => router.push('/medications/new')} />}
             />
+          ) : filteredPlans.length === 0 ? (
+            <EmptyState title={t('noMedsMatchFilter')} description={t('addMedicationCadenceHint')} />
           ) : (
             <Stack>
               {activePlans.length > 0 ? (
