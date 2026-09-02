@@ -632,5 +632,22 @@
   "familySharingNameRequired": "Vorname und Nachname sind erforderlich.",
   "familySharingGrantError": "Familienfreigabe konnte nicht erstellt werden. Bitte erneut versuchen.",
   "familySharingRevokeError": "Familienfreigabe konnte nicht widerrufen werden. Bitte erneut versuchen.",
-  "familySharingViewingAs": "Vorschau als {name}"
+  "familySharingViewingAs": "Vorschau als {name}",
+  "familySharingFlowTitle": "So funktioniert die Familienfreigabe",
+  "familySharingFlowStep1": "Angehörigen mit Name und Beziehung hinzufügen",
+  "familySharingFlowStep2": "Read-only Einwilligung für Dosisansicht freigeben",
+  "familySharingFlowStep3": "Angehörigenvorschau öffnen und Sicht prüfen",
+  "familySharingActiveListTitle": "Aktive Zugriffe ({count})",
+  "familySharingRevokedListTitle": "Widerrufene Zugriffe",
+  "familySharingGrantSuccess": "Familienzugriff ist jetzt aktiv.",
+  "familySharingRevokeSuccess": "Familienzugriff wurde widerrufen.",
+  "familySharingDuplicateHint": "Diese Person existiert bereits. Bitte bestehenden Eintrag verwenden.",
+  "familySharingDuplicateError": "Dieses Familienmitglied existiert bereits.",
+  "familySharingRevokeConfirmCta": "Widerruf bestätigen",
+  "familySharingRevokeConfirmHint": "Zum sofortigen Widerruf erneut tippen.",
+  "familySharingBackToManage": "Zurück zur Familienfreigabe",
+  "familySharingRelativeNoGrantSelectedHint": "Erstellen und freigeben Sie ein Familienmitglied, um diese Ansicht zu testen.",
+  "familySharingAccessRevokedTitle": "Zugriff widerrufen",
+  "familySharingAccessRevokedHint": "Dieser Angehörige hat keine Lesesicht auf heutige Dosen mehr.",
+  "familySharingRouteSubtitle": "Angehörigenzugriff freigeben, prüfen und widerrufen"
 }

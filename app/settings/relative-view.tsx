@@ -1,8 +1,9 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import {
   Badge,
+  Button,
   Card,
   EmptyState,
   ErrorState,
@@ -37,6 +38,7 @@ const statusKey = (
 export default function RelativeViewScreen() {
   const { c } = useTokens();
   const { t } = useLocale();
+  const router = useRouter();
   const params = useLocalSearchParams<{ relatedPersonRef?: string }>();
 
   const patient = usePrimaryPatient();
@@ -87,6 +89,8 @@ export default function RelativeViewScreen() {
     );
   }
 
+  const hasViewAccess = selectedGrant?.status === 'granted';
+
   return (
     <PageShell>
       <PageHeader title={t('familySharingRelativeTitle')} subtitle={t('familySharingRelativeSubtitle')} />
@@ -99,33 +103,66 @@ export default function RelativeViewScreen() {
             {selectedGrant ? (
               <Badge
                 label={t('familySharingViewingAs').replace('{name}', selectedGrant.relatedPersonLabel)}
-                tone={selectedGrant.status === 'granted' ? 'accent' : 'warning'}
+                tone={hasViewAccess ? 'accent' : 'warning'}
               />
             ) : (
               <Badge label={t('familySharingNoGrants')} tone="warning" />
             )}
+            {!hasViewAccess && selectedGrant ? (
+              <Text style={[typography.footnote, { color: c.destructive }]}>
+                {t('familySharingAccessRevokedHint')}
+              </Text>
+            ) : null}
             <Badge label={t('familySharingOptionalQuietReminder')} tone="neutral" />
           </View>
         </Card>
 
-        <View>
-          <SectionHeader title={t('timeline')} />
-          {today.doses.length === 0 ? (
-            <EmptyState title={t('noDosesToday')} description={t('familySharingRelativeNoDosesHint')} />
-          ) : (
-            <ListGroup>
-              {today.doses.map((dose, index) => (
-                <ListRow
-                  key={dose.id}
-                  isFirst={index === 0}
-                  title={dose.label}
-                  subtitle={doseSubtitle(dose)}
-                  value={t(statusKey(dose.state))}
-                />
-              ))}
-            </ListGroup>
-          )}
-        </View>
+        {!selectedGrant ? (
+          <EmptyState
+            title={t('familySharingNoGrants')}
+            description={t('familySharingRelativeNoGrantSelectedHint')}
+            action={
+              <Button
+                label={t('familySharingBackToManage')}
+                onPress={() => router.replace('/settings/family-sharing' as never)}
+              />
+            }
+          />
+        ) : !hasViewAccess ? (
+          <EmptyState
+            title={t('familySharingAccessRevokedTitle')}
+            description={t('familySharingAccessRevokedHint')}
+            action={
+              <Button
+                kind="secondary"
+                label={t('familySharingBackToManage')}
+                onPress={() => router.replace('/settings/family-sharing' as never)}
+              />
+            }
+          />
+        ) : (
+          <View>
+            <SectionHeader title={t('timeline')} />
+            {today.doses.length === 0 ? (
+              <EmptyState
+                title={t('noDosesToday')}
+                description={t('familySharingRelativeNoDosesHint')}
+              />
+            ) : (
+              <ListGroup>
+                {today.doses.map((dose, index) => (
+                  <ListRow
+                    key={dose.id}
+                    isFirst={index === 0}
+                    title={dose.label}
+                    subtitle={doseSubtitle(dose)}
+                    value={t(statusKey(dose.state))}
+                  />
+                ))}
+              </ListGroup>
+            )}
+          </View>
+        )}
 
         <View>
           <SectionHeader title={t('familySharingRelativeBlockedTitle')} />

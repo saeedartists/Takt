@@ -632,5 +632,22 @@
   "familySharingNameRequired": "First and last name are required.",
   "familySharingGrantError": "Could not grant family access. Please try again.",
   "familySharingRevokeError": "Could not revoke family access. Please try again.",
-  "familySharingViewingAs": "Preview as {name}"
+  "familySharingViewingAs": "Preview as {name}",
+  "familySharingFlowTitle": "How family sharing works",
+  "familySharingFlowStep1": "Add the family member identity and relationship",
+  "familySharingFlowStep2": "Grant read-only consent for dose visibility",
+  "familySharingFlowStep3": "Use relative preview to verify what they can see",
+  "familySharingActiveListTitle": "Active access ({count})",
+  "familySharingRevokedListTitle": "Revoked access history",
+  "familySharingGrantSuccess": "Family access is now active.",
+  "familySharingRevokeSuccess": "Family access has been revoked.",
+  "familySharingDuplicateHint": "This person already exists. Use the existing entry instead of creating a duplicate.",
+  "familySharingDuplicateError": "This family member already exists.",
+  "familySharingRevokeConfirmCta": "Confirm revoke access",
+  "familySharingRevokeConfirmHint": "Tap again to revoke this access now.",
+  "familySharingBackToManage": "Back to family sharing",
+  "familySharingRelativeNoGrantSelectedHint": "Create and grant one family member to preview this screen.",
+  "familySharingAccessRevokedTitle": "Access is revoked",
+  "familySharingAccessRevokedHint": "This relative no longer has read-only visibility for today doses.",
+  "familySharingRouteSubtitle": "Invite, preview, and revoke read-only family access"
 }
