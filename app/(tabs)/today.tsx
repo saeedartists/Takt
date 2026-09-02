@@ -90,6 +90,10 @@ export default function TodayScreen() {
       : 0;
   const completionWidth = `${completionPct}%` as `${number}%`;
 
+  const loggedDoseCount = (events.data?.entry ?? []).length;
+  const needsFirstMedication = plans.plans.length === 0;
+  const needsFirstDoseLog = !needsFirstMedication && loggedDoseCount === 0;
+
   const filteredTimelineDoses = useMemo(() => {
     if (timelineFilter === 'all') return todayDoses;
     if (timelineFilter === 'due') return todayDoses.filter((dose) => dose.state === 'due');
@@ -199,6 +203,44 @@ export default function TodayScreen() {
       />
 
       <Stack>
+        {needsFirstMedication || needsFirstDoseLog ? (
+          <Card>
+            <View style={{ padding: spacing(4), gap: spacing(3) }}>
+              <Badge
+                label={
+                  needsFirstMedication
+                    ? t('journeyStepOneLabel')
+                    : needsFirstDoseLog
+                      ? t('journeyStepTwoLabel')
+                      : t('journeyCompleteLabel')
+                }
+                tone="accent"
+              />
+              <Text style={[typography.headline, { color: c.textPrimary }]}>{t('journeyCardTitle')}</Text>
+              <Text style={[typography.subhead, { color: c.textSecondary }]}>
+                {needsFirstMedication ? t('journeyCardNeedMedication') : t('journeyCardNeedDose')}
+              </Text>
+              <Button
+                label={needsFirstMedication ? t('journeyAddMedicationCta') : t('journeyLogDoseCta')}
+                onPress={() => {
+                  if (needsFirstMedication) {
+                    router.push('/medications/new');
+                    return;
+                  }
+
+                  if (nextActionDose && nextActionDose.state === 'due') {
+                    void takeAction(nextActionDose, 'taken');
+                    return;
+                  }
+
+                  router.push('/(tabs)/today');
+                }}
+                disabled={recordDose.isPending || patient.isLoading}
+              />
+            </View>
+          </Card>
+        ) : null}
+
         <Card>
           <View style={{ padding: spacing(4), gap: spacing(3) }}>
             <Text style={[typography.headline, { color: c.textSecondary }]}>{t('rhythmToday')}</Text>

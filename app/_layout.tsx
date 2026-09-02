@@ -28,7 +28,8 @@ function AppStack() {
       <Stack.Screen name="consent" options={{ title: t('consentRouteTitle') }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="medications/new" options={{ title: t('addMedicationRouteTitle') }} />
-      <Stack.Screen name="medications/[id]" options={{ title: t('editMedicationRouteTitle') }} />
+      <Stack.Screen name="medications/[id]" options={{ title: t('medicationDetailsRouteTitle') }} />
+      <Stack.Screen name="medications/[id]/edit" options={{ title: t('editMedicationRouteTitle') }} />
       <Stack.Screen name="report" options={{ title: t('reportRouteTitle') }} />
       <Stack.Screen name="settings/privacy" options={{ title: t('privacyRouteTitle') }} />
       <Stack.Screen name="settings/imprint" options={{ title: t('imprintRouteTitle') }} />

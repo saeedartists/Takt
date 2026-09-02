@@ -1,99 +1,72 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import {
   Badge,
   Button,
   Card,
   EmptyState,
-  Field,
-  Input,
+  ErrorState,
+  ListGroup,
+  ListRow,
   LoadingState,
   PageHeader,
   PageShell,
-  SegmentedControl,
+  SectionHeader,
   Stack,
   spacing,
   typography,
   useTokens,
 } from '@/components/ui';
-import { WeekdayPicker } from '@/components/takt/weekday-picker';
+import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useUpdateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
+import { TAKT_EXT } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
-import { WEEKDAY_ORDER, WEEKDAYS_ONLY } from '@/lib/takt/time';
-import type { MedicationCadence, WeekdayCode } from '@/lib/takt/types';
 
-const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-const parseTimeList = (raw: string): string[] => {
-  const tokens = raw
-    .split(',')
-    .map((token) => token.trim())
-    .filter(Boolean);
-
-  const normalized = tokens.map((token) => {
-    if (!TIME_PATTERN.test(token)) return null;
-    return token;
-  });
-
-  if (normalized.some((value) => value === null)) return [];
-
-  const unique = [...new Set(normalized as string[])];
-  return unique.sort((a, b) => {
-    const [ah, am] = a.split(':').map((x) => Number.parseInt(x, 10));
-    const [bh, bm] = b.split(':').map((x) => Number.parseInt(x, 10));
-    return ah * 60 + am - (bh * 60 + bm);
-  });
+const statusTone = (status: string): 'success' | 'warning' | 'destructive' => {
+  if (status === 'on-hold') return 'warning';
+  if (status === 'stopped') return 'destructive';
+  return 'success';
 };
 
-export default function EditMedicationScreen() {
+const statusLabelKey = (status: string): 'statusActive' | 'statusPaused' | 'statusArchived' => {
+  if (status === 'on-hold') return 'statusPaused';
+  if (status === 'stopped') return 'statusArchived';
+  return 'statusActive';
+};
+
+const cadenceLabelKey = (cadence: 'daily' | 'weekdays' | 'custom'): 'cadenceDaily' | 'cadenceWeekdays' | 'cadenceSpecificDays' => {
+  if (cadence === 'weekdays') return 'cadenceWeekdays';
+  if (cadence === 'custom') return 'cadenceSpecificDays';
+  return 'cadenceDaily';
+};
+
+export default function MedicationDetailsScreen() {
   const { c } = useTokens();
-  const { t } = useLocale();
+  const { t, formatDateTime } = useLocale();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 
   const patient = usePrimaryPatient();
   const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
   const plans = useMedicationPlans(patientRef);
+  const events = useDoseEvents(patientRef);
   const updatePlan = useUpdateMedicationPlan();
 
   const plan = useMemo(() => plans.plans.find((entry) => entry.request.id === id), [id, plans.plans]);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
-  const [name, setName] = useState('');
-  const [form, setForm] = useState('');
-  const [strength, setStrength] = useState('');
-  const [timesInput, setTimesInput] = useState('08:00');
-  const [cadence, setCadence] = useState<MedicationCadence>('daily');
-  const [selectedDays, setSelectedDays] = useState<WeekdayCode[]>(WEEKDAYS_ONLY);
-  const [supply, setSupply] = useState('');
-  const [status, setStatus] = useState<'active' | 'on-hold' | 'stopped'>('active');
-  const [error, setError] = useState<string | null>(null);
+  const relatedEvents = useMemo(() => {
+    if (!plan) return [];
+    return (events.data?.entry ?? [])
+      .map((entry) => entry.resource)
+      .filter((entry) => entry.request?.reference === `MedicationRequest/${plan.request.id}`)
+      .slice(0, 8);
+  }, [events.data?.entry, plan]);
 
-  useEffect(() => {
-    if (!plan) return;
-    setName(plan.label);
-    setForm(plan.form || 'Tablet');
-    setStrength(plan.strength || '');
-    setTimesInput(plan.times.join(', '));
-    setCadence(plan.cadence);
-    setSelectedDays(plan.dayOfWeek);
-    setSupply(typeof plan.supplyCount === 'number' ? Math.round(plan.supplyCount).toString() : '');
-    if (plan.request.status === 'on-hold' || plan.request.status === 'stopped') {
-      setStatus(plan.request.status);
-    } else {
-      setStatus('active');
-    }
-  }, [plan]);
-
-  const toggleDay = (day: WeekdayCode) => {
-    setSelectedDays((prev) =>
-      prev.includes(day) ? prev.filter((entry) => entry !== day) : [...prev, day],
-    );
-  };
-
-  if (patient.isLoading || plans.isLoading) {
+  if (patient.isLoading || plans.isLoading || events.isLoading) {
     return (
       <PageShell>
         <LoadingState label={t('loadingMedication')} />
@@ -101,7 +74,23 @@ export default function EditMedicationScreen() {
     );
   }
 
-  if (!plan || !plan.medication || !patientRef) {
+  if (patient.error || plans.error || events.error) {
+    return (
+      <PageShell>
+        <ErrorState
+          description={t('loadMedicationsError')}
+          onRetry={() => {
+            void patient.refetch();
+            void plans.requestsQuery.refetch();
+            void plans.medicationsQuery.refetch();
+            void events.refetch();
+          }}
+        />
+      </PageShell>
+    );
+  }
+
+  if (!plan || !patientRef || !plan.medication) {
     return (
       <PageShell>
         <EmptyState title={t('medicationNotFound')} description={t('medicationNotFoundHint')} />
@@ -109,150 +98,125 @@ export default function EditMedicationScreen() {
     );
   }
 
-  const save = async () => {
-    if (!name.trim()) {
-      setError(t('addMedicationNameError'));
-      return;
-    }
+  const medication = plan.medication;
 
-    const times = parseTimeList(timesInput);
-    if (times.length === 0) {
-      setError(t('invalidTimesError'));
-      return;
-    }
-
-    if (cadence === 'custom' && selectedDays.length === 0) {
-      setError(t('selectAtLeastOneDayError'));
-      return;
-    }
-
-    const dayOfWeek =
-      cadence === 'daily' ? WEEKDAY_ORDER : cadence === 'weekdays' ? WEEKDAYS_ONLY : selectedDays;
-
-    setError(null);
-
-    const parsedSupply = Number.parseInt(supply, 10);
-    const supplyCount = Number.isFinite(parsedSupply) && parsedSupply > 0 ? parsedSupply : undefined;
+  const updateStatus = async (nextStatus: 'active' | 'on-hold' | 'stopped') => {
+    setStatusError(null);
 
     try {
       await updatePlan.mutateAsync({
         patientRef,
-        name,
-        form,
-        strength,
-        cadence,
-        dayOfWeek,
-        times,
-        supplyCount,
-        status,
+        name: plan.label,
+        form: plan.form,
+        strength: plan.strength,
+        cadence: plan.cadence,
+        dayOfWeek: plan.dayOfWeek,
+        times: plan.times,
+        supplyCount: plan.supplyCount,
+        status: nextStatus,
         request: plan.request,
-        medication: plan.medication!,
+        medication,
       });
-      router.replace('/(tabs)/medications');
     } catch {
-      setError(t('saveChangesError'));
+      setStatusError(t('medicationStatusActionError'));
     }
-  };
-
-  const dayLabel = (day: WeekdayCode): string => {
-    if (day === 'mon') return t('dayMon');
-    if (day === 'tue') return t('dayTue');
-    if (day === 'wed') return t('dayWed');
-    if (day === 'thu') return t('dayThu');
-    if (day === 'fri') return t('dayFri');
-    if (day === 'sat') return t('daySat');
-    return t('daySun');
   };
 
   return (
     <PageShell>
-      <PageHeader title={name || t('medications')} subtitle={t('regimen')} />
+      <PageHeader title={plan.label} subtitle={t('medicationDetailsSubtitle')} />
+
       <Stack>
         <Card>
           <View style={{ padding: spacing(4), gap: spacing(3) }}>
             <View style={{ flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' }}>
-              <Badge
-                label={
-                  status === 'active' ? t('statusActive') : status === 'on-hold' ? t('statusPaused') : t('statusArchived')
-                }
-                tone={status === 'active' ? 'success' : status === 'on-hold' ? 'warning' : 'destructive'}
-              />
-              <Badge
-                label={
-                  cadence === 'daily'
-                    ? t('cadenceDaily')
-                    : cadence === 'weekdays'
-                      ? t('cadenceWeekdays')
-                      : t('cadenceSpecificDays')
-                }
-                tone="accent"
-              />
+              <Badge label={t(statusLabelKey(plan.request.status))} tone={statusTone(plan.request.status)} />
+              <Badge label={t(cadenceLabelKey(plan.cadence))} tone="accent" />
             </View>
 
-            <Field label={t('medicationName')}>
-              <Input value={name} onChangeText={setName} />
-            </Field>
-            <Field label={t('medicationForm')}>
-              <Input value={form} onChangeText={setForm} />
-            </Field>
-            <Field label={t('medicationStrength')}>
-              <Input value={strength} onChangeText={setStrength} />
-            </Field>
-            <Field label={t('medicationCadence')}>
-              <SegmentedControl
-                value={cadence}
-                onChange={(next) => setCadence(next as MedicationCadence)}
-                options={[
-                  { value: 'daily', label: t('cadenceDaily') },
-                  { value: 'weekdays', label: t('cadenceWeekdays') },
-                  { value: 'custom', label: t('cadenceSpecificDays') },
-                ]}
+            <ListGroup>
+              <ListRow isFirst title={t('medicationForm')} value={plan.form || t('formNotSet')} />
+              <ListRow title={t('medicationStrength')} value={plan.strength || '—'} />
+              <ListRow title={t('medicationTimes')} value={plan.times.join(', ')} />
+              <ListRow
+                title={t('medicationSupply')}
+                value={typeof plan.supplyCount === 'number' ? Math.round(plan.supplyCount).toString() : '—'}
               />
-            </Field>
+            </ListGroup>
 
-            {cadence === 'custom' ? (
-              <Field label={t('specificDaysLabel')}>
-                <WeekdayPicker
-                  days={WEEKDAY_ORDER}
-                  selected={selectedDays}
-                  onToggle={toggleDay}
-                  labelFor={dayLabel}
-                />
-              </Field>
-            ) : null}
-
-            <Field label={t('medicationTimes')}>
-              <Input
-                value={timesInput}
-                onChangeText={setTimesInput}
-                placeholder="08:00, 13:00, 20:00"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </Field>
-            <Field label={t('medicationSupply')}>
-              <Input value={supply} onChangeText={setSupply} keyboardType="number-pad" />
-            </Field>
-            <Field label={t('statusLabel')}>
-              <SegmentedControl
-                value={status}
-                onChange={(next) => setStatus(next as 'active' | 'on-hold' | 'stopped')}
-                options={[
-                  { value: 'active', label: t('statusActive') },
-                  { value: 'on-hold', label: t('statusPaused') },
-                  { value: 'stopped', label: t('statusArchived') },
-                ]}
-              />
-            </Field>
-
-            {error ? <Text style={[typography.footnote, { color: c.destructive }]}>{error}</Text> : null}
-            {updatePlan.error ? (
-              <Text style={[typography.footnote, { color: c.destructive }]}>{t('saveChangesError')}</Text>
-            ) : null}
-
-            <Button label={t('saveChanges')} onPress={() => void save()} disabled={updatePlan.isPending} />
+            <Button label={t('editMedicationPlanCta')} onPress={() => router.push(`/medications/${plan.request.id}/edit`)} />
           </View>
         </Card>
+
+        <View>
+          <SectionHeader title={t('medicationFlowActionsTitle')} />
+          <Card>
+            <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
+              {plan.request.status === 'active' ? (
+                <Button
+                  kind="secondary"
+                  label={t('pauseMedicationCta')}
+                  onPress={() => void updateStatus('on-hold')}
+                  disabled={updatePlan.isPending}
+                />
+              ) : null}
+
+              {plan.request.status === 'on-hold' ? (
+                <Button
+                  kind="secondary"
+                  label={t('resumeMedicationCta')}
+                  onPress={() => void updateStatus('active')}
+                  disabled={updatePlan.isPending}
+                />
+              ) : null}
+
+              {plan.request.status !== 'stopped' ? (
+                <Button
+                  kind="destructive"
+                  label={t('archiveMedicationCta')}
+                  onPress={() => void updateStatus('stopped')}
+                  disabled={updatePlan.isPending}
+                />
+              ) : null}
+
+              <Button
+                kind="secondary"
+                label={t('openTodayTimelineCta')}
+                onPress={() => router.push('/(tabs)/today')}
+              />
+
+              {statusError ? <Text style={[typography.footnote, { color: c.destructive }]}>{statusError}</Text> : null}
+            </View>
+          </Card>
+        </View>
+
+        <View>
+          <SectionHeader title={t('recentDoseLogsTitle')} />
+          {relatedEvents.length === 0 ? (
+            <EmptyState title={t('noDoseLogsYetTitle')} description={t('noDoseLogsYetHint')} />
+          ) : (
+            <ListGroup>
+              {relatedEvents.map((event, index) => {
+                const scheduledAt = event.extension?.find((entry) => entry.url === TAKT_EXT.scheduledTime)?.valueDateTime;
+                const effectiveAt = event.effectiveDateTime;
+
+                const actionLabel =
+                  event.status === 'completed'
+                    ? t('statusTaken')
+                    : event.statusReason?.[0]?.coding?.[0]?.code === 'patient-refusal'
+                      ? t('statusSkipped')
+                      : t('statusMissed');
+
+                const timestamp = scheduledAt ?? effectiveAt;
+                const subtitle = timestamp
+                  ? `${actionLabel} · ${formatDateTime(new Date(timestamp))}`
+                  : actionLabel;
+
+                return <ListRow key={event.id} isFirst={index === 0} title={plan.label} subtitle={subtitle} />;
+              })}
+            </ListGroup>
+          )}
+        </View>
       </Stack>
     </PageShell>
   );
