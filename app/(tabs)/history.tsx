@@ -1,3 +1,6 @@
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import {
@@ -22,6 +25,7 @@ import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useRecordDose, useUndoDose } from '@/lib/hooks/use-takt-mutations';
+import { buildHistoryCsv } from '@/lib/takt/history-csv';
 import { useLocale } from '@/lib/takt/l10n';
 import { buildHistory } from '@/lib/takt/schedule';
 import type { DoseOccurrence } from '@/lib/takt/types';
@@ -37,7 +41,8 @@ const toStateBadgeTone = (state: CorrectionAction): 'success' | 'warning' | 'des
 
 export default function HistoryScreen() {
   const { c } = useTokens();
-  const { t, formatDate, formatTime } = useLocale();
+  const { t, formatDate, formatTime, locale } = useLocale();
+  const router = useRouter();
 
   const patient = usePrimaryPatient();
   const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
@@ -48,6 +53,7 @@ export default function HistoryScreen() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [windowDays, setWindowDays] = useState<7 | 14 | 30>(14);
   const [pendingDoseId, setPendingDoseId] = useState<string | null>(null);
+  const [exportingCsv, setExportingCsv] = useState(false);
 
   const history = useMemo(
     () => buildHistory(plans.plans, (events.data?.entry ?? []).map((x) => x.resource), windowDays),
@@ -114,6 +120,56 @@ export default function HistoryScreen() {
         .slice(0, 12),
     [formatDate, history],
   );
+
+  const exportCsv = async () => {
+    setActionError(null);
+    setExportingCsv(true);
+
+    try {
+      const bundle = (events.data?.entry ?? []).map((entry) => entry.resource);
+      const { fileName, csv } = buildHistoryCsv({
+        plans: plans.plans,
+        events: bundle,
+        locale,
+        headers: {
+          date: t('csvColumnDate'),
+          medication: t('csvColumnMedication'),
+          time: t('csvColumnTime'),
+          status: t('csvColumnStatus'),
+          actualTime: t('csvColumnActualTime'),
+        },
+        statusLabels: {
+          taken: t('statusTaken'),
+          skipped: t('statusSkipped'),
+          missed: t('statusMissed'),
+        },
+        summaryLabel: t('csvSummaryAdherence'),
+      });
+
+      if (!(await Sharing.isAvailableAsync())) {
+        setActionError(t('sharingUnavailable'));
+        return;
+      }
+
+      const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+      if (!baseDir) {
+        setActionError(t('csvExportError'));
+        return;
+      }
+
+      const uri = `${baseDir}${fileName}`;
+      await FileSystem.writeAsStringAsync(uri, csv, { encoding: FileSystem.EncodingType.UTF8 });
+      await Sharing.shareAsync(uri, {
+        mimeType: 'text/csv',
+        dialogTitle: t('exportCsv'),
+        UTI: 'public.comma-separated-values-text',
+      });
+    } catch {
+      setActionError(t('csvExportError'));
+    } finally {
+      setExportingCsv(false);
+    }
+  };
 
   const rewriteDoseState = async (dose: DoseWithDay, action: CorrectionAction) => {
     if (!patientRef) return;
@@ -186,6 +242,21 @@ export default function HistoryScreen() {
       <PageHeader
         title={t('history')}
         subtitle={t('adherenceWindowDays').replace('{days}', windowDays.toString())}
+        action={
+          <View style={styles.headerActions}>
+            <View style={{ flex: 1 }}>
+              <Button kind="secondary" label={t('openReport')} onPress={() => router.push('/report')} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                kind="secondary"
+                label={exportingCsv ? t('exportingCsv') : t('exportCsv')}
+                onPress={() => void exportCsv()}
+                disabled={exportingCsv || patient.isLoading || plans.isLoading || events.isLoading}
+              />
+            </View>
+          </View>
+        }
       />
 
       <Stack>
@@ -339,6 +410,11 @@ const styles = {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
+    gap: spacing(2),
+  },
+  headerActions: {
+    width: 248,
+    flexDirection: 'row' as const,
     gap: spacing(2),
   },
 };

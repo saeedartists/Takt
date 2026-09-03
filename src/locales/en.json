@@ -702,5 +702,14 @@
   "reportFocusNoNeedsReview": "No medication is below 80% adherence in this window.",
   "reportFocusMissedRecent": "Most recent missed dose: {when}.",
   "reportFocusNoMissed": "No missed doses were logged in this window.",
-  "reportNoDataInWindow": "No dose data in this period"
+  "reportNoDataInWindow": "No dose data in this period",
+  "exportCsv": "Export CSV",
+  "exportingCsv": "Exporting CSV…",
+  "csvColumnDate": "Date",
+  "csvColumnMedication": "Medication Name",
+  "csvColumnTime": "Scheduled Time",
+  "csvColumnStatus": "Status",
+  "csvColumnActualTime": "Actual Time",
+  "csvSummaryAdherence": "14-day adherence",
+  "csvExportError": "Could not export CSV right now."
 }

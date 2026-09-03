@@ -702,5 +702,14 @@
   "reportFocusNoNeedsReview": "Kein Medikament liegt in diesem Zeitraum unter 80% Adhärenz.",
   "reportFocusMissedRecent": "Zuletzt verpasste Dosis: {when}.",
   "reportFocusNoMissed": "In diesem Zeitraum wurden keine verpassten Dosen protokolliert.",
-  "reportNoDataInWindow": "Keine Dosisdaten in diesem Zeitraum"
+  "reportNoDataInWindow": "Keine Dosisdaten in diesem Zeitraum",
+  "exportCsv": "CSV exportieren",
+  "exportingCsv": "CSV wird exportiert…",
+  "csvColumnDate": "Datum",
+  "csvColumnMedication": "Medikament",
+  "csvColumnTime": "Geplante Uhrzeit",
+  "csvColumnStatus": "Status",
+  "csvColumnActualTime": "Tatsächliche Uhrzeit",
+  "csvSummaryAdherence": "Adhärenz über 14 Tage",
+  "csvExportError": "CSV konnte aktuell nicht exportiert werden."
 }
