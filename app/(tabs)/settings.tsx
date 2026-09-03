@@ -105,7 +105,8 @@ export default function SettingsTabScreen() {
         <View>
           <SectionHeader title={t('legal')} />
           <ListGroup>
-            <ListRow isFirst title={t('privacyNotice')} onPress={() => router.push('/settings/privacy')} />
+            <ListRow isFirst title={t('reminderTestTitle')} subtitle={t('reminderTestSubtitle')} onPress={() => router.push('/settings/reminder-test')} />
+            <ListRow title={t('privacyNotice')} onPress={() => router.push('/settings/privacy')} />
             <ListRow title={t('imprint')} onPress={() => router.push('/settings/imprint')} />
             <ListRow title={t('releaseHubTitle')} onPress={() => router.push('/settings/release-hub' as never)} />
             <ListRow title={t('readinessTitle')} onPress={() => router.push('/settings/readiness')} />
