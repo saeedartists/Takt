@@ -669,5 +669,18 @@
   "openTodayTimelineCta": "Zeitplan heute öffnen",
   "recentDoseLogsTitle": "Letzte Dosisprotokolle",
   "noDoseLogsYetTitle": "Noch keine Dosisprotokolle",
-  "noDoseLogsYetHint": "Dosisprotokolle erscheinen, sobald Sie eine Dosis als eingenommen, ausgelassen oder verpasst markieren."
+  "noDoseLogsYetHint": "Dosisprotokolle erscheinen, sobald Sie eine Dosis als eingenommen, ausgelassen oder verpasst markieren.",
+  "medicationSetupSubtitle": "Definieren Sie, was Sie wann einnehmen",
+  "medicationEditSubtitle": "Zeitplan, Status und Vorrat anpassen",
+  "medicationIdentitySectionTitle": "Medikamenten-Details",
+  "medicationScheduleSectionTitle": "Zeitplan",
+  "medicationSupplySectionTitle": "Vorratsübersicht",
+  "medicationNamePlaceholder": "Ramipril",
+  "medicationFormPlaceholder": "Tablette",
+  "medicationStrengthPlaceholder": "5 mg",
+  "medicationTimesPlaceholder": "08:00, 13:00, 20:00",
+  "medicationTimesHint": "Nutzen Sie das 24-Stunden-Format. Mehrere Zeiten mit Komma trennen.",
+  "medicationSupplyPlaceholder": "28",
+  "savingMedication": "Wird gespeichert…",
+  "savingMedicationChanges": "Änderungen werden gespeichert…"
 }

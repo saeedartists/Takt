@@ -13,9 +13,7 @@ export const Field = ({
   const { c } = useTokens();
   return (
     <View style={{ gap: spacing(1.5) }}>
-      <Text style={[typography.footnote, { color: c.textSecondary, letterSpacing: 0.2 }]}>
-        {label}
-      </Text>
+      <Text style={[typography.footnote, { color: c.textSecondary, letterSpacing: 0.2 }]}>{label}</Text>
       {children}
     </View>
   );
@@ -28,6 +26,7 @@ export const Input = (props: TextInputProps) => {
       placeholderTextColor={c.textTertiary}
       style={[
         styles.input,
+        typography.body,
         {
           color: c.textPrimary,
           borderColor: c.separator,
@@ -63,13 +62,12 @@ export const SegmentedControl = ({
               styles.segment,
               {
                 backgroundColor: active ? c.surface : 'transparent',
-                opacity: pressed ? 0.75 : 1,
+                transform: [{ scale: pressed ? 0.98 : 1 }],
+                opacity: pressed ? 0.82 : 1,
               },
             ]}
           >
-            <Text style={[typography.subhead, { color: active ? c.textPrimary : c.textSecondary }]}>
-              {option.label}
-            </Text>
+            <Text style={[typography.subhead, { color: active ? c.textPrimary : c.textSecondary }]}>{option.label}</Text>
           </Pressable>
         );
       })}
@@ -89,9 +87,9 @@ export const Button = ({
   disabled?: boolean;
 }) => {
   const { c } = useTokens();
-  const bg =
+  const backgroundColor =
     kind === 'primary' ? c.accent : kind === 'destructive' ? `${c.destructive}20` : c.surfaceRaised;
-  const textColor = kind === 'primary' ? '#fff' : kind === 'destructive' ? c.destructive : c.textPrimary;
+  const textColor = kind === 'primary' ? c.surface : kind === 'destructive' ? c.destructive : c.textPrimary;
 
   return (
     <Pressable
@@ -103,9 +101,10 @@ export const Button = ({
       style={({ pressed }) => [
         styles.button,
         {
-          backgroundColor: bg,
+          backgroundColor,
           borderColor: c.separator,
-          opacity: disabled ? 0.4 : pressed ? 0.8 : 1,
+          transform: [{ scale: pressed ? 0.98 : 1 }],
+          opacity: disabled ? 0.45 : pressed ? 0.86 : 1,
         },
       ]}
     >
@@ -120,7 +119,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
     paddingHorizontal: spacing(3),
-    fontSize: 17,
   },
   button: {
     minHeight: 50,

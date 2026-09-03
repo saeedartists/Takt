@@ -9,6 +9,7 @@ import {
   Input,
   PageHeader,
   PageShell,
+  SectionHeader,
   SegmentedControl,
   Stack,
   spacing,
@@ -19,31 +20,9 @@ import { WeekdayPicker } from '@/components/takt/weekday-picker';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useCreateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
 import { useLocale } from '@/lib/takt/l10n';
+import { formatDayLabel, normalizeTimesInput, parseTimeList } from '@/lib/takt/medication-form';
 import { WEEKDAY_ORDER, WEEKDAYS_ONLY } from '@/lib/takt/time';
 import type { MedicationCadence, WeekdayCode } from '@/lib/takt/types';
-
-const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-const parseTimeList = (raw: string): string[] => {
-  const tokens = raw
-    .split(',')
-    .map((token) => token.trim())
-    .filter(Boolean);
-
-  const normalized = tokens.map((token) => {
-    if (!TIME_PATTERN.test(token)) return null;
-    return token;
-  });
-
-  if (normalized.some((value) => value === null)) return [];
-
-  const unique = [...new Set(normalized as string[])];
-  return unique.sort((a, b) => {
-    const [ah, am] = a.split(':').map((x) => Number.parseInt(x, 10));
-    const [bh, bm] = b.split(':').map((x) => Number.parseInt(x, 10));
-    return ah * 60 + am - (bh * 60 + bm);
-  });
-};
 
 export default function AddMedicationScreen() {
   const router = useRouter();
@@ -117,22 +96,12 @@ export default function AddMedicationScreen() {
     }
   };
 
-  const dayLabel = (day: WeekdayCode): string => {
-    if (day === 'mon') return t('dayMon');
-    if (day === 'tue') return t('dayTue');
-    if (day === 'wed') return t('dayWed');
-    if (day === 'thu') return t('dayThu');
-    if (day === 'fri') return t('dayFri');
-    if (day === 'sat') return t('daySat');
-    return t('daySun');
-  };
-
   return (
     <PageShell>
-      <PageHeader title={t('addMedication')} subtitle={t('regimen')} />
+      <PageHeader title={t('addMedication')} subtitle={t('medicationSetupSubtitle')} />
       <Stack>
         <Card>
-          <View style={{ padding: spacing(4), gap: spacing(3) }}>
+          <View style={{ padding: spacing(4), gap: spacing(4) }}>
             <View style={{ flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' }}>
               <Badge label={t('statusActive')} tone="success" />
               <Badge
@@ -147,56 +116,78 @@ export default function AddMedicationScreen() {
               />
             </View>
 
-            <Field label={t('medicationName')}>
-              <Input value={name} onChangeText={setName} placeholder="Ramipril" />
-            </Field>
-            <Field label={t('medicationForm')}>
-              <Input value={form} onChangeText={setForm} placeholder="Tablet" />
-            </Field>
-            <Field label={t('medicationStrength')}>
-              <Input value={strength} onChangeText={setStrength} placeholder="5 mg" />
-            </Field>
-            <Field label={t('medicationCadence')}>
-              <SegmentedControl
-                value={cadence}
-                onChange={(next) => setCadence(next as MedicationCadence)}
-                options={[
-                  { value: 'daily', label: t('cadenceDaily') },
-                  { value: 'weekdays', label: t('cadenceWeekdays') },
-                  { value: 'custom', label: t('cadenceSpecificDays') },
-                ]}
-              />
-            </Field>
+            <View style={{ gap: spacing(3) }}>
+              <SectionHeader title={t('medicationIdentitySectionTitle')} />
+              <Field label={t('medicationName')}>
+                <Input value={name} onChangeText={setName} placeholder={t('medicationNamePlaceholder')} />
+              </Field>
+              <Field label={t('medicationForm')}>
+                <Input value={form} onChangeText={setForm} placeholder={t('medicationFormPlaceholder')} />
+              </Field>
+              <Field label={t('medicationStrength')}>
+                <Input value={strength} onChangeText={setStrength} placeholder={t('medicationStrengthPlaceholder')} />
+              </Field>
+            </View>
 
-            {cadence === 'custom' ? (
-              <Field label={t('specificDaysLabel')}>
-                <WeekdayPicker
-                  days={WEEKDAY_ORDER}
-                  selected={selectedDays}
-                  onToggle={toggleDay}
-                  labelFor={dayLabel}
+            <View style={{ gap: spacing(3) }}>
+              <SectionHeader title={t('medicationScheduleSectionTitle')} />
+              <Field label={t('medicationCadence')}>
+                <SegmentedControl
+                  value={cadence}
+                  onChange={(next) => setCadence(next as MedicationCadence)}
+                  options={[
+                    { value: 'daily', label: t('cadenceDaily') },
+                    { value: 'weekdays', label: t('cadenceWeekdays') },
+                    { value: 'custom', label: t('cadenceSpecificDays') },
+                  ]}
                 />
               </Field>
-            ) : null}
 
-            <Field label={t('medicationTimes')}>
-              <Input
-                value={timesInput}
-                onChangeText={setTimesInput}
-                placeholder="08:00, 13:00, 20:00"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </Field>
-            <Field label={t('medicationSupplyOptional')}>
-              <Input value={supply} onChangeText={setSupply} keyboardType="number-pad" placeholder="28" />
-            </Field>
+              {cadence === 'custom' ? (
+                <Field label={t('specificDaysLabel')}>
+                  <WeekdayPicker
+                    days={WEEKDAY_ORDER}
+                    selected={selectedDays}
+                    onToggle={toggleDay}
+                    labelFor={(day) => formatDayLabel(day, t)}
+                  />
+                </Field>
+              ) : null}
+
+              <Field label={t('medicationTimes')}>
+                <Input
+                  value={timesInput}
+                  onChangeText={setTimesInput}
+                  onBlur={() => {
+                    const normalized = normalizeTimesInput(timesInput);
+                    if (normalized) setTimesInput(normalized);
+                  }}
+                  placeholder={t('medicationTimesPlaceholder')}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </Field>
+              <Text style={[typography.caption, { color: c.textSecondary }]}>{t('medicationTimesHint')}</Text>
+            </View>
+
+            <View style={{ gap: spacing(3) }}>
+              <SectionHeader title={t('medicationSupplySectionTitle')} />
+              <Field label={t('medicationSupplyOptional')}>
+                <Input
+                  value={supply}
+                  onChangeText={setSupply}
+                  keyboardType="number-pad"
+                  placeholder={t('medicationSupplyPlaceholder')}
+                />
+              </Field>
+            </View>
+
             {error ? <Text style={[typography.footnote, { color: c.destructive }]}>{error}</Text> : null}
             {createPlan.error ? (
               <Text style={[typography.footnote, { color: c.destructive }]}>{t('saveMedicationError')}</Text>
             ) : null}
             <Button
-              label={t('save')}
+              label={createPlan.isPending ? t('savingMedication') : t('save')}
               onPress={() => void save()}
               disabled={createPlan.isPending || patient.isLoading}
             />
