@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ovokFetch } from '@/lib/ovok-fetch';
 import { PRIMARY_PATIENT_STORAGE_KEY, TAKT_CONSENT_VERSION, TAKT_EXT } from '@/lib/takt/constants';
 import { normalizeWeekdayCodes, sortTimes, toTimeOfDay, WEEKDAY_ORDER, WEEKDAYS_ONLY } from '@/lib/takt/time';
+import { clearSupplyCount, deductSupply, setDailyConsumptionRate, setLastRefilledAt, setSupplyCount } from '@/lib/takt/supply-tracker';
 import type {
   ConsentResource,
   FhirExtension,
@@ -25,6 +26,7 @@ type PlanInput = {
   dayOfWeek?: WeekdayCode[];
   times: string[];
   supplyCount?: number;
+  lastRefilledDate?: string;
 };
 
 type UpdatePlanInput = PlanInput & {
@@ -64,6 +66,20 @@ const cadenceRepeat = (
   dayOfWeek: resolveDays(cadence, dayOfWeek),
   timeOfDay: sortTimes(times).map(toTimeOfDay),
 });
+
+const estimateDailyConsumptionRate = (
+  cadence: MedicationCadence,
+  times: string[],
+  dayOfWeek?: WeekdayCode[],
+): number => {
+  const dosesPerActiveDay = Math.max(1, times.length);
+  if (cadence === 'daily') return dosesPerActiveDay;
+  if (cadence === 'weekdays') return (dosesPerActiveDay * 5) / 7;
+
+  const normalized = resolveDays(cadence, dayOfWeek);
+  const activeDays = Math.max(1, normalized.length);
+  return (dosesPerActiveDay * activeDays) / 7;
+};
 
 const getExtension = (extensions: FhirExtension[] | undefined, url: string): FhirExtension | undefined =>
   extensions?.find((x) => x.url === url);
@@ -210,6 +226,19 @@ export const useCreateMedicationPlan = () => {
         }),
       });
 
+      const medicationId = medication.id;
+      const dailyRate = estimateDailyConsumptionRate(input.cadence, input.times, input.dayOfWeek);
+
+      await setDailyConsumptionRate(medicationId, dailyRate);
+
+      if (typeof input.supplyCount === 'number' && Number.isFinite(input.supplyCount)) {
+        await setSupplyCount(medicationId, input.supplyCount);
+      }
+
+      if (input.lastRefilledDate) {
+        await setLastRefilledAt(medicationId, input.lastRefilledDate);
+      }
+
       return { medication, medicationRequest };
     },
     onSuccess: () => {
@@ -271,6 +300,21 @@ export const useUpdateMedicationPlan = () => {
         },
       );
 
+      const medicationId = medication.id;
+      const dailyRate = estimateDailyConsumptionRate(input.cadence, input.times, input.dayOfWeek);
+
+      await setDailyConsumptionRate(medicationId, dailyRate);
+
+      if (typeof input.supplyCount === 'number' && Number.isFinite(input.supplyCount)) {
+        await setSupplyCount(medicationId, input.supplyCount);
+      } else {
+        await clearSupplyCount(medicationId);
+      }
+
+      if (input.lastRefilledDate !== undefined) {
+        await setLastRefilledAt(medicationId, input.lastRefilledDate || null);
+      }
+
       return { medication, medicationRequest };
     },
     onSuccess: () => {
@@ -321,10 +365,19 @@ export const useRecordDose = () => {
           : {}),
       };
 
-      return ovokFetch<MedicationAdministrationResource>('/fhir/R4/MedicationAdministration', {
+      const created = await ovokFetch<MedicationAdministrationResource>('/fhir/R4/MedicationAdministration', {
         method: 'POST',
         body: JSON.stringify(body),
       });
+
+      if (input.action === 'taken' && input.medicationRef) {
+        const medicationId = input.medicationRef.split('/')[1];
+        if (medicationId) {
+          await deductSupply(medicationId);
+        }
+      }
+
+      return created;
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['takt', 'MedicationAdministration'] });

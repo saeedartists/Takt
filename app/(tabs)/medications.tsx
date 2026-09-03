@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import {
   Badge,
@@ -25,6 +25,11 @@ import {
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useLocale } from '@/lib/takt/l10n';
+import { getSupplyCount } from '@/lib/takt/supply-tracker';
+
+const SUPPLY_LOW_THRESHOLD = 7;
+
+type SupplyMap = Record<string, number | null>;
 
 export default function MedicationsScreen() {
   const { c } = useTokens();
@@ -37,6 +42,23 @@ export default function MedicationsScreen() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused' | 'archived'>('all');
+  const [supplyByMedication, setSupplyByMedication] = useState<SupplyMap>({});
+
+  const refreshSupply = useCallback(async () => {
+    const next: SupplyMap = {};
+    for (const plan of plans.plans) {
+      const medicationId = plan.medication?.id;
+      if (!medicationId) continue;
+      next[medicationId] = await getSupplyCount(medicationId);
+    }
+    setSupplyByMedication(next);
+  }, [plans.plans]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshSupply();
+    }, [refreshSupply]),
+  );
 
   const filteredPlans = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
@@ -61,6 +83,29 @@ export default function MedicationsScreen() {
     return t('cadenceSpecificDays');
   };
 
+  const supplyBadge = (plan: (typeof plans.plans)[number]) => {
+    const medicationId = plan.medication?.id;
+    if (!medicationId) return null;
+
+    const count = supplyByMedication[medicationId];
+    if (typeof count !== 'number') return null;
+
+    if (count <= 0) {
+      return <Badge label={t('supplyRefillNeeded')} tone="destructive" />;
+    }
+
+    if (count <= SUPPLY_LOW_THRESHOLD) {
+      return (
+        <Badge
+          label={`${t('supplyLow')} · ${t('supplyRemaining').replace('{count}', count.toString())}`}
+          tone="warning"
+        />
+      );
+    }
+
+    return <Badge label={t('supplyRemaining').replace('{count}', count.toString())} tone="neutral" />;
+  };
+
   const renderList = (rows: typeof plans.plans) => (
     <ListGroup>
       {rows.map((plan, index) => (
@@ -69,6 +114,7 @@ export default function MedicationsScreen() {
           isFirst={index === 0}
           title={plan.label}
           subtitle={`${cadenceLabel(plan)} · ${plan.times.join(', ')} · ${plan.form || t('formNotSet')}`}
+          trailing={supplyBadge(plan) ?? undefined}
           leading={
             <View
               style={{
@@ -140,6 +186,7 @@ export default function MedicationsScreen() {
                 void patient.refetch();
                 void plans.requestsQuery.refetch();
                 void plans.medicationsQuery.refetch();
+                void refreshSupply();
               }}
             />
           ) : plans.plans.length === 0 ? (

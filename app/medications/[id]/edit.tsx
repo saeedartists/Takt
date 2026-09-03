@@ -25,6 +25,7 @@ import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useUpdateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
 import { useLocale } from '@/lib/takt/l10n';
 import { formatDayLabel, normalizeTimesInput, parseTimeList } from '@/lib/takt/medication-form';
+import { getDaysUntilRefill, getLastRefilledAt, getSupplyCount } from '@/lib/takt/supply-tracker';
 import { WEEKDAY_ORDER, WEEKDAYS_ONLY } from '@/lib/takt/time';
 import type { MedicationCadence, WeekdayCode } from '@/lib/takt/types';
 
@@ -32,6 +33,16 @@ const statusToFilter = (status: string): 'active' | 'on-hold' | 'stopped' => {
   if (status === 'on-hold') return 'on-hold';
   if (status === 'stopped') return 'stopped';
   return 'active';
+};
+
+const normalizeDateInput = (value: string): string | null => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const asDate = new Date(`${trimmed}T12:00:00.000Z`);
+  if (Number.isNaN(asDate.getTime())) return null;
+  return asDate.toISOString();
 };
 
 export default function EditMedicationScreen() {
@@ -55,6 +66,8 @@ export default function EditMedicationScreen() {
   const [selectedDays, setSelectedDays] = useState<WeekdayCode[]>(WEEKDAYS_ONLY);
   const [status, setStatus] = useState<'active' | 'on-hold' | 'stopped'>('active');
   const [supply, setSupply] = useState('');
+  const [lastRefilled, setLastRefilled] = useState('');
+  const [storedDaysUntilRefill, setStoredDaysUntilRefill] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -67,7 +80,26 @@ export default function EditMedicationScreen() {
     setCadence(plan.cadence);
     setSelectedDays(plan.dayOfWeek);
     setStatus(statusToFilter(plan.request.status));
-    setSupply(typeof plan.supplyCount === 'number' ? Math.round(plan.supplyCount).toString() : '');
+
+    void (async () => {
+      const medicationId = plan.medication?.id;
+      if (!medicationId) return;
+
+      const [localCount, localLastRefilled, localDays] = await Promise.all([
+        getSupplyCount(medicationId),
+        getLastRefilledAt(medicationId),
+        getDaysUntilRefill(medicationId),
+      ]);
+
+      if (typeof localCount === 'number') {
+        setSupply(localCount.toString());
+      } else {
+        setSupply(typeof plan.supplyCount === 'number' ? Math.round(plan.supplyCount).toString() : '');
+      }
+
+      setLastRefilled(localLastRefilled ? localLastRefilled.slice(0, 10) : '');
+      setStoredDaysUntilRefill(localDays);
+    })();
   }, [plan]);
 
   const toggleDay = (day: WeekdayCode) => {
@@ -104,6 +136,12 @@ export default function EditMedicationScreen() {
     const parsedSupply = Number.parseInt(supply, 10);
     const supplyCount = Number.isFinite(parsedSupply) && parsedSupply > 0 ? parsedSupply : undefined;
 
+    const lastRefilledIso = normalizeDateInput(lastRefilled);
+    if (lastRefilled.trim() && !lastRefilledIso) {
+      setError(t('supplyLastRefilledInvalid'));
+      return;
+    }
+
     setError(null);
 
     try {
@@ -116,6 +154,7 @@ export default function EditMedicationScreen() {
         dayOfWeek,
         times,
         supplyCount,
+        lastRefilledDate: lastRefilledIso ?? '',
         status,
         request: plan.request,
         medication: plan.medication,
@@ -245,6 +284,18 @@ export default function EditMedicationScreen() {
                   placeholder={t('medicationSupplyPlaceholder')}
                 />
               </Field>
+              <Field label={t('supplyLastRefilled')}>
+                <Input
+                  value={lastRefilled}
+                  onChangeText={setLastRefilled}
+                  placeholder="YYYY-MM-DD"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </Field>
+              <Text style={[typography.caption, { color: c.textSecondary }]}>
+                {t('supplyDaysUntilRefill')}: {typeof storedDaysUntilRefill === 'number' ? storedDaysUntilRefill.toString() : '—'}
+              </Text>
             </View>
 
             <View style={{ gap: spacing(3) }}>

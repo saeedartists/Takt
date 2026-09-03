@@ -711,5 +711,12 @@
   "csvColumnStatus": "Status",
   "csvColumnActualTime": "Actual Time",
   "csvSummaryAdherence": "14-day adherence",
-  "csvExportError": "Could not export CSV right now."
+  "csvExportError": "Could not export CSV right now.",
+  "supplyRemaining": "{count} tablets remaining",
+  "supplyLow": "Low Supply",
+  "supplyRefillNeeded": "Refill Needed",
+  "supplyDaysUntilRefill": "Days until refill",
+  "supplyLastRefilled": "Last refilled date",
+  "supplyLastRefilledInvalid": "Use YYYY-MM-DD for last refilled date.",
+  "supplyRefillReminder": "Supply dropped to 7 or fewer. Refill this medication soon."
 }

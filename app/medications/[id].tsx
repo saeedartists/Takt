@@ -1,5 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import {
   Badge,
@@ -24,6 +24,7 @@ import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useUpdateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
 import { TAKT_EXT } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
+import { getDaysUntilRefill, getLastRefilledAt, getSupplyCount } from '@/lib/takt/supply-tracker';
 
 const statusTone = (status: string): 'success' | 'warning' | 'destructive' => {
   if (status === 'on-hold') return 'warning';
@@ -37,7 +38,9 @@ const statusLabelKey = (status: string): 'statusActive' | 'statusPaused' | 'stat
   return 'statusActive';
 };
 
-const cadenceLabelKey = (cadence: 'daily' | 'weekdays' | 'custom'): 'cadenceDaily' | 'cadenceWeekdays' | 'cadenceSpecificDays' => {
+const cadenceLabelKey = (
+  cadence: 'daily' | 'weekdays' | 'custom',
+): 'cadenceDaily' | 'cadenceWeekdays' | 'cadenceSpecificDays' => {
   if (cadence === 'weekdays') return 'cadenceWeekdays';
   if (cadence === 'custom') return 'cadenceSpecificDays';
   return 'cadenceDaily';
@@ -57,6 +60,35 @@ export default function MedicationDetailsScreen() {
 
   const plan = useMemo(() => plans.plans.find((entry) => entry.request.id === id), [id, plans.plans]);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [supplyCount, setSupplyCountState] = useState<number | null>(null);
+  const [daysUntilRefill, setDaysUntilRefill] = useState<number | null>(null);
+  const [lastRefilledAt, setLastRefilledAtState] = useState<string | null>(null);
+
+  const reloadSupply = useCallback(async () => {
+    const medicationId = plan?.medication?.id;
+    if (!medicationId) {
+      setSupplyCountState(null);
+      setDaysUntilRefill(null);
+      setLastRefilledAtState(null);
+      return;
+    }
+
+    const [count, days, refilledAt] = await Promise.all([
+      getSupplyCount(medicationId),
+      getDaysUntilRefill(medicationId),
+      getLastRefilledAt(medicationId),
+    ]);
+
+    setSupplyCountState(count);
+    setDaysUntilRefill(days);
+    setLastRefilledAtState(refilledAt);
+  }, [plan?.medication?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void reloadSupply();
+    }, [reloadSupply]),
+  );
 
   const relatedEvents = useMemo(() => {
     if (!plan) return [];
@@ -84,6 +116,7 @@ export default function MedicationDetailsScreen() {
             void plans.requestsQuery.refetch();
             void plans.medicationsQuery.refetch();
             void events.refetch();
+            void reloadSupply();
           }}
         />
       </PageShell>
@@ -112,7 +145,7 @@ export default function MedicationDetailsScreen() {
         cadence: plan.cadence,
         dayOfWeek: plan.dayOfWeek,
         times: plan.times,
-        supplyCount: plan.supplyCount,
+        supplyCount: supplyCount ?? undefined,
         status: nextStatus,
         request: plan.request,
         medication,
@@ -138,15 +171,42 @@ export default function MedicationDetailsScreen() {
               <ListRow isFirst title={t('medicationForm')} value={plan.form || t('formNotSet')} />
               <ListRow title={t('medicationStrength')} value={plan.strength || '—'} />
               <ListRow title={t('medicationTimes')} value={plan.times.join(', ')} />
-              <ListRow
-                title={t('medicationSupply')}
-                value={typeof plan.supplyCount === 'number' ? Math.round(plan.supplyCount).toString() : '—'}
-              />
             </ListGroup>
 
             <Button label={t('editMedicationPlanCta')} onPress={() => router.push(`/medications/${plan.request.id}/edit`)} />
           </View>
         </Card>
+
+        <View>
+          <SectionHeader title={t('medicationSupplySectionTitle')} />
+          <Card>
+            <View style={{ padding: spacing(4) }}>
+              <ListGroup>
+                <ListRow
+                  isFirst
+                  title={t('medicationSupply')}
+                  value={typeof supplyCount === 'number' ? supplyCount.toString() : '—'}
+                />
+                <ListRow
+                  title={t('supplyDaysUntilRefill')}
+                  value={typeof daysUntilRefill === 'number' ? daysUntilRefill.toString() : '—'}
+                />
+                <ListRow
+                  title={t('supplyLastRefilled')}
+                  value={
+                    lastRefilledAt
+                      ? formatDateTime(new Date(lastRefilledAt), {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })
+                      : '—'
+                  }
+                />
+              </ListGroup>
+            </View>
+          </Card>
+        </View>
 
         <View>
           <SectionHeader title={t('medicationFlowActionsTitle')} />

@@ -43,6 +43,7 @@ export const ListRow = ({
   value,
   leading,
   onPress,
+  trailing,
   isFirst = false,
 }: {
   title: string;
@@ -50,6 +51,7 @@ export const ListRow = ({
   value?: string;
   leading?: ReactNode;
   onPress?: () => void;
+  trailing?: ReactNode;
   /** Suppresses the top hairline. Set on the first row of a group. */
   isFirst?: boolean;
 }) => {
@@ -71,16 +73,17 @@ export const ListRow = ({
           </Text>
         ) : null}
       </View>
-      {value ? (
-        <Text
-          style={[
-            typography.body,
-            { color: c.textSecondary, fontVariant: ['tabular-nums'] },
-          ]}
-        >
-          {value}
-        </Text>
-      ) : null}
+      {trailing ??
+        (value ? (
+          <Text
+            style={[
+              typography.body,
+              { color: c.textSecondary, fontVariant: ['tabular-nums'] },
+            ]}
+          >
+            {value}
+          </Text>
+        ) : null)}
       {onPress ? (
         <Text style={[typography.body, { color: c.textTertiary }]}>›</Text>
       ) : null}
