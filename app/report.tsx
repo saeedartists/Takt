@@ -34,8 +34,9 @@ const esc = (value: string): string =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 
-const REPORT_MEDICATION_LIMIT = 20;
-const REPORT_MISSED_LIMIT = 12;
+const REPORT_MEDICATION_LIMIT = 10;
+const REPORT_MISSED_LIMIT = 6;
+const FOCUS_MEDICATION_LIMIT = 3;
 
 export default function ReportScreen() {
   const { c } = useTokens();
@@ -69,10 +70,60 @@ export default function ReportScreen() {
     [formatDateTime, history, plans.plans],
   );
 
+  const medsNeedingReview = useMemo(
+    () =>
+      summary.byMedication
+        .filter((row) => row.denominator > 0 && row.pct < 80)
+        .sort((a, b) => a.pct - b.pct)
+        .slice(0, FOCUS_MEDICATION_LIMIT),
+    [summary.byMedication],
+  );
+
   const needsReviewCount = useMemo(
     () => summary.byMedication.filter((row) => row.denominator > 0 && row.pct < 80).length,
     [summary.byMedication],
   );
+
+  const recentMissed = summary.missedRows[0];
+
+  const focusNotes = useMemo(() => {
+    const notes = [
+      t('reportFocusAdherence')
+        .replace('{pct}', summary.pct.toString())
+        .replace('{taken}', summary.taken.toString())
+        .replace('{total}', summary.denominator.toString()),
+    ];
+
+    if (needsReviewCount > 0) {
+      const topNames = medsNeedingReview.map((row) => row.label).join(', ');
+      notes.push(
+        t('reportFocusNeedsReview')
+          .replace('{count}', needsReviewCount.toString())
+          .replace('{names}', topNames),
+      );
+    } else {
+      notes.push(t('reportFocusNoNeedsReview'));
+    }
+
+    if (recentMissed) {
+      notes.push(
+        t('reportFocusMissedRecent').replace(
+          '{when}',
+          formatDateTime(recentMissed.scheduledAt, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+        ),
+      );
+    } else {
+      notes.push(t('reportFocusNoMissed'));
+    }
+
+    return notes;
+  }, [formatDateTime, medsNeedingReview, needsReviewCount, recentMissed, summary.denominator, summary.pct, summary.taken, t]);
 
   const exportPdf = async () => {
     if (!patient.data) return;
@@ -99,24 +150,28 @@ export default function ReportScreen() {
         .map((row) => `<tr><td>${esc(row.label)}</td><td style=\"text-align:right\">${esc(row.dateLabel)}</td></tr>`)
         .join('');
 
+      const focusRows = focusNotes.map((note) => `<li>${esc(note)}</li>`).join('');
+
       const html = `
 <!DOCTYPE html>
 <html>
   <head>
     <meta charset="utf-8" />
     <style>
-      @page { size: A4; margin: 18px; }
+      @page { size: A4; margin: 16px; }
       body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #0E1218; }
-      h1 { margin: 0 0 6px 0; font-size: 22px; }
-      .meta { color: #5C646F; margin-bottom: 14px; font-size: 12px; line-height: 1.4; }
-      .score { font-size: 30px; color: #B4611C; margin: 6px 0 14px; font-weight: 700; }
-      .keyfacts { margin: 0 0 12px; padding-left: 16px; }
-      .keyfacts li { font-size: 12px; line-height: 1.4; margin: 0 0 4px; }
-      table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-      th, td { border-bottom: 1px solid #E8E6E3; padding: 5px 0; font-size: 12px; line-height: 1.3; }
+      h1 { margin: 0 0 4px 0; font-size: 20px; }
+      h2 { margin: 10px 0 4px 0; font-size: 13px; color: #0E1218; }
+      .meta { color: #5C646F; margin-bottom: 8px; font-size: 10px; line-height: 1.3; }
+      .score { font-size: 24px; color: #B4611C; margin: 4px 0 8px; font-weight: 700; }
+      .notes { margin: 0 0 8px; padding-left: 16px; }
+      .notes li { font-size: 10px; line-height: 1.3; margin: 0 0 3px; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+      th, td { border-bottom: 1px solid #E8E6E3; padding: 3px 0; font-size: 10px; line-height: 1.3; }
       th { text-align: left; color: #5C646F; font-weight: 600; }
-      .small { color: #5C646F; font-size: 11px; margin-top: 8px; line-height: 1.35; }
-      .muted { color: #5C646F; font-size: 11px; margin: 2px 0 8px; }
+      .small { color: #5C646F; font-size: 9px; margin-top: 6px; line-height: 1.3; }
+      .muted { color: #5C646F; font-size: 9px; margin: 1px 0 6px; line-height: 1.3; }
+      .compact { page-break-inside: avoid; }
     </style>
   </head>
   <body>
@@ -126,23 +181,28 @@ export default function ReportScreen() {
       )}<br/>${esc(t('windowLabel'))}: ${esc(t('adherenceWindow'))}</div>
     <div class="score">${summary.pct}% ${esc(t('takenOnSchedule'))}</div>
 
-    <ul class="keyfacts">
-      <li>${esc(t('reportFactTotalLogged').replace('{count}', summary.denominator.toString()))}</li>
-      <li>${esc(t('reportFactMissed').replace('{count}', summary.missedRows.length.toString()))}</li>
-      <li>${esc(t('reportFactNeedsReview').replace('{count}', needsReviewCount.toString()))}</li>
-    </ul>
+    <div class="compact">
+      <h2>${esc(t('reportVisitFocusTitle'))}</h2>
+      <ul class="notes">${focusRows}</ul>
+    </div>
 
-    <table>
-      <thead><tr><th>${esc(t('medications'))}</th><th style="text-align:right">${esc(t('completion'))}</th></tr></thead>
-      <tbody>${medicationRows}</tbody>
-    </table>
-    ${hiddenMeds > 0 ? `<div class=\"muted\">${esc(t('reportExtraMedications').replace('{count}', hiddenMeds.toString()))}</div>` : ''}
+    <div class="compact">
+      <h2>${esc(t('reportPerMedication'))}</h2>
+      <table>
+        <thead><tr><th>${esc(t('medications'))}</th><th style="text-align:right">${esc(t('completion'))}</th></tr></thead>
+        <tbody>${medicationRows || `<tr><td colspan=\"2\">${esc(t('reportNoDataInWindow'))}</td></tr>`}</tbody>
+      </table>
+      ${hiddenMeds > 0 ? `<div class=\"muted\">${esc(t('reportExtraMedications').replace('{count}', hiddenMeds.toString()))}</div>` : ''}
+    </div>
 
-    <table>
-      <thead><tr><th>${esc(t('missedDoses'))}</th><th style="text-align:right">${esc(t('dateLabel'))}</th></tr></thead>
-      <tbody>${missedRows || `<tr><td colspan=\"2\">${esc(t('reportNoMissedInPeriod'))}</td></tr>`}</tbody>
-    </table>
-    ${hiddenMissed > 0 ? `<div class=\"muted\">${esc(t('reportExtraMissedRows').replace('{count}', hiddenMissed.toString()))}</div>` : ''}
+    <div class="compact">
+      <h2>${esc(t('reportMissedDetailsTitle'))}</h2>
+      <table>
+        <thead><tr><th>${esc(t('missedDoses'))}</th><th style="text-align:right">${esc(t('dateLabel'))}</th></tr></thead>
+        <tbody>${missedRows || `<tr><td colspan=\"2\">${esc(t('reportNoMissedInPeriod'))}</td></tr>`}</tbody>
+      </table>
+      ${hiddenMissed > 0 ? `<div class=\"muted\">${esc(t('reportExtraMissedRows').replace('{count}', hiddenMissed.toString()))}</div>` : ''}
+    </div>
 
     <div class="small">${esc(t('reportPdfDisclaimer'))}</div>
   </body>
@@ -223,6 +283,15 @@ export default function ReportScreen() {
         </Card>
 
         <View>
+          <SectionHeader title={t('reportVisitFocusTitle')} />
+          <ListGroup>
+            {focusNotes.map((note, index) => (
+              <ListRow key={note} isFirst={index === 0} title={note} />
+            ))}
+          </ListGroup>
+        </View>
+
+        <View>
           <SectionHeader title={t('reportClinicianSummaryTitle')} />
           <ListGroup>
             <ListRow
@@ -267,7 +336,12 @@ export default function ReportScreen() {
           ) : (
             <ListGroup>
               {summary.missedRows.slice(0, 8).map((row, index) => (
-                <ListRow key={`${row.requestId}-${row.scheduledAt.toISOString()}`} isFirst={index === 0} title={row.label} subtitle={row.dateLabel} />
+                <ListRow
+                  key={`${row.requestId}-${row.scheduledAt.toISOString()}`}
+                  isFirst={index === 0}
+                  title={row.label}
+                  subtitle={row.dateLabel}
+                />
               ))}
             </ListGroup>
           )}

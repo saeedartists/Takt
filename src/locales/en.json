@@ -695,5 +695,12 @@
   "reportFactMissedHint": "Missed doses highlight timing pressure or barriers",
   "reportFactNeedsReview": "{count} medications under 80% adherence",
   "reportFactNeedsReviewHint": "Use this to focus the visit discussion",
-  "reportDoseCount": "{taken} of {total} doses taken on schedule"
+  "reportDoseCount": "{taken} of {total} doses taken on schedule",
+  "reportVisitFocusTitle": "Visit focus",
+  "reportFocusAdherence": "Adherence is {pct}% ({taken} of {total} logged doses taken on schedule).",
+  "reportFocusNeedsReview": "{count} medications are under 80% adherence: {names}.",
+  "reportFocusNoNeedsReview": "No medication is below 80% adherence in this window.",
+  "reportFocusMissedRecent": "Most recent missed dose: {when}.",
+  "reportFocusNoMissed": "No missed doses were logged in this window.",
+  "reportNoDataInWindow": "No dose data in this period"
 }
