@@ -682,5 +682,18 @@
   "medicationTimesHint": "Nutzen Sie das 24-Stunden-Format. Mehrere Zeiten mit Komma trennen.",
   "medicationSupplyPlaceholder": "28",
   "savingMedication": "Wird gespeichert…",
-  "savingMedicationChanges": "Änderungen werden gespeichert…"
+  "savingMedicationChanges": "Änderungen werden gespeichert…",
+  "historyFixLogSectionTitle": "Protokollierte Dosis korrigieren",
+  "historyFixLogEmptyTitle": "Keine protokollierten Dosen zum Korrigieren",
+  "historyFixLogEmptyHint": "Als eingenommen, ausgelassen oder verpasst markierte Dosen erscheinen hier.",
+  "historyClearDoseLogCta": "Diesen Eintrag entfernen",
+  "reportClinicianSummaryTitle": "Zusammenfassung für den Arzttermin",
+  "reportMissedDetailsTitle": "Details zu verpassten Dosen",
+  "reportFactTotalLogged": "{count} protokollierte Dosen im Zeitraum",
+  "reportFactTotalLoggedHint": "Eingenommen + ausgelassen + verpasst aus diesem Bericht",
+  "reportFactMissed": "{count} verpasste Dosen",
+  "reportFactMissedHint": "Verpasste Dosen zeigen typische Hürden im Alltag",
+  "reportFactNeedsReview": "{count} Medikamente unter 80% Adhärenz",
+  "reportFactNeedsReviewHint": "Hilft, das Gespräch im Termin zu fokussieren",
+  "reportDoseCount": "{taken} von {total} Dosen planmäßig eingenommen"
 }

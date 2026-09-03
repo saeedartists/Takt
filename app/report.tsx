@@ -69,6 +69,11 @@ export default function ReportScreen() {
     [formatDateTime, history, plans.plans],
   );
 
+  const needsReviewCount = useMemo(
+    () => summary.byMedication.filter((row) => row.denominator > 0 && row.pct < 80).length,
+    [summary.byMedication],
+  );
+
   const exportPdf = async () => {
     if (!patient.data) return;
 
@@ -105,6 +110,8 @@ export default function ReportScreen() {
       h1 { margin: 0 0 6px 0; font-size: 22px; }
       .meta { color: #5C646F; margin-bottom: 14px; font-size: 12px; line-height: 1.4; }
       .score { font-size: 30px; color: #B4611C; margin: 6px 0 14px; font-weight: 700; }
+      .keyfacts { margin: 0 0 12px; padding-left: 16px; }
+      .keyfacts li { font-size: 12px; line-height: 1.4; margin: 0 0 4px; }
       table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
       th, td { border-bottom: 1px solid #E8E6E3; padding: 5px 0; font-size: 12px; line-height: 1.3; }
       th { text-align: left; color: #5C646F; font-weight: 600; }
@@ -118,6 +125,12 @@ export default function ReportScreen() {
         formatDate(new Date(), { year: 'numeric', month: 'short', day: 'numeric' }),
       )}<br/>${esc(t('windowLabel'))}: ${esc(t('adherenceWindow'))}</div>
     <div class="score">${summary.pct}% ${esc(t('takenOnSchedule'))}</div>
+
+    <ul class="keyfacts">
+      <li>${esc(t('reportFactTotalLogged').replace('{count}', summary.denominator.toString()))}</li>
+      <li>${esc(t('reportFactMissed').replace('{count}', summary.missedRows.length.toString()))}</li>
+      <li>${esc(t('reportFactNeedsReview').replace('{count}', needsReviewCount.toString()))}</li>
+    </ul>
 
     <table>
       <thead><tr><th>${esc(t('medications'))}</th><th style="text-align:right">${esc(t('completion'))}</th></tr></thead>
@@ -210,13 +223,51 @@ export default function ReportScreen() {
         </Card>
 
         <View>
+          <SectionHeader title={t('reportClinicianSummaryTitle')} />
+          <ListGroup>
+            <ListRow
+              isFirst
+              title={t('reportFactTotalLogged').replace('{count}', summary.denominator.toString())}
+              subtitle={t('reportFactTotalLoggedHint')}
+            />
+            <ListRow
+              title={t('reportFactMissed').replace('{count}', summary.missedRows.length.toString())}
+              subtitle={t('reportFactMissedHint')}
+            />
+            <ListRow
+              title={t('reportFactNeedsReview').replace('{count}', needsReviewCount.toString())}
+              subtitle={t('reportFactNeedsReviewHint')}
+            />
+          </ListGroup>
+        </View>
+
+        <View>
           <SectionHeader title={t('reportPerMedication')} />
           {summary.byMedication.length === 0 ? (
             <EmptyState title={t('noAdherenceHistory')} description={t('historyNeedsSchedule')} />
           ) : (
             <ListGroup>
               {summary.byMedication.map((row, index) => (
-                <ListRow key={row.id} isFirst={index === 0} title={row.label} value={`${row.pct.toString()}%`} />
+                <ListRow
+                  key={row.id}
+                  isFirst={index === 0}
+                  title={row.label}
+                  subtitle={t('reportDoseCount').replace('{taken}', row.taken.toString()).replace('{total}', row.denominator.toString())}
+                  value={`${row.pct.toString()}%`}
+                />
+              ))}
+            </ListGroup>
+          )}
+        </View>
+
+        <View>
+          <SectionHeader title={t('reportMissedDetailsTitle')} />
+          {summary.missedRows.length === 0 ? (
+            <EmptyState title={t('reportNoMissedInPeriod')} description={t('greatRhythm')} />
+          ) : (
+            <ListGroup>
+              {summary.missedRows.slice(0, 8).map((row, index) => (
+                <ListRow key={`${row.requestId}-${row.scheduledAt.toISOString()}`} isFirst={index === 0} title={row.label} subtitle={row.dateLabel} />
               ))}
             </ListGroup>
           )}

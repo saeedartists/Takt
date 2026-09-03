@@ -682,5 +682,18 @@
   "medicationTimesHint": "Use 24-hour format. Separate multiple times with commas.",
   "medicationSupplyPlaceholder": "28",
   "savingMedication": "Saving…",
-  "savingMedicationChanges": "Saving changes…"
+  "savingMedicationChanges": "Saving changes…",
+  "historyFixLogSectionTitle": "Fix a logged dose",
+  "historyFixLogEmptyTitle": "No logged doses to correct",
+  "historyFixLogEmptyHint": "Logged taken, skipped, or missed doses will appear here.",
+  "historyClearDoseLogCta": "Remove this log",
+  "reportClinicianSummaryTitle": "Clinician summary",
+  "reportMissedDetailsTitle": "Missed dose details",
+  "reportFactTotalLogged": "{count} logged doses in this window",
+  "reportFactTotalLoggedHint": "Taken + skipped + missed events used in this report",
+  "reportFactMissed": "{count} missed doses",
+  "reportFactMissedHint": "Missed doses highlight timing pressure or barriers",
+  "reportFactNeedsReview": "{count} medications under 80% adherence",
+  "reportFactNeedsReviewHint": "Use this to focus the visit discussion",
+  "reportDoseCount": "{taken} of {total} doses taken on schedule"
 }

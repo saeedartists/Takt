@@ -24,6 +24,16 @@ import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useRecordDose, useUndoDose } from '@/lib/hooks/use-takt-mutations';
 import { useLocale } from '@/lib/takt/l10n';
 import { buildHistory } from '@/lib/takt/schedule';
+import type { DoseOccurrence } from '@/lib/takt/types';
+
+type CorrectionAction = 'taken' | 'skipped' | 'missed';
+type DoseWithDay = DoseOccurrence & { dayLabel: string };
+
+const toStateBadgeTone = (state: CorrectionAction): 'success' | 'warning' | 'destructive' => {
+  if (state === 'taken') return 'success';
+  if (state === 'skipped') return 'warning';
+  return 'destructive';
+};
 
 export default function HistoryScreen() {
   const { c } = useTokens();
@@ -37,6 +47,7 @@ export default function HistoryScreen() {
   const undoDose = useUndoDose();
   const [actionError, setActionError] = useState<string | null>(null);
   const [windowDays, setWindowDays] = useState<7 | 14 | 30>(14);
+  const [pendingDoseId, setPendingDoseId] = useState<string | null>(null);
 
   const history = useMemo(
     () => buildHistory(plans.plans, (events.data?.entry ?? []).map((x) => x.resource), windowDays),
@@ -84,6 +95,69 @@ export default function HistoryScreen() {
         .slice(0, 30),
     [formatDate, formatTime, history],
   );
+
+  const correctionRows = useMemo<DoseWithDay[]>(
+    () =>
+      history
+        .flatMap((day) =>
+          day.doses
+            .filter(
+              (dose): dose is DoseOccurrence & { state: CorrectionAction } =>
+                dose.state === 'taken' || dose.state === 'skipped' || dose.state === 'missed',
+            )
+            .map((dose) => ({
+              ...dose,
+              dayLabel: formatDate(day.date, { month: 'short', day: 'numeric' }),
+            })),
+        )
+        .sort((a, b) => b.scheduledAt.getTime() - a.scheduledAt.getTime())
+        .slice(0, 12),
+    [formatDate, history],
+  );
+
+  const rewriteDoseState = async (dose: DoseWithDay, action: CorrectionAction) => {
+    if (!patientRef) return;
+
+    if (dose.state === action && dose.eventId) {
+      return;
+    }
+
+    setActionError(null);
+    setPendingDoseId(dose.id);
+
+    try {
+      if (dose.eventId) {
+        await undoDose.mutateAsync(dose.eventId);
+      }
+
+      await recordDose.mutateAsync({
+        patientRef,
+        medicationRef: dose.medicationRef,
+        requestRef: `MedicationRequest/${dose.requestId}`,
+        scheduledAt: dose.scheduledAt,
+        action,
+      });
+    } catch {
+      setActionError(t('historyCorrectionError'));
+    } finally {
+      setPendingDoseId(null);
+    }
+  };
+
+  const clearDoseLog = async (dose: DoseWithDay) => {
+    if (!dose.eventId) return;
+
+    setActionError(null);
+    setPendingDoseId(dose.id);
+
+    try {
+      await undoDose.mutateAsync(dose.eventId);
+    } catch {
+      setActionError(t('historyCorrectionError'));
+    } finally {
+      setPendingDoseId(null);
+    }
+  };
 
   const markTaken = async (item: (typeof missed)[number]) => {
     if (!patientRef) return;
@@ -171,6 +245,62 @@ export default function HistoryScreen() {
                 </View>
               </View>
             </Card>
+
+            <View>
+              <SectionHeader title={t('historyFixLogSectionTitle')} />
+              {correctionRows.length === 0 ? (
+                <EmptyState title={t('historyFixLogEmptyTitle')} description={t('historyFixLogEmptyHint')} />
+              ) : (
+                <Stack>
+                  {correctionRows.map((dose) => {
+                    const state = dose.state as CorrectionAction;
+                    const disabled = pendingDoseId === dose.id || recordDose.isPending || undoDose.isPending;
+                    const dateTimeLabel = `${dose.dayLabel} · ${formatTime(dose.scheduledAt)}`;
+
+                    return (
+                      <Card key={dose.id}>
+                        <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
+                          <View style={styles.metricRow}>
+                            <Text style={[typography.body, { color: c.textPrimary, flex: 1 }]}>{dose.label}</Text>
+                            <Badge
+                              label={
+                                state === 'taken'
+                                  ? t('statusTaken')
+                                  : state === 'skipped'
+                                    ? t('statusSkipped')
+                                    : t('statusMissed')
+                              }
+                              tone={toStateBadgeTone(state)}
+                            />
+                          </View>
+
+                          <Text style={[typography.footnote, { color: c.textSecondary }]}>{dateTimeLabel}</Text>
+
+                          <SegmentedControl
+                            value={state}
+                            onChange={(next) => void rewriteDoseState(dose, next as CorrectionAction)}
+                            options={[
+                              { value: 'taken', label: t('statusTaken') },
+                              { value: 'skipped', label: t('statusSkipped') },
+                              { value: 'missed', label: t('statusMissed') },
+                            ]}
+                          />
+
+                          {dose.eventId ? (
+                            <Button
+                              kind="secondary"
+                              label={t('historyClearDoseLogCta')}
+                              onPress={() => void clearDoseLog(dose)}
+                              disabled={disabled}
+                            />
+                          ) : null}
+                        </View>
+                      </Card>
+                    );
+                  })}
+                </Stack>
+              )}
+            </View>
 
             <View>
               <SectionHeader title={t('missedDoses')} />
