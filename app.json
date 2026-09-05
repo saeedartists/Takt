@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Takt",
-    "slug": "takt",
+    "slug": "saeed",
     "scheme": "takt",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -28,13 +28,28 @@
           "sounds": []
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
     },
     "notification": {
       "color": "#B4611C"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d4b1c55c-cddf-4e3e-a188-25ebbe9388ba"
+      }
+    },
+    "owner": "saeedartists1s-team"
   }
 }
