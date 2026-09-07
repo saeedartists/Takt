@@ -19,8 +19,15 @@
     "web": {
       "bundler": "metro"
     },
+    "updates": {
+      "url": "https://u.expo.dev/d4b1c55c-cddf-4e3e-a188-25ebbe9388ba",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "plugins": [
       "expo-router",
+      "expo-updates",
       [
         "expo-notifications",
         {

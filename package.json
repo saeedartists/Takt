@@ -41,6 +41,7 @@
     "expo-standard-web-crypto": "^56.0.3",
     "expo-status-bar": "~56.0.4",
     "expo-system-ui": "~56.0.5",
+    "expo-updates": "~56.0.26",
     "expo-web-browser": "~56.0.5",
     "formik": "^2.4.9",
     "i18next": "^26.3.1",
