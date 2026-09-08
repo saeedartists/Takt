@@ -1,0 +1,31 @@
+# EAS Build ignore rules
+# Mirrors .gitignore plus excludes large local build artifacts that are not
+# needed to compile the app (APKs, QRs, native dirs, secrets).
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# native build dirs (CNG managed)
+android/
+ios/
+
+# environment / secrets
+.env
+.env.local
+.env.*.local
+!src/lib/web-native-stub.js
+
+# local build artifacts (large APKs / generated QRs) - never needed on EAS
+build-artifacts/
+
+# misc
+.DS_Store
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
