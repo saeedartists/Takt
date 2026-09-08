@@ -57,6 +57,9 @@
         "projectId": "d4b1c55c-cddf-4e3e-a188-25ebbe9388ba"
       }
     },
-    "owner": "saeedartists1s-team"
+    "owner": "saeedartists1s-team",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }
