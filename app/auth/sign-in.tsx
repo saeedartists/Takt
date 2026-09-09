@@ -22,7 +22,6 @@ export default function SignInScreen() {
           label={t('authRegisterTitle')} 
           kind="secondary" 
           onPress={() => router.replace('/auth/register' as never)} 
-          style={{ marginTop: spacing(4) }}
         />
       </Stack>
     </PageShell>
