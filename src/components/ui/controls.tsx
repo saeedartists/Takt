@@ -38,42 +38,10 @@ export const Input = (props: TextInputProps) => {
   );
 };
 
-export const SegmentedControl = ({
-  value,
-  options,
-  onChange,
-}: {
-  value: string;
-  options: Array<{ value: string; label: string }>;
-  onChange: (next: string) => void;
-}) => {
-  const { c } = useTokens();
-  return (
-    <View style={[styles.segmentedWrap, { backgroundColor: c.surfaceRaised, borderColor: c.separator }]}>
-      {options.map((option) => {
-        const active = value === option.value;
-        return (
-          <Pressable
-            key={option.value}
-            onPress={() => onChange(option.value)}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            style={({ pressed }) => [
-              styles.segment,
-              {
-                backgroundColor: active ? c.surface : 'transparent',
-                transform: [{ scale: pressed ? 0.98 : 1 }],
-                opacity: pressed ? 0.82 : 1,
-              },
-            ]}
-          >
-            <Text style={[typography.subhead, { color: active ? c.textPrimary : c.textSecondary }]}>{option.label}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-};
+import { AnimatedPressable } from './animated-pressable';
+import { AnimatedSegmentedControl } from './animated-segmented-control';
+
+export const SegmentedControl = AnimatedSegmentedControl;
 
 export const Button = ({
   label,
@@ -92,26 +60,26 @@ export const Button = ({
   const textColor = kind === 'primary' ? c.surface : kind === 'destructive' ? c.destructive : c.textPrimary;
 
   return (
-    <Pressable
+    <AnimatedPressable
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled: Boolean(disabled) }}
       onPress={onPress}
-      style={({ pressed }) => [
+      style={[
         styles.button,
         {
           backgroundColor,
           borderColor: c.separator,
-          transform: [{ scale: pressed ? 0.98 : 1 }],
-          opacity: disabled ? 0.45 : pressed ? 0.86 : 1,
+          opacity: disabled ? 0.45 : 1,
         },
       ]}
     >
       <Text style={[typography.headline, { color: textColor }]}>{label}</Text>
-    </Pressable>
+    </AnimatedPressable>
   );
 };
+
 
 const styles = StyleSheet.create({
   input: {

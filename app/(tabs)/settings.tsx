@@ -1,8 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
+  AnimatedPressable,
+  AnimatedSegmentedControl,
   Badge,
   Button,
   Card,
@@ -12,11 +15,15 @@ import {
   PageHeader,
   PageShell,
   SectionHeader,
-  SegmentedControl,
   Stack,
+  paletteConfigs,
+  radius,
   spacing,
   typography,
+  useTheme,
   useTokens,
+  type ThemeMode,
+  type ThemePalette,
 } from '@/components/ui';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { ovokClient } from '@/lib/ovok-client';
@@ -28,9 +35,33 @@ import { env } from '@/lib/env';
 
 const SNOOZE_OPTIONS = [5, 10, 15, 30] as const;
 
+function SettingsIconBadge({
+  name,
+  color,
+}: {
+  name: keyof typeof Ionicons.glyphMap;
+  color: string;
+}) {
+  return (
+    <View
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: radius.md,
+        backgroundColor: `${color}1F`,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Ionicons name={name} size={17} color={color} />
+    </View>
+  );
+}
+
 export default function SettingsTabScreen() {
   const router = useRouter();
   const { c } = useTokens();
+  const { themeMode, palette, setThemeMode, setPalette } = useTheme();
   const { locale, setLocale, t } = useLocale();
   const patient = usePrimaryPatient();
   const withdrawConsent = useWithdrawConsent();
@@ -64,10 +95,67 @@ export default function SettingsTabScreen() {
 
       <Stack>
         <View>
+          <SectionHeader title={t('appearance')} />
+          <Card>
+            <View style={{ padding: spacing(4), gap: spacing(4) }}>
+              <View style={{ gap: spacing(2) }}>
+                <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('themeMode')}</Text>
+                <AnimatedSegmentedControl
+                  value={themeMode}
+                  onChange={(next) => void setThemeMode(next as ThemeMode)}
+                  options={[
+                    { value: 'system', label: t('themeModeSystem') },
+                    { value: 'light', label: t('themeModeLight') },
+                    { value: 'dark', label: t('themeModeDark') },
+                  ]}
+                />
+              </View>
+
+              <View style={{ gap: spacing(2.5) }}>
+                <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('themePalette')}</Text>
+                <View style={{ gap: spacing(2) }}>
+                  {(['amber', 'sage', 'indigo', 'plum'] as const).map((pKey) => {
+                    const config = paletteConfigs[pKey];
+                    const isSelected = palette === pKey;
+                    return (
+                      <AnimatedPressable
+                        key={pKey}
+                        onPress={() => void setPalette(pKey as ThemePalette)}
+                        style={[
+                          styles.paletteChip,
+                          {
+                            backgroundColor: isSelected ? c.surfaceRaised : c.surface,
+                            borderColor: isSelected ? c.accent : c.separator,
+                            borderWidth: isSelected ? 2 : StyleSheet.hairlineWidth,
+                          },
+                        ]}
+                      >
+                        <View style={[styles.paletteCircle, { backgroundColor: config.previewColor }]} />
+                        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                          <Text style={[typography.headline, { color: c.textPrimary, fontSize: 15 }]}>
+                            {config.name}
+                          </Text>
+                          <Text style={[typography.caption, { color: c.textSecondary }]}>
+                            {config.description}
+                          </Text>
+                        </View>
+                        {isSelected ? (
+                          <Ionicons name="checkmark-circle" size={22} color={c.accent} />
+                        ) : null}
+                      </AnimatedPressable>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+          </Card>
+        </View>
+
+        <View>
           <SectionHeader title={t('language')} />
           <Card>
             <View style={{ padding: spacing(4), gap: spacing(3) }}>
-              <SegmentedControl
+              <AnimatedSegmentedControl
                 value={locale}
                 onChange={(next) => void setLocale(next as 'de' | 'en')}
                 options={[
@@ -85,7 +173,7 @@ export default function SettingsTabScreen() {
           <Card>
             <View style={{ padding: spacing(4), gap: spacing(3) }}>
               <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('snoozeAfter')}</Text>
-              <SegmentedControl
+              <AnimatedSegmentedControl
                 value={(reminderPrefs.data?.snoozeMinutes ?? 15).toString()}
                 onChange={(next) => void reminderPrefs.setSnoozeMinutes(Number.parseInt(next, 10))}
                 options={SNOOZE_OPTIONS.map((minutes) => ({
@@ -102,21 +190,89 @@ export default function SettingsTabScreen() {
           {reminderPrefs.saveError ? <ErrorState description={t('saveReminderPrefError')} /> : null}
         </View>
 
+        {/* Care & Quality */}
         <View>
-          <SectionHeader title={t('legal')} />
+          <SectionHeader title={t('settingsCareCoordination')} />
           <ListGroup>
-            <ListRow isFirst title={t('reminderTestTitle')} subtitle={t('reminderTestSubtitle')} onPress={() => router.push('/settings/reminder-test')} />
-            <ListRow title={t('privacyNotice')} onPress={() => router.push('/settings/privacy')} />
-            <ListRow title={t('imprint')} onPress={() => router.push('/settings/imprint')} />
-            <ListRow title={t('releaseHubTitle')} onPress={() => router.push('/settings/release-hub' as never)} />
-            <ListRow title={t('readinessTitle')} onPress={() => router.push('/settings/readiness')} />
-            <ListRow title={t('isolationTitle')} onPress={() => router.push('/settings/isolation')} />
-            <ListRow title={t('reportReviewTitle')} onPress={() => router.push('/settings/report-review')} />
-            <ListRow title={t('familySharingTitle')} subtitle={t('familySharingRouteSubtitle')} onPress={() => router.push('/settings/family-sharing' as never)} />
-            <ListRow title={t('consentAuditTitle')} onPress={() => router.push('/settings/consent-audit')} />
-            <ListRow title={t('a11yPassTitle')} onPress={() => router.push('/settings/accessibility-pass' as never)} />
-            <ListRow title={t('reminderCertTitle')} onPress={() => router.push('/settings/reminder-certification')} />
-            <ListRow title={t('sessionQaTitle')} onPress={() => router.push('/settings/session-security')} />
+            <ListRow
+              isFirst
+              title={t('familySharingTitle')}
+              subtitle={t('familySharingRouteSubtitle')}
+              leading={<SettingsIconBadge name="people-outline" color="#8B5CF6" />}
+              onPress={() => router.push('/settings/family-sharing' as never)}
+            />
+            <ListRow
+              title={t('reminderTestTitle')}
+              subtitle={t('reminderTestSubtitle')}
+              leading={<SettingsIconBadge name="notifications-outline" color="#3B82F6" />}
+              onPress={() => router.push('/settings/reminder-test')}
+            />
+            <ListRow
+              title={t('reminderCertTitle')}
+              leading={<SettingsIconBadge name="ribbon-outline" color="#F59E0B" />}
+              onPress={() => router.push('/settings/reminder-certification')}
+            />
+            <ListRow
+              title={t('reportReviewTitle')}
+              leading={<SettingsIconBadge name="document-text-outline" color="#10B981" />}
+              onPress={() => router.push('/settings/report-review')}
+            />
+          </ListGroup>
+        </View>
+
+        {/* Privacy & Security */}
+        <View>
+          <SectionHeader title={t('settingsPrivacySecurity')} />
+          <ListGroup>
+            <ListRow
+              isFirst
+              title={t('privacyNotice')}
+              leading={<SettingsIconBadge name="shield-checkmark-outline" color="#059669" />}
+              onPress={() => router.push('/settings/privacy')}
+            />
+            <ListRow
+              title={t('sessionQaTitle')}
+              leading={<SettingsIconBadge name="key-outline" color="#6366F1" />}
+              onPress={() => router.push('/settings/session-security')}
+            />
+            <ListRow
+              title={t('consentAuditTitle')}
+              leading={<SettingsIconBadge name="lock-closed-outline" color="#D97706" />}
+              onPress={() => router.push('/settings/consent-audit')}
+            />
+            <ListRow
+              title={t('isolationTitle')}
+              leading={<SettingsIconBadge name="cube-outline" color="#64748B" />}
+              onPress={() => router.push('/settings/isolation')}
+            />
+          </ListGroup>
+        </View>
+
+        {/* Standards & Compliance */}
+        <View>
+          <SectionHeader title={t('settingsCompliance')} />
+          <ListGroup>
+            <ListRow
+              isFirst
+              title={t('releaseHubTitle')}
+              leading={<SettingsIconBadge name="sparkles-outline" color="#EC4899" />}
+              onPress={() => router.push('/settings/release-hub' as never)}
+            />
+            <ListRow
+              title={t('readinessTitle')}
+              leading={<SettingsIconBadge name="checkmark-circle-outline" color="#0D9488" />}
+              onPress={() => router.push('/settings/readiness')}
+            />
+            <ListRow
+              title={t('a11yPassTitle')}
+              leading={<SettingsIconBadge name="accessibility-outline" color="#0284C7" />}
+              onPress={() => router.push('/settings/accessibility-pass' as never)}
+            />
+            <ListRow
+              title={t('imprint')}
+              leading={<SettingsIconBadge name="information-circle-outline" color="#6B7280" />}
+              onPress={() => router.push('/settings/imprint')}
+            />
           </ListGroup>
         </View>
 
@@ -146,3 +302,19 @@ export default function SettingsTabScreen() {
     </PageShell>
   );
 }
+
+const styles = StyleSheet.create({
+  paletteChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(3),
+    padding: spacing(3),
+    borderRadius: radius.md,
+  },
+  paletteCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.full,
+  },
+});
+

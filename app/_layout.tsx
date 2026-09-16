@@ -12,14 +12,25 @@ import { ovokClient } from '@/lib/ovok-client';
 import { queryClient } from '@/lib/query-client';
 import { LocaleProvider, useLocale } from '@/lib/takt/l10n';
 
+import { ThemeProvider, useTheme } from '@/theme/theme-context';
+
 polyfillMedplumWebAPIs();
 installOvokMocks();
 
 function AppStack() {
   const { t } = useLocale();
+  const { c } = useTheme();
 
   return (
-    <Stack>
+    <Stack
+      screenOptions={{
+        headerStyle: { backgroundColor: c.surface },
+        headerTintColor: c.accent,
+        headerTitleStyle: { color: c.textPrimary, fontWeight: '600' },
+        headerShadowVisible: false,
+        contentStyle: { backgroundColor: c.background },
+      }}
+    >
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="setup" options={{ title: t('setupTitle') }} />
       <Stack.Screen name="auth/sign-in" options={{ title: t('authSignInTitle') }} />
@@ -47,26 +58,40 @@ function AppStack() {
   );
 }
 
+function ThemedAppContainer() {
+  const { isDark, c } = useTheme();
+
+  return (
+    <OvokThemeProvider
+      theme={{
+        colors: {
+          ...DEFAULT_COLORS,
+          primary: c.accent,
+          background: c.background,
+        },
+        dark: isDark,
+        spacingMultiplier: DEFAULT_MULTIPLIERS.spacing,
+        borderRadiusMultiplier: DEFAULT_MULTIPLIERS.borderRadius,
+      }}
+    >
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <SampleDataBanner />
+      <AppStack />
+    </OvokThemeProvider>
+  );
+}
+
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <KeyboardProvider>
           <OvokProvider client={ovokClient}>
-            <LocaleProvider>
-              <OvokThemeProvider
-                theme={{
-                  colors: DEFAULT_COLORS,
-                  dark: false,
-                  spacingMultiplier: DEFAULT_MULTIPLIERS.spacing,
-                  borderRadiusMultiplier: DEFAULT_MULTIPLIERS.borderRadius,
-                }}
-              >
-                <StatusBar style="auto" />
-                <SampleDataBanner />
-                <AppStack />
-              </OvokThemeProvider>
-            </LocaleProvider>
+            <ThemeProvider>
+              <LocaleProvider>
+                <ThemedAppContainer />
+              </LocaleProvider>
+            </ThemeProvider>
           </OvokProvider>
         </KeyboardProvider>
       </QueryClientProvider>

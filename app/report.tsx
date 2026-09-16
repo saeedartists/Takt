@@ -1,8 +1,10 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
+  AnimatedProgressBar,
   Badge,
   Button,
   Card,
@@ -15,6 +17,7 @@ import {
   PageShell,
   SectionHeader,
   Stack,
+  radius,
   spacing,
   typography,
   useTokens,
@@ -258,21 +261,67 @@ export default function ReportScreen() {
       <PageHeader title={t('reportTitle')} subtitle={t('reportWindow')} />
       <Stack>
         <Card>
-          <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
-            <Text style={[typography.headline, { color: c.textPrimary }]}>{t('reportTitle')}</Text>
-            <Text style={[typography.subhead, { color: c.textSecondary }]}> 
-              {t('patientLabel')}: {patient.data.name?.[0]?.given?.join(' ') ?? ''} {patient.data.name?.[0]?.family ?? ''}
-            </Text>
-            <Text style={[typography.subhead, { color: c.textSecondary }]}>
-              {t('dateLabel')}: {formatDate(new Date(), { year: 'numeric', month: 'short', day: 'numeric' })}
-            </Text>
-            <Text style={[typography.title2, { color: c.textPrimary, marginTop: spacing(1) }]}>
-              {summary.pct}% {t('takenOnSchedule')}
-            </Text>
+          <View style={{ padding: spacing(4), gap: spacing(3.5) }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
+              <View
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: radius.lg,
+                  backgroundColor: `${c.accent}1A`,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: `${c.accent}33`,
+                }}
+              >
+                <Ionicons name="document-text" size={24} color={c.accent} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[typography.headline, { color: c.textPrimary }]}>
+                  {patient.data.name?.[0]?.given?.join(' ') ?? ''} {patient.data.name?.[0]?.family ?? ''}
+                </Text>
+                <Text style={[typography.footnote, { color: c.textSecondary, marginTop: 2 }]}>
+                  {t('dateLabel')}: {formatDate(new Date(), { year: 'numeric', month: 'short', day: 'numeric' })}
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ gap: spacing(1.5) }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <Text
+                  style={[
+                    typography.metricSm,
+                    {
+                      color:
+                        summary.pct >= 80
+                          ? c.success
+                          : summary.pct >= 60
+                            ? c.warning
+                            : c.destructive,
+                      fontVariant: ['tabular-nums'],
+                    },
+                  ]}
+                >
+                  {summary.pct}%
+                </Text>
+                <Text style={[typography.subhead, { color: c.textSecondary }]}>
+                  {t('takenOnSchedule')}
+                </Text>
+              </View>
+
+              <AnimatedProgressBar
+                progress={Math.min(1, Math.max(0, summary.pct / 100))}
+                color={summary.pct >= 80 ? c.success : summary.pct >= 60 ? c.warning : c.destructive}
+                height={8}
+              />
+            </View>
+
             <View style={{ flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' }}>
               <Badge label={`${summary.byMedication.length.toString()} ${t('medications')}`} tone="accent" />
               <Badge label={`${summary.missedRows.length.toString()} ${t('statusMissed')}`} tone="destructive" />
             </View>
+
             <Button
               label={exporting ? t('preparingPdf') : t('exportPdf')}
               onPress={() => void exportPdf()}
@@ -286,7 +335,25 @@ export default function ReportScreen() {
           <SectionHeader title={t('reportVisitFocusTitle')} />
           <ListGroup>
             {focusNotes.map((note, index) => (
-              <ListRow key={note} isFirst={index === 0} title={note} />
+              <ListRow
+                key={note}
+                isFirst={index === 0}
+                title={note}
+                leading={
+                  <View
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: radius.md,
+                      backgroundColor: `${c.accent}14`,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="information-circle-outline" size={16} color={c.accent} />
+                  </View>
+                }
+              />
             ))}
           </ListGroup>
         </View>
@@ -298,14 +365,56 @@ export default function ReportScreen() {
               isFirst
               title={t('reportFactTotalLogged').replace('{count}', summary.denominator.toString())}
               subtitle={t('reportFactTotalLoggedHint')}
+              leading={
+                <View
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: radius.md,
+                    backgroundColor: `${c.accent}14`,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="stats-chart-outline" size={15} color={c.accent} />
+                </View>
+              }
             />
             <ListRow
               title={t('reportFactMissed').replace('{count}', summary.missedRows.length.toString())}
               subtitle={t('reportFactMissedHint')}
+              leading={
+                <View
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: radius.md,
+                    backgroundColor: `${c.destructive}1A`,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="alert-circle-outline" size={16} color={c.destructive} />
+                </View>
+              }
             />
             <ListRow
               title={t('reportFactNeedsReview').replace('{count}', needsReviewCount.toString())}
               subtitle={t('reportFactNeedsReviewHint')}
+              leading={
+                <View
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: radius.md,
+                    backgroundColor: `${c.warning}1A`,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="time-outline" size={16} color={c.warning} />
+                </View>
+              }
             />
           </ListGroup>
         </View>
@@ -323,6 +432,20 @@ export default function ReportScreen() {
                   title={row.label}
                   subtitle={t('reportDoseCount').replace('{taken}', row.taken.toString()).replace('{total}', row.denominator.toString())}
                   value={`${row.pct.toString()}%`}
+                  leading={
+                    <View
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: radius.md,
+                        backgroundColor: `${c.accent}14`,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons name="medkit-outline" size={15} color={c.accent} />
+                    </View>
+                  }
                 />
               ))}
             </ListGroup>
@@ -341,6 +464,20 @@ export default function ReportScreen() {
                   isFirst={index === 0}
                   title={row.label}
                   subtitle={row.dateLabel}
+                  leading={
+                    <View
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: radius.md,
+                        backgroundColor: `${c.destructive}1A`,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons name="alert" size={15} color={c.destructive} />
+                    </View>
+                  }
                 />
               ))}
             </ListGroup>

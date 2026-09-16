@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import {
+  AnimatedPressable,
   Badge,
   Button,
   Card,
@@ -15,6 +16,7 @@ import {
   SectionHeader,
   SegmentedControl,
   Stack,
+  radius,
   spacing,
   typography,
   useTokens,
@@ -197,6 +199,23 @@ export default function EditMedicationScreen() {
     );
   }
 
+  const FORM_PRESETS = ['Tablet', 'Capsule', 'Drops', 'Inhaler', 'Syrup'];
+  const TIME_PRESETS = ['08:00', '12:00', '18:00', '22:00'];
+  const SUPPLY_PRESETS = ['14', '28', '30', '60', '90'];
+
+  const toggleTimePreset = (timeStr: string) => {
+    const current = parseTimeList(timesInput);
+    let next: string[];
+    if (current.includes(timeStr)) {
+      next = current.filter((t) => t !== timeStr);
+    } else {
+      next = [...current, timeStr].sort();
+    }
+    setTimesInput(next.join(', '));
+  };
+
+  const currentTimes = parseTimeList(timesInput);
+
   return (
     <PageShell>
       <PageHeader title={t('editMedicationRouteTitle')} subtitle={t('medicationEditSubtitle')} />
@@ -227,6 +246,37 @@ export default function EditMedicationScreen() {
               </Field>
               <Field label={t('medicationForm')}>
                 <Input value={form} onChangeText={setForm} placeholder={t('medicationFormPlaceholder')} />
+                <View style={{ flexDirection: 'row', gap: spacing(1.5), flexWrap: 'wrap', marginTop: spacing(2) }}>
+                  {FORM_PRESETS.map((item) => {
+                    const isSelected = form.toLowerCase() === item.toLowerCase();
+                    return (
+                      <AnimatedPressable
+                        key={item}
+                        onPress={() => setForm(item)}
+                        style={{
+                          paddingHorizontal: spacing(3),
+                          paddingVertical: spacing(1),
+                          borderRadius: radius.full,
+                          backgroundColor: isSelected ? `${c.accent}20` : c.surfaceRaised,
+                          borderWidth: 1,
+                          borderColor: isSelected ? c.accent : c.separator,
+                        }}
+                      >
+                        <Text
+                          style={[
+                            typography.caption,
+                            {
+                              color: isSelected ? c.accent : c.textSecondary,
+                              fontWeight: isSelected ? '700' : '500',
+                            },
+                          ]}
+                        >
+                          {item}
+                        </Text>
+                      </AnimatedPressable>
+                    );
+                  })}
+                </View>
               </Field>
               <Field label={t('medicationStrength')}>
                 <Input value={strength} onChangeText={setStrength} placeholder={t('medicationStrengthPlaceholder')} />
@@ -270,6 +320,37 @@ export default function EditMedicationScreen() {
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
+                <View style={{ flexDirection: 'row', gap: spacing(1.5), flexWrap: 'wrap', marginTop: spacing(2) }}>
+                  {TIME_PRESETS.map((time) => {
+                    const isSelected = currentTimes.includes(time);
+                    return (
+                      <AnimatedPressable
+                        key={time}
+                        onPress={() => toggleTimePreset(time)}
+                        style={{
+                          paddingHorizontal: spacing(3),
+                          paddingVertical: spacing(1),
+                          borderRadius: radius.full,
+                          backgroundColor: isSelected ? `${c.accent}20` : c.surfaceRaised,
+                          borderWidth: 1,
+                          borderColor: isSelected ? c.accent : c.separator,
+                        }}
+                      >
+                        <Text
+                          style={[
+                            typography.caption,
+                            {
+                              color: isSelected ? c.accent : c.textSecondary,
+                              fontWeight: isSelected ? '700' : '500',
+                            },
+                          ]}
+                        >
+                          {time} {isSelected ? '✓' : '+'}
+                        </Text>
+                      </AnimatedPressable>
+                    );
+                  })}
+                </View>
               </Field>
               <Text style={[typography.caption, { color: c.textSecondary }]}>{t('medicationTimesHint')}</Text>
             </View>
@@ -283,6 +364,37 @@ export default function EditMedicationScreen() {
                   keyboardType="number-pad"
                   placeholder={t('medicationSupplyPlaceholder')}
                 />
+                <View style={{ flexDirection: 'row', gap: spacing(1.5), flexWrap: 'wrap', marginTop: spacing(2) }}>
+                  {SUPPLY_PRESETS.map((count) => {
+                    const isSelected = supply === count;
+                    return (
+                      <AnimatedPressable
+                        key={count}
+                        onPress={() => setSupply(count)}
+                        style={{
+                          paddingHorizontal: spacing(3),
+                          paddingVertical: spacing(1),
+                          borderRadius: radius.full,
+                          backgroundColor: isSelected ? `${c.accent}20` : c.surfaceRaised,
+                          borderWidth: 1,
+                          borderColor: isSelected ? c.accent : c.separator,
+                        }}
+                      >
+                        <Text
+                          style={[
+                            typography.caption,
+                            {
+                              color: isSelected ? c.accent : c.textSecondary,
+                              fontWeight: isSelected ? '700' : '500',
+                            },
+                          ]}
+                        >
+                          {count}
+                        </Text>
+                      </AnimatedPressable>
+                    );
+                  })}
+                </View>
               </Field>
               <Field label={t('supplyLastRefilled')}>
                 <Input

@@ -1,5 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { radius, spacing, typography, useTokens } from '@/components/ui';
+import { StyleSheet, Text, View } from 'react-native';
+import { AnimatedPressable, radius, spacing, typography, useTokens } from '@/components/ui';
 import type { WeekdayCode } from '@/lib/takt/types';
 
 export const WeekdayPicker = ({
@@ -21,23 +21,30 @@ export const WeekdayPicker = ({
         const active = selected.includes(day);
         const label = labelFor(day);
         return (
-          <Pressable
+          <AnimatedPressable
             key={day}
             accessibilityRole="button"
             accessibilityLabel={label}
             accessibilityState={{ selected: active }}
             onPress={() => onToggle(day)}
-            style={({ pressed }) => [
+            style={[
               styles.day,
               {
                 borderColor: active ? c.accent : c.separator,
                 backgroundColor: active ? `${c.accent}22` : c.surfaceRaised,
-                opacity: pressed ? 0.72 : 1,
+                borderWidth: active ? 1.5 : StyleSheet.hairlineWidth,
               },
             ]}
           >
-            <Text style={[typography.subhead, { color: active ? c.accent : c.textSecondary }]}>{label}</Text>
-          </Pressable>
+            <Text
+              style={[
+                typography.subhead,
+                { color: active ? c.accent : c.textSecondary, fontWeight: active ? '600' : '400' },
+              ]}
+            >
+              {label}
+            </Text>
+          </AnimatedPressable>
         );
       })}
     </View>

@@ -22,12 +22,11 @@ export const Card = ({
       style={[
         {
           backgroundColor: c.surface,
-          borderRadius: radius.lg,
+          borderRadius: radius.xl,
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: c.separator,
+          borderColor: c.cardBorder,
         },
-        // Health cards are flat on black; a soft shadow only reads in light.
-        scheme === 'light' && [styles.lightShadow, { shadowColor: c.textPrimary }],
+        scheme === 'light' && styles.lightShadow,
         style,
       ]}
     >

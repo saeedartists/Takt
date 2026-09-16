@@ -1,8 +1,11 @@
 import { useEffect, useMemo } from 'react';
 import { Text, View } from 'react-native';
 import {
+  AnimatedProgressBar,
+  AnimatedSegmentedControl,
   Badge,
   Button,
+  Card,
   Field,
   Input,
   ListGroup,
@@ -11,7 +14,6 @@ import {
   PageHeader,
   PageShell,
   SectionHeader,
-  SegmentedControl,
   Stack,
   spacing,
   typography,
@@ -121,7 +123,7 @@ export default function ConsentAuditScreen() {
 
         <View>
           <SectionHeader title={t('consentAuditVerdict')} />
-          <SegmentedControl
+          <AnimatedSegmentedControl
             value={audit.data.verdict}
             onChange={(next) => void audit.setVerdict(next as 'pending' | 'pass' | 'minor-edits' | 'fail')}
             options={[
@@ -135,13 +137,29 @@ export default function ConsentAuditScreen() {
 
         <View>
           <SectionHeader title={t('consentAuditChecklist')} />
+          <Card style={{ marginBottom: spacing(3) }}>
+            <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={[typography.headline, { color: c.textPrimary }]}>{t('consentAuditChecklist')}</Text>
+                <Text style={[typography.subhead, { color: c.accent, fontWeight: '700' }]}>
+                  {audit.completionPct}%
+                </Text>
+              </View>
+              <AnimatedProgressBar progress={audit.completionPct} tintColor={c.accent} />
+            </View>
+          </Card>
           <ListGroup>
             {CHECK_ROWS.map((item, index) => (
               <ListRow
                 key={item.id}
                 isFirst={index === 0}
                 title={t(item.titleKey)}
-                value={audit.data.checks[item.id] ? t('statusDone') : t('statusPending')}
+                trailing={
+                  <Badge
+                    label={audit.data.checks[item.id] ? t('statusDone') : t('statusPending')}
+                    tone={audit.data.checks[item.id] ? 'success' : 'neutral'}
+                  />
+                }
                 onPress={() => void audit.toggleCheck(item.id)}
               />
             ))}
@@ -150,47 +168,49 @@ export default function ConsentAuditScreen() {
 
         <View>
           <SectionHeader title={t('consentAuditEvidenceTitle')} />
-          <View style={{ gap: spacing(3) }}>
-            <Field label={t('consentAuditTesterName')}>
-              <Input
-                value={audit.data.testerName}
-                onChangeText={(value) => void audit.updateMeta({ testerName: value })}
-                placeholder={t('consentAuditTesterPlaceholder')}
-              />
-            </Field>
-            <Field label={t('consentAuditReviewerRole')}>
-              <Input
-                value={audit.data.reviewerRole}
-                onChangeText={(value) => void audit.updateMeta({ reviewerRole: value })}
-                placeholder={t('consentAuditReviewerRolePlaceholder')}
-              />
-            </Field>
-            <Field label={t('consentAuditReviewDate')}>
-              <Input
-                value={audit.data.reviewDate}
-                onChangeText={(value) => void audit.updateMeta({ reviewDate: value })}
-                placeholder={t('consentAuditReviewDatePlaceholder')}
-              />
-            </Field>
-            <Field label={t('consentAuditEvidenceLinks')}>
-              <Input
-                value={audit.data.evidenceLinks}
-                onChangeText={(value) => void audit.updateMeta({ evidenceLinks: value })}
-                placeholder={t('consentAuditEvidenceLinksPlaceholder')}
-                multiline
-                textAlignVertical="top"
-              />
-            </Field>
-            <Field label={t('consentAuditFindings')}>
-              <Input
-                value={audit.data.findings}
-                onChangeText={(value) => void audit.updateMeta({ findings: value })}
-                placeholder={t('consentAuditFindingsPlaceholder')}
-                multiline
-                textAlignVertical="top"
-              />
-            </Field>
-          </View>
+          <Card>
+            <View style={{ padding: spacing(4), gap: spacing(3) }}>
+              <Field label={t('consentAuditTesterName')}>
+                <Input
+                  value={audit.data.testerName}
+                  onChangeText={(value) => void audit.updateMeta({ testerName: value })}
+                  placeholder={t('consentAuditTesterPlaceholder')}
+                />
+              </Field>
+              <Field label={t('consentAuditReviewerRole')}>
+                <Input
+                  value={audit.data.reviewerRole}
+                  onChangeText={(value) => void audit.updateMeta({ reviewerRole: value })}
+                  placeholder={t('consentAuditReviewerRolePlaceholder')}
+                />
+              </Field>
+              <Field label={t('consentAuditReviewDate')}>
+                <Input
+                  value={audit.data.reviewDate}
+                  onChangeText={(value) => void audit.updateMeta({ reviewDate: value })}
+                  placeholder={t('consentAuditReviewDatePlaceholder')}
+                />
+              </Field>
+              <Field label={t('consentAuditEvidenceLinks')}>
+                <Input
+                  value={audit.data.evidenceLinks}
+                  onChangeText={(value) => void audit.updateMeta({ evidenceLinks: value })}
+                  placeholder={t('consentAuditEvidenceLinksPlaceholder')}
+                  multiline
+                  textAlignVertical="top"
+                />
+              </Field>
+              <Field label={t('consentAuditFindings')}>
+                <Input
+                  value={audit.data.findings}
+                  onChangeText={(value) => void audit.updateMeta({ findings: value })}
+                  placeholder={t('consentAuditFindingsPlaceholder')}
+                  multiline
+                  textAlignVertical="top"
+                />
+              </Field>
+            </View>
+          </Card>
         </View>
 
         <Badge

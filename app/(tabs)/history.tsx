@@ -2,8 +2,11 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
+  AnimatedProgressBar,
+  AnimatedSegmentedControl,
   Badge,
   Button,
   Card,
@@ -13,10 +16,10 @@ import {
   PageHeader,
   PageShell,
   SectionHeader,
-  SegmentedControl,
   Sparkline,
   Stack,
   categoryColors,
+  radius,
   spacing,
   typography,
   useTokens,
@@ -242,28 +245,32 @@ export default function HistoryScreen() {
       <PageHeader
         title={t('history')}
         subtitle={t('adherenceWindowDays').replace('{days}', windowDays.toString())}
-        action={
-          <View style={styles.headerActions}>
-            <View style={{ flex: 1 }}>
-              <Button kind="secondary" label={t('openReport')} onPress={() => router.push('/report')} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Button
-                kind="secondary"
-                label={exportingCsv ? t('exportingCsv') : t('exportCsv')}
-                onPress={() => void exportCsv()}
-                disabled={exportingCsv || patient.isLoading || plans.isLoading || events.isLoading}
-              />
-            </View>
-          </View>
-        }
       />
 
       <Stack>
+        {/* Responsive action buttons */}
+        <View style={{ flexDirection: 'row', gap: spacing(2.5) }}>
+          <View style={{ flex: 1 }}>
+            <Button
+              kind="secondary"
+              label={t('openReport')}
+              onPress={() => router.push('/report')}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button
+              kind="secondary"
+              label={exportingCsv ? t('exportingCsv') : t('exportCsv')}
+              onPress={() => void exportCsv()}
+              disabled={exportingCsv || patient.isLoading || plans.isLoading || events.isLoading}
+            />
+          </View>
+        </View>
+
         <Card>
           <View style={{ padding: spacing(3), gap: spacing(2) }}>
             <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('historyWindowLabel')}</Text>
-            <SegmentedControl
+            <AnimatedSegmentedControl
               value={windowDays.toString()}
               onChange={(next) => setWindowDays(Number.parseInt(next, 10) as 7 | 14 | 30)}
               options={[
@@ -299,7 +306,12 @@ export default function HistoryScreen() {
                     style={[
                       typography.metricSm,
                       {
-                        color: categoryColors.medication,
+                        color:
+                          totals.adherencePct >= 80
+                            ? c.success
+                            : totals.adherencePct >= 60
+                              ? c.warning
+                              : c.destructive,
                         fontVariant: ['tabular-nums'],
                       },
                     ]}
@@ -308,6 +320,19 @@ export default function HistoryScreen() {
                   </Text>
                   <Badge label={t('takenOnSchedule')} tone="accent" />
                 </View>
+
+                <AnimatedProgressBar
+                  progress={Math.min(1, Math.max(0, totals.adherencePct / 100))}
+                  color={
+                    totals.adherencePct >= 80
+                      ? c.success
+                      : totals.adherencePct >= 60
+                        ? c.warning
+                        : c.destructive
+                  }
+                  height={8}
+                />
+
                 <Sparkline values={trend} category="medication" height={72} />
                 <View style={{ flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' }}>
                   <Badge label={`${totals.taken.toString()} ${t('statusTaken')}`} tone="success" />
@@ -328,11 +353,51 @@ export default function HistoryScreen() {
                     const disabled = pendingDoseId === dose.id || recordDose.isPending || undoDose.isPending;
                     const dateTimeLabel = `${dose.dayLabel} · ${formatTime(dose.scheduledAt)}`;
 
+                    const stateIcon =
+                      state === 'taken'
+                        ? 'checkmark'
+                        : state === 'skipped'
+                          ? 'pause'
+                          : 'alert';
+                    const stateColor =
+                      state === 'taken'
+                        ? c.success
+                        : state === 'skipped'
+                          ? c.warning
+                          : c.destructive;
+                    const stateBg =
+                      state === 'taken'
+                        ? `${c.success}1A`
+                        : state === 'skipped'
+                          ? `${c.warning}1A`
+                          : `${c.destructive}1A`;
+
                     return (
                       <Card key={dose.id}>
-                        <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
-                          <View style={styles.metricRow}>
-                            <Text style={[typography.body, { color: c.textPrimary, flex: 1 }]}>{dose.label}</Text>
+                        <View style={{ padding: spacing(4), gap: spacing(3) }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
+                            <View
+                              style={{
+                                width: 34,
+                                height: 34,
+                                borderRadius: radius.md,
+                                backgroundColor: stateBg,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <Ionicons name={stateIcon} size={16} color={stateColor} />
+                            </View>
+
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text style={[typography.headline, { color: c.textPrimary }]} numberOfLines={1}>
+                                {dose.label}
+                              </Text>
+                              <Text style={[typography.footnote, { color: c.textSecondary, marginTop: 1 }]}>
+                                {dateTimeLabel}
+                              </Text>
+                            </View>
+
                             <Badge
                               label={
                                 state === 'taken'
@@ -345,9 +410,7 @@ export default function HistoryScreen() {
                             />
                           </View>
 
-                          <Text style={[typography.footnote, { color: c.textSecondary }]}>{dateTimeLabel}</Text>
-
-                          <SegmentedControl
+                          <AnimatedSegmentedControl
                             value={state}
                             onChange={(next) => void rewriteDoseState(dose, next as CorrectionAction)}
                             options={[
@@ -382,8 +445,25 @@ export default function HistoryScreen() {
                   {missed.map((item) => (
                     <Card key={item.id}>
                       <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
-                        <Text style={[typography.body, { color: c.textPrimary }]}>{item.title}</Text>
-                        <Text style={[typography.footnote, { color: c.textSecondary }]}>{item.subtitle}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2.5) }}>
+                          <View
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: radius.md,
+                              backgroundColor: `${c.destructive}1A`,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <Ionicons name="alert" size={16} color={c.destructive} />
+                          </View>
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={[typography.body, { color: c.textPrimary }]}>{item.title}</Text>
+                            <Text style={[typography.footnote, { color: c.textSecondary }]}>{item.subtitle}</Text>
+                          </View>
+                        </View>
+
                         <Button
                           kind="secondary"
                           label={t('markTakenFromHistory')}
@@ -410,11 +490,6 @@ const styles = {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
-    gap: spacing(2),
-  },
-  headerActions: {
-    width: 248,
-    flexDirection: 'row' as const,
     gap: spacing(2),
   },
 };

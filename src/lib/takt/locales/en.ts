@@ -15,6 +15,9 @@ export const en = {
     snooze: 'Snooze',
     undo: 'Undo',
     legal: 'Legal',
+    settingsCareCoordination: 'Care & Quality',
+    settingsPrivacySecurity: 'Privacy & Security',
+    settingsCompliance: 'Standards & Compliance',
     privacyNotice: 'Privacy notice',
     imprint: 'Imprint',
     consentTitle: 'Health-data consent',
@@ -27,6 +30,8 @@ export const en = {
     rhythmToday: 'Therapy rhythm today',
     timeline: 'Today timeline',
     nextDose: 'Next dose',
+    singleDoseLabel: 'dose',
+    multipleDosesLabel: 'doses',
     completion: 'completion',
     activeMeds: 'active',
     pausedMeds: 'paused',
@@ -78,6 +83,9 @@ export const en = {
     supplyLastRefilled: 'Last refilled date',
     supplyLastRefilledInvalid: 'Use YYYY-MM-DD for last refilled date.',
     supplyRefillReminder: 'Supply dropped to 7 or fewer. Refill this medication soon.',
+    quickRefillAction: 'Log Refill (+30)',
+    quickRefillSuccess: 'Supply refilled by +30',
+    quickRefillAdding: 'Refilling…',
     savingMedication: 'Saving…',
     savingMedicationChanges: 'Saving changes…',
     cadenceDaily: 'Daily',
@@ -763,4 +771,32 @@ export const en = {
     familySharingOptionalQuietReminder: 'Optional v1.1 design: one quiet reminder when a dose is still unconfirmed after 2 hours.',
     familySharingRelativeNoDosesHint: 'No patient doses scheduled today.',
     familySharingRelativeBlockedTitle: 'Not available in relative view',
+
+    // Theme & Appearance
+    appearance: 'Appearance',
+    themeMode: 'Theme',
+    themeModeSystem: 'System',
+    themeModeLight: 'Light',
+    themeModeDark: 'Dark',
+    themePalette: 'Color palette',
+    themeAmberName: 'Takt Amber',
+    themeAmberDesc: 'Warm terracotta & sunlit calm',
+    themeSageName: 'Nordic Sage',
+    themeSageDesc: 'Serene forest & restorative calm',
+    themeIndigoName: 'Ocean Slate',
+    themeIndigoDesc: 'Crisp medical indigo & clarity',
+    themePlumName: 'Velvet Plum',
+    themePlumDesc: 'Gentle berry & mindful presence',
+
+    // Greetings & Hero
+    greetingMorning: 'Good morning',
+    greetingAfternoon: 'Good afternoon',
+    greetingEvening: 'Good evening',
+    allDoneToday: 'All caught up for today',
+
+    // Floating Undo Toast
+    doseConfirmedToast: 'Dose marked as taken',
+    doseSkippedToast: 'Dose marked as skipped',
+    undoAction: 'Undo',
 } as const;
+

@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import { Text, View } from 'react-native';
 import {
+  AnimatedProgressBar,
   Badge,
   Button,
+  Card,
   Field,
   Input,
   ListGroup,
@@ -102,6 +104,17 @@ export default function AccessibilityPassScreen() {
       <Stack>
         <View>
           <SectionHeader title={t('a11yProgressTitle')} />
+          <Card style={{ marginBottom: spacing(3) }}>
+            <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={[typography.headline, { color: c.textPrimary }]}>{t('a11yCaseProgress')}</Text>
+                <Text style={[typography.subhead, { color: c.accent, fontWeight: '700' }]}>
+                  {matrix.completionPct}%
+                </Text>
+              </View>
+              <AnimatedProgressBar progress={matrix.completionPct} tintColor={c.accent} />
+            </View>
+          </Card>
           <ListGroup>
             <ListRow
               isFirst
@@ -128,7 +141,12 @@ export default function AccessibilityPassScreen() {
                   isFirst={index === 0}
                   title={t(item.titleKey)}
                   subtitle={t(item.subtitleKey)}
-                  value={matrix.data.cases[item.id] ? t('statusDone') : t('statusPending')}
+                  trailing={
+                    <Badge
+                      label={matrix.data.cases[item.id] ? t('statusDone') : t('statusPending')}
+                      tone={matrix.data.cases[item.id] ? 'success' : 'neutral'}
+                    />
+                  }
                   onPress={() => void matrix.toggleCase(item.id)}
                 />
               ))}
@@ -138,62 +156,64 @@ export default function AccessibilityPassScreen() {
 
         <View>
           <SectionHeader title={t('a11yEvidenceTitle')} />
-          <View style={{ gap: spacing(3) }}>
-            <Field label={t('a11yTesterName')}>
-              <Input
-                value={matrix.data.testerName}
-                onChangeText={(value) => void matrix.updateMeta({ testerName: value })}
-                placeholder={t('a11yTesterPlaceholder')}
-                autoCapitalize="words"
-              />
-            </Field>
+          <Card>
+            <View style={{ padding: spacing(4), gap: spacing(3) }}>
+              <Field label={t('a11yTesterName')}>
+                <Input
+                  value={matrix.data.testerName}
+                  onChangeText={(value) => void matrix.updateMeta({ testerName: value })}
+                  placeholder={t('a11yTesterPlaceholder')}
+                  autoCapitalize="words"
+                />
+              </Field>
 
-            <Field label={t('a11yRunDate')}>
-              <Input
-                value={matrix.data.runDate}
-                onChangeText={(value) => void matrix.updateMeta({ runDate: value })}
-                placeholder={t('a11yRunDatePlaceholder')}
-              />
-            </Field>
+              <Field label={t('a11yRunDate')}>
+                <Input
+                  value={matrix.data.runDate}
+                  onChangeText={(value) => void matrix.updateMeta({ runDate: value })}
+                  placeholder={t('a11yRunDatePlaceholder')}
+                />
+              </Field>
 
-            <Field label={t('a11yDeviceSummary')}>
-              <Input
-                value={matrix.data.deviceSummary}
-                onChangeText={(value) => void matrix.updateMeta({ deviceSummary: value })}
-                placeholder={t('a11yDevicePlaceholder')}
-              />
-            </Field>
+              <Field label={t('a11yDeviceSummary')}>
+                <Input
+                  value={matrix.data.deviceSummary}
+                  onChangeText={(value) => void matrix.updateMeta({ deviceSummary: value })}
+                  placeholder={t('a11yDevicePlaceholder')}
+                />
+              </Field>
 
-            <Field label={t('a11yAssistiveTech')}>
-              <Input
-                value={matrix.data.assistiveTechUsed}
-                onChangeText={(value) => void matrix.updateMeta({ assistiveTechUsed: value })}
-                placeholder={t('a11yAssistiveTechPlaceholder')}
-              />
-            </Field>
+              <Field label={t('a11yAssistiveTech')}>
+                <Input
+                  value={matrix.data.assistiveTechUsed}
+                  onChangeText={(value) => void matrix.updateMeta({ assistiveTechUsed: value })}
+                  placeholder={t('a11yAssistiveTechPlaceholder')}
+                />
+              </Field>
 
-            <Field label={t('a11yEvidenceLinks')}>
-              <Input
-                value={matrix.data.evidenceLinks}
-                onChangeText={(value) => void matrix.updateMeta({ evidenceLinks: value })}
-                placeholder={t('a11yEvidenceLinksPlaceholder')}
-                multiline
-                textAlignVertical="top"
-              />
-            </Field>
+              <Field label={t('a11yEvidenceLinks')}>
+                <Input
+                  value={matrix.data.evidenceLinks}
+                  onChangeText={(value) => void matrix.updateMeta({ evidenceLinks: value })}
+                  placeholder={t('a11yEvidenceLinksPlaceholder')}
+                  multiline
+                  textAlignVertical="top"
+                />
+              </Field>
 
-            <Field label={t('a11yNotes')}>
-              <Input
-                value={matrix.data.notes}
-                onChangeText={(value) => void matrix.updateMeta({ notes: value })}
-                placeholder={t('a11yNotesPlaceholder')}
-                multiline
-                textAlignVertical="top"
-              />
-            </Field>
+              <Field label={t('a11yNotes')}>
+                <Input
+                  value={matrix.data.notes}
+                  onChangeText={(value) => void matrix.updateMeta({ notes: value })}
+                  placeholder={t('a11yNotesPlaceholder')}
+                  multiline
+                  textAlignVertical="top"
+                />
+              </Field>
 
-            <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('a11yEvidenceFootnote')}</Text>
-          </View>
+              <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('a11yEvidenceFootnote')}</Text>
+            </View>
+          </Card>
         </View>
 
         <Badge

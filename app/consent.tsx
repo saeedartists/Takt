@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
   Badge,
   Button,
@@ -10,6 +11,7 @@ import {
   PageShell,
   SectionHeader,
   Stack,
+  radius,
   spacing,
   typography,
 } from '@/components/ui';
@@ -49,23 +51,114 @@ export default function ConsentScreen() {
 
   const busy = consent.isPending || ensurePatient.isPending || patient.isLoading;
 
+  const trustPoints = [
+    {
+      icon: 'lock-closed-outline' as const,
+      title: 'FHIR R4 Health Standard',
+      description: t('consentPermissionsHint'),
+    },
+    {
+      icon: 'notifications-outline' as const,
+      title: 'Calm Dignified Reminders',
+      description: 'Scheduled reminders with generous grace windows so you never feel rushed or stressed.',
+    },
+    {
+      icon: 'document-text-outline' as const,
+      title: 'Doctor Consultation Ready',
+      description: 'Generate standardized, print-ready medication adherence reports for your healthcare team.',
+    },
+  ];
+
   return (
     <PageShell>
       <PageHeader title={t('consentTitle')} subtitle={t('legal')} />
       <Stack>
-        <View>
-          <SectionHeader title={t('consentTitle')} />
-          <Card>
-            <View style={{ padding: spacing(4), gap: spacing(3) }}>
-              <Badge label={t('legal')} tone="accent" />
-              <Text style={[typography.body, { color: c.textPrimary }]}>{t('consentBody')}</Text>
-              <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('consentPermissionsHint')}</Text>
-              <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('safetyNote')}</Text>
-              {submitError ? <Text style={[typography.footnote, { color: c.destructive }]}>{submitError}</Text> : null}
+        {/* Shield Hero */}
+        <Card>
+          <View style={{ padding: spacing(5), alignItems: 'center', gap: spacing(3) }}>
+            <View
+              style={{
+                width: 68,
+                height: 68,
+                borderRadius: radius.xl,
+                backgroundColor: `${c.accent}1A`,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1,
+                borderColor: `${c.accent}33`,
+              }}
+            >
+              <Ionicons name="shield-checkmark" size={36} color={c.accent} />
             </View>
-          </Card>
+
+            <View style={{ alignItems: 'center', gap: spacing(1) }}>
+              <Badge label={t('legal')} tone="accent" />
+              <Text style={[typography.title2, { color: c.textPrimary, textAlign: 'center' }]}>
+                {t('consentTitle')}
+              </Text>
+              <Text
+                style={[
+                  typography.subhead,
+                  { color: c.textSecondary, textAlign: 'center', lineHeight: 22, marginTop: 4 },
+                ]}
+              >
+                {t('consentBody')}
+              </Text>
+            </View>
+          </View>
+        </Card>
+
+        {/* 3 Pillars of Trust */}
+        <View style={{ gap: spacing(3) }}>
+          {trustPoints.map((point) => (
+            <Card key={point.title}>
+              <View style={{ padding: spacing(4), flexDirection: 'row', gap: spacing(3.5), alignItems: 'flex-start' }}>
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: radius.md,
+                    backgroundColor: `${c.accent}14`,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginTop: 2,
+                  }}
+                >
+                  <Ionicons name={point.icon} size={20} color={c.accent} />
+                </View>
+
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <Text style={[typography.headline, { color: c.textPrimary }]}>{point.title}</Text>
+                  <Text style={[typography.footnote, { color: c.textSecondary, lineHeight: 18 }]}>
+                    {point.description}
+                  </Text>
+                </View>
+              </View>
+            </Card>
+          ))}
         </View>
-        <Button label={t('acceptConsent')} onPress={() => void submit()} disabled={busy} />
+
+        {/* Safety Note */}
+        <Card>
+          <View style={{ padding: spacing(4), flexDirection: 'row', gap: spacing(3), alignItems: 'center' }}>
+            <Ionicons name="information-circle-outline" size={20} color={c.textSecondary} />
+            <Text style={[typography.footnote, { color: c.textSecondary, flex: 1 }]}>
+              {t('safetyNote')}
+            </Text>
+          </View>
+        </Card>
+
+        {submitError ? (
+          <Text style={[typography.footnote, { color: c.destructive, textAlign: 'center' }]}>
+            {submitError}
+          </Text>
+        ) : null}
+
+        <Button
+          label={busy ? t('savingMedication') : t('acceptConsent')}
+          onPress={() => void submit()}
+          disabled={busy}
+        />
       </Stack>
     </PageShell>
   );

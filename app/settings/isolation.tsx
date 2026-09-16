@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import { Text, View } from 'react-native';
 import {
+  AnimatedProgressBar,
   Badge,
   Button,
+  Card,
   Field,
   Input,
   ListGroup,
@@ -79,6 +81,17 @@ export default function IsolationScreen() {
       <Stack>
         <View>
           <SectionHeader title={t('isolationProgressTitle')} />
+          <Card style={{ marginBottom: spacing(3) }}>
+            <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={[typography.headline, { color: c.textPrimary }]}>{t('isolationProgressCases')}</Text>
+                <Text style={[typography.subhead, { color: c.accent, fontWeight: '700' }]}>
+                  {matrix.completionPct}%
+                </Text>
+              </View>
+              <AnimatedProgressBar progress={matrix.completionPct} tintColor={c.accent} />
+            </View>
+          </Card>
           <ListGroup>
             <ListRow
               isFirst
@@ -105,7 +118,12 @@ export default function IsolationScreen() {
                   isFirst={index === 0}
                   title={t(item.titleKey)}
                   subtitle={t(item.subtitleKey)}
-                  value={matrix.data.cases[item.id] ? t('statusDone') : t('statusPending')}
+                  trailing={
+                    <Badge
+                      label={matrix.data.cases[item.id] ? t('statusDone') : t('statusPending')}
+                      tone={matrix.data.cases[item.id] ? 'success' : 'neutral'}
+                    />
+                  }
                   onPress={() => void matrix.toggleCase(item.id)}
                 />
               ))}
@@ -115,46 +133,48 @@ export default function IsolationScreen() {
 
         <View>
           <SectionHeader title={t('isolationEvidenceTitle')} />
-          <View style={{ gap: spacing(3) }}>
-            <Field label={t('isolationTesterName')}>
-              <Input
-                value={matrix.data.testerName}
-                onChangeText={(value) => void matrix.updateMeta({ testerName: value })}
-                placeholder={t('isolationTesterNamePlaceholder')}
-                autoCapitalize="words"
-              />
-            </Field>
+          <Card>
+            <View style={{ padding: spacing(4), gap: spacing(3) }}>
+              <Field label={t('isolationTesterName')}>
+                <Input
+                  value={matrix.data.testerName}
+                  onChangeText={(value) => void matrix.updateMeta({ testerName: value })}
+                  placeholder={t('isolationTesterNamePlaceholder')}
+                  autoCapitalize="words"
+                />
+              </Field>
 
-            <Field label={t('isolationRunDate')}>
-              <Input
-                value={matrix.data.runDate}
-                onChangeText={(value) => void matrix.updateMeta({ runDate: value })}
-                placeholder={t('isolationRunDatePlaceholder')}
-              />
-            </Field>
+              <Field label={t('isolationRunDate')}>
+                <Input
+                  value={matrix.data.runDate}
+                  onChangeText={(value) => void matrix.updateMeta({ runDate: value })}
+                  placeholder={t('isolationRunDatePlaceholder')}
+                />
+              </Field>
 
-            <Field label={t('isolationEvidenceLinks')}>
-              <Input
-                value={matrix.data.evidenceLinks}
-                onChangeText={(value) => void matrix.updateMeta({ evidenceLinks: value })}
-                placeholder={t('isolationEvidenceLinksPlaceholder')}
-                multiline
-                textAlignVertical="top"
-              />
-            </Field>
+              <Field label={t('isolationEvidenceLinks')}>
+                <Input
+                  value={matrix.data.evidenceLinks}
+                  onChangeText={(value) => void matrix.updateMeta({ evidenceLinks: value })}
+                  placeholder={t('isolationEvidenceLinksPlaceholder')}
+                  multiline
+                  textAlignVertical="top"
+                />
+              </Field>
 
-            <Field label={t('isolationNotes')}>
-              <Input
-                value={matrix.data.notes}
-                onChangeText={(value) => void matrix.updateMeta({ notes: value })}
-                placeholder={t('isolationNotesPlaceholder')}
-                multiline
-                textAlignVertical="top"
-              />
-            </Field>
+              <Field label={t('isolationNotes')}>
+                <Input
+                  value={matrix.data.notes}
+                  onChangeText={(value) => void matrix.updateMeta({ notes: value })}
+                  placeholder={t('isolationNotesPlaceholder')}
+                  multiline
+                  textAlignVertical="top"
+                />
+              </Field>
 
-            <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('isolationEvidenceHint')}</Text>
-          </View>
+              <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('isolationEvidenceHint')}</Text>
+            </View>
+          </Card>
         </View>
 
         <Button

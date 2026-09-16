@@ -1,8 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
-import { Button, Card, Field, Input, PageHeader, PageShell, Stack, spacing, typography, useTokens } from '@/components/ui';
+import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import {
+  Button,
+  Card,
+  Field,
+  Input,
+  PageHeader,
+  PageShell,
+  Stack,
+  radius,
+  spacing,
+  typography,
+  useTokens,
+} from '@/components/ui';
 import { env } from '@/lib/env';
 import { ovokClient } from '@/lib/ovok-client';
 import { mapAuthError } from '@/lib/takt/auth-errors';
@@ -68,8 +81,28 @@ export default function RegisterScreen() {
 
   return (
     <PageShell>
-      <PageHeader title={t('authRegisterHeaderTitle')} subtitle={t('authRegisterDescription')} />
       <Stack>
+        {/* Brand Icon Header */}
+        <View style={styles.brandHero}>
+          <View
+            style={[
+              styles.logoCircle,
+              {
+                backgroundColor: `${c.accent}1A`,
+                borderColor: `${c.accent}33`,
+              },
+            ]}
+          >
+            <Ionicons name="person-add" size={32} color={c.accent} />
+          </View>
+          <Text style={[typography.title1, { color: c.textPrimary, letterSpacing: -0.5 }]}>
+            {t('authRegisterHeaderTitle')}
+          </Text>
+          <Text style={[typography.subhead, { color: c.textSecondary, textAlign: 'center' }]}>
+            {t('authRegisterDescription')}
+          </Text>
+        </View>
+
         <Card>
           <View style={{ padding: spacing(4), gap: spacing(3) }}>
             <Field label={t('authGivenNameLabel')}>
@@ -81,6 +114,7 @@ export default function RegisterScreen() {
                 placeholder={t('authGivenNamePlaceholder')}
               />
             </Field>
+
             <Field label={t('authFamilyNameLabel')}>
               <Input
                 value={surname}
@@ -90,6 +124,7 @@ export default function RegisterScreen() {
                 placeholder={t('authFamilyNamePlaceholder')}
               />
             </Field>
+
             <Field label={t('authEmailLabel')}>
               <Input
                 value={email}
@@ -102,6 +137,7 @@ export default function RegisterScreen() {
                 placeholder={t('authEmailPlaceholder')}
               />
             </Field>
+
             <Field label={t('authPasswordLabel')}>
               <Input
                 value={password}
@@ -112,6 +148,7 @@ export default function RegisterScreen() {
                 placeholder={t('authPasswordPlaceholder')}
               />
             </Field>
+
             <Field label={t('authPasswordConfirmLabel')}>
               <Input
                 value={passwordConfirm}
@@ -122,17 +159,44 @@ export default function RegisterScreen() {
                 placeholder={t('authPasswordConfirmPlaceholder')}
               />
             </Field>
+
             {errorText ? <Text style={[typography.footnote, { color: c.destructive }]}>{errorText}</Text> : null}
-            <Button label={busy ? t('authRegistering') : t('authRegisterTitle')} disabled={busy} onPress={() => void submit()} />
+
+            <Button
+              label={busy ? t('authRegistering') : t('authRegisterTitle')}
+              disabled={busy}
+              onPress={() => void submit()}
+            />
           </View>
         </Card>
 
         <Card>
           <View style={{ padding: spacing(4), gap: spacing(3) }}>
-            <Button kind="secondary" label={t('authBackToSignIn')} onPress={() => router.push('/auth/sign-in' as never)} />
+            <Button
+              kind="secondary"
+              label={t('authBackToSignIn')}
+              onPress={() => router.push('/auth/sign-in' as never)}
+            />
           </View>
         </Card>
       </Stack>
     </PageShell>
   );
 }
+
+const styles = StyleSheet.create({
+  brandHero: {
+    alignItems: 'center',
+    paddingVertical: spacing(3),
+    gap: spacing(1.5),
+  },
+  logoCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: radius.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    marginBottom: spacing(1),
+  },
+});

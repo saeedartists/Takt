@@ -1,7 +1,9 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
+  AnimatedSegmentedControl,
   Badge,
   Button,
   Card,
@@ -14,7 +16,6 @@ import {
   PageHeader,
   PageShell,
   SectionHeader,
-  SegmentedControl,
   Stack,
   categoryColors,
   radius,
@@ -106,6 +107,15 @@ export default function MedicationsScreen() {
     return <Badge label={t('supplyRemaining').replace('{count}', count.toString())} tone="neutral" />;
   };
 
+  const getFormIconName = (form?: string): keyof typeof Ionicons.glyphMap => {
+    const normalized = (form ?? '').toLowerCase();
+    if (normalized.includes('capsul') || normalized.includes('kapsel')) return 'bandage-outline';
+    if (normalized.includes('drop') || normalized.includes('tropf')) return 'water-outline';
+    if (normalized.includes('inhal')) return 'fitness-outline';
+    if (normalized.includes('inject') || normalized.includes('injekt')) return 'color-filter-outline';
+    return 'medkit';
+  };
+
   const renderList = (rows: typeof plans.plans) => (
     <ListGroup>
       {rows.map((plan, index) => (
@@ -118,15 +128,15 @@ export default function MedicationsScreen() {
           leading={
             <View
               style={{
-                width: 30,
-                height: 30,
-                borderRadius: radius.full,
-                backgroundColor: `${categoryColors.medication}1F`,
+                width: 34,
+                height: 34,
+                borderRadius: radius.md,
+                backgroundColor: `${c.accent}1A`,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Text style={[typography.caption, { color: categoryColors.medication, fontWeight: '700' }]}>M</Text>
+              <Ionicons name={getFormIconName(plan.form)} size={16} color={c.accent} />
             </View>
           }
           onPress={() => router.push({ pathname: '/medications/[id]', params: { id: plan.request.id } })}
@@ -163,7 +173,7 @@ export default function MedicationsScreen() {
               placeholder={t('medsSearchPlaceholder')}
               returnKeyType="search"
             />
-            <SegmentedControl
+            <AnimatedSegmentedControl
               value={statusFilter}
               onChange={(next) => setStatusFilter(next as 'all' | 'active' | 'paused' | 'archived')}
               options={[

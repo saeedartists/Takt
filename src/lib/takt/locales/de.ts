@@ -15,6 +15,9 @@ export const de = {
     snooze: 'Später',
     undo: 'Rückgängig',
     legal: 'Rechtliches',
+    settingsCareCoordination: 'Betreuung & Qualität',
+    settingsPrivacySecurity: 'Datenschutz & Sicherheit',
+    settingsCompliance: 'Standards & Konformität',
     privacyNotice: 'Datenschutz',
     imprint: 'Impressum',
     consentTitle: 'Einwilligung zu Gesundheitsdaten',
@@ -27,6 +30,8 @@ export const de = {
     rhythmToday: 'Therapierhythmus heute',
     timeline: 'Zeitplan heute',
     nextDose: 'Nächste Dosis',
+    singleDoseLabel: 'Dosis',
+    multipleDosesLabel: 'Dosen',
     completion: 'abgeschlossen',
     activeMeds: 'aktiv',
     pausedMeds: 'pausiert',
@@ -78,6 +83,9 @@ export const de = {
     supplyLastRefilled: 'Zuletzt nachgefüllt',
     supplyLastRefilledInvalid: 'Bitte YYYY-MM-DD für das Nachfülldatum verwenden.',
     supplyRefillReminder: 'Der Vorrat liegt bei 7 oder weniger. Bitte bald nachfüllen.',
+    quickRefillAction: 'Vorrat auffüllen (+30)',
+    quickRefillSuccess: 'Vorrat um +30 aufgestockt',
+    quickRefillAdding: 'Wird aufgefüllt…',
     savingMedication: 'Wird gespeichert…',
     savingMedicationChanges: 'Änderungen werden gespeichert…',
     cadenceDaily: 'Täglich',
@@ -762,4 +770,32 @@ export const de = {
     familySharingOptionalQuietReminder: 'Optionale v1.1-Idee: eine leise Erinnerung, wenn eine Dosis nach 2 Stunden noch unbestätigt ist.',
     familySharingRelativeNoDosesHint: 'Heute sind keine Patientendosen geplant.',
     familySharingRelativeBlockedTitle: 'In der Angehörigenansicht nicht verfügbar',
+
+    // Theme & Appearance
+    appearance: 'Erscheinungsbild',
+    themeMode: 'Design',
+    themeModeSystem: 'System',
+    themeModeLight: 'Hell',
+    themeModeDark: 'Dunkel',
+    themePalette: 'Farbpalette',
+    themeAmberName: 'Takt Bernstein',
+    themeAmberDesc: 'Warmes Terrakotta & ruhige Wärme',
+    themeSageName: 'Nordischer Salbei',
+    themeSageDesc: 'Ruhiger Wald & Erholung',
+    themeIndigoName: 'Ozeanschiefer',
+    themeIndigoDesc: 'Klares medizinisches Indigo & Fokus',
+    themePlumName: 'Samtpflaume',
+    themePlumDesc: 'Sanfte Beere & Achtsamkeit',
+
+    // Greetings & Hero
+    greetingMorning: 'Guten Morgen',
+    greetingAfternoon: 'Guten Tag',
+    greetingEvening: 'Guten Abend',
+    allDoneToday: 'Alles für heute erledigt',
+
+    // Floating Undo Toast
+    doseConfirmedToast: 'Dosis als eingenommen markiert',
+    doseSkippedToast: 'Dosis als übersprungen markiert',
+    undoAction: 'Rückgängig',
 } as const;
+

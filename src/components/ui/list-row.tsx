@@ -18,17 +18,18 @@ export const ListGroup = ({
   children: ReactNode;
   style?: ViewStyle;
 }) => {
-  const { c } = useTokens();
+  const { c, scheme } = useTokens();
   return (
     <View
       style={[
         {
           backgroundColor: c.surface,
-          borderRadius: radius.lg,
+          borderRadius: radius.xl,
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: c.separator,
+          borderColor: c.cardBorder,
           overflow: 'hidden',
         },
+        scheme === 'light' && styles.lightShadow,
         style,
       ]}
     >
@@ -121,4 +122,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing(2.5),
   },
   textCol: { flex: 1, minWidth: 0 },
+  lightShadow: {
+    shadowColor: '#000000',
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
 });

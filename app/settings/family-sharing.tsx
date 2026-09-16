@@ -1,7 +1,9 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
+  AnimatedSegmentedControl,
   Badge,
   Button,
   Card,
@@ -15,7 +17,6 @@ import {
   PageHeader,
   PageShell,
   SectionHeader,
-  SegmentedControl,
   Stack,
   spacing,
   typography,
@@ -216,7 +217,7 @@ export default function FamilySharingScreen() {
                 />
               </Field>
               <Field label={t('familySharingRelationshipLabel')}>
-                <SegmentedControl
+                <AnimatedSegmentedControl
                   value={relationshipCode}
                   onChange={(next) =>
                     setRelationshipCode(next as (typeof RELATIONSHIP_OPTIONS)[number]['value'])
@@ -347,11 +348,27 @@ export default function FamilySharingScreen() {
         <View>
           <SectionHeader title={t('familySharingScopeTitle')} />
           <ListGroup>
-            <ListRow isFirst title={t('familySharingAllowedLine1')} value="✓" />
-            <ListRow title={t('familySharingAllowedLine2')} value="✓" />
-            <ListRow title={t('familySharingBlockedLine1')} value="✕" />
-            <ListRow title={t('familySharingBlockedLine2')} value="✕" />
-            <ListRow title={t('familySharingBlockedLine3')} value="✕" />
+            <ListRow
+              isFirst
+              title={t('familySharingAllowedLine1')}
+              trailing={<Ionicons name="checkmark-circle" size={18} color="#10B981" />}
+            />
+            <ListRow
+              title={t('familySharingAllowedLine2')}
+              trailing={<Ionicons name="checkmark-circle" size={18} color="#10B981" />}
+            />
+            <ListRow
+              title={t('familySharingBlockedLine1')}
+              trailing={<Ionicons name="close-circle" size={18} color={c.textTertiary} />}
+            />
+            <ListRow
+              title={t('familySharingBlockedLine2')}
+              trailing={<Ionicons name="close-circle" size={18} color={c.textTertiary} />}
+            />
+            <ListRow
+              title={t('familySharingBlockedLine3')}
+              trailing={<Ionicons name="close-circle" size={18} color={c.textTertiary} />}
+            />
           </ListGroup>
         </View>
       </Stack>

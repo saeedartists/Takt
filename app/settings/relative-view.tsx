@@ -1,6 +1,7 @@
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
   Badge,
   Button,
@@ -156,7 +157,20 @@ export default function RelativeViewScreen() {
                     isFirst={index === 0}
                     title={dose.label}
                     subtitle={doseSubtitle(dose)}
-                    value={t(statusKey(dose.state))}
+                    trailing={
+                      <Badge
+                        label={t(statusKey(dose.state))}
+                        tone={
+                          dose.state === 'taken'
+                            ? 'success'
+                            : dose.state === 'due'
+                              ? 'accent'
+                              : dose.state === 'missed'
+                                ? 'warning'
+                                : 'neutral'
+                        }
+                      />
+                    }
                   />
                 ))}
               </ListGroup>
@@ -168,7 +182,12 @@ export default function RelativeViewScreen() {
           <SectionHeader title={t('familySharingRelativeBlockedTitle')} />
           <ListGroup>
             {lockedLabel.map((line, index) => (
-              <ListRow key={line} isFirst={index === 0} title={line} value="✕" />
+              <ListRow
+                key={line}
+                isFirst={index === 0}
+                title={line}
+                trailing={<Ionicons name="close-circle" size={18} color={c.textTertiary} />}
+              />
             ))}
           </ListGroup>
         </View>

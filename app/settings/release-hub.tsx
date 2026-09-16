@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { View } from 'react-native';
 import {
+  AnimatedProgressBar,
   Badge,
   Card,
   ListGroup,
@@ -54,6 +55,10 @@ export default function ReleaseHubScreen() {
               tone={releaseReady ? 'success' : 'warning'}
               label={releaseReady ? t('releaseHubReady') : t('releaseHubNotReady')}
             />
+            <AnimatedProgressBar
+              progress={readiness.completionPct}
+              tintColor={readiness.completionPct === 100 ? '#10B981' : undefined}
+            />
             <Badge
               tone={readiness.completionPct === 100 ? 'success' : 'neutral'}
               label={t('releaseHubChecklistProgress').replace('{done}', readiness.done.toString()).replace('{total}', readiness.total.toString())}
@@ -68,49 +73,49 @@ export default function ReleaseHubScreen() {
               isFirst
               title={t('releaseHubAuth')}
               subtitle={t('releaseHubAuthHint')}
-              value={authDone ? t('statusDone') : t('statusPending')}
+              trailing={<Badge tone={statusTone(authDone)} label={authDone ? t('statusDone') : t('statusPending')} />}
               onPress={() => router.push('/settings/readiness' as never)}
             />
             <ListRow
               title={t('releaseHubReminder')}
               subtitle={t('releaseHubReminderHint').replace('{done}', reminder.done.toString()).replace('{total}', reminder.total.toString())}
-              value={reminderDone ? t('statusDone') : t('statusPending')}
+              trailing={<Badge tone={statusTone(reminderDone)} label={reminderDone ? t('statusDone') : t('statusPending')} />}
               onPress={() => router.push('/settings/reminder-certification' as never)}
             />
             <ListRow
               title={t('releaseHubTimezone')}
               subtitle={t('releaseHubTimezoneHint')}
-              value={timezoneDone ? t('statusDone') : t('statusPending')}
+              trailing={<Badge tone={statusTone(timezoneDone)} label={timezoneDone ? t('statusDone') : t('statusPending')} />}
               onPress={() => router.push('/settings/reminder-certification' as never)}
             />
             <ListRow
               title={t('releaseHubIsolation')}
               subtitle={t('releaseHubIsolationHint').replace('{done}', isolation.done.toString()).replace('{total}', isolation.total.toString())}
-              value={isolationDone ? t('statusDone') : t('statusPending')}
+              trailing={<Badge tone={statusTone(isolationDone)} label={isolationDone ? t('statusDone') : t('statusPending')} />}
               onPress={() => router.push('/settings/isolation' as never)}
             />
             <ListRow
               title={t('releaseHubSession')}
               subtitle={t('releaseHubSessionHint').replace('{done}', session.done.toString()).replace('{total}', session.total.toString())}
-              value={sessionDone ? t('statusDone') : t('statusPending')}
+              trailing={<Badge tone={statusTone(sessionDone)} label={sessionDone ? t('statusDone') : t('statusPending')} />}
               onPress={() => router.push('/settings/session-security' as never)}
             />
             <ListRow
               title={t('releaseHubConsent')}
               subtitle={t('releaseHubConsentHint').replace('{done}', consent.done.toString()).replace('{total}', consent.total.toString())}
-              value={consentDone ? t('statusDone') : t('statusPending')}
+              trailing={<Badge tone={statusTone(consentDone)} label={consentDone ? t('statusDone') : t('statusPending')} />}
               onPress={() => router.push('/settings/consent-audit' as never)}
             />
             <ListRow
               title={t('releaseHubReport')}
               subtitle={t('releaseHubReportHint').replace('{done}', report.done.toString()).replace('{total}', report.total.toString())}
-              value={reportDone ? t('statusDone') : t('statusPending')}
+              trailing={<Badge tone={statusTone(reportDone)} label={reportDone ? t('statusDone') : t('statusPending')} />}
               onPress={() => router.push('/settings/report-review' as never)}
             />
             <ListRow
               title={t('releaseHubA11y')}
               subtitle={t('releaseHubA11yHint')}
-              value={a11yDone ? t('statusDone') : t('statusPending')}
+              trailing={<Badge tone={statusTone(a11yDone)} label={a11yDone ? t('statusDone') : t('statusPending')} />}
               onPress={() => router.push('/settings/accessibility-pass' as never)}
             />
           </ListGroup>
@@ -122,15 +127,15 @@ export default function ReleaseHubScreen() {
             <ListRow
               isFirst
               title={t('releaseHubNextReminder')}
-              value={releaseReady ? t('statusDone') : t('statusPending')}
+              trailing={<Badge tone={statusTone(releaseReady)} label={releaseReady ? t('statusDone') : t('statusPending')} />}
             />
             <ListRow
               title={t('releaseHubNextEvidence')}
-              value={consentDone && reportDone && sessionDone ? t('statusDone') : t('statusPending')}
+              trailing={<Badge tone={statusTone(consentDone && reportDone && sessionDone)} label={consentDone && reportDone && sessionDone ? t('statusDone') : t('statusPending')} />}
             />
             <ListRow
               title={t('releaseHubNextSignoff')}
-              value={releaseReady ? t('statusDone') : t('statusPending')}
+              trailing={<Badge tone={statusTone(releaseReady)} label={releaseReady ? t('statusDone') : t('statusPending')} />}
             />
           </ListGroup>
         </View>

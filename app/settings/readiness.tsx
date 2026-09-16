@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import {
+  AnimatedProgressBar,
   Badge,
   Button,
   Card,
@@ -240,7 +241,7 @@ export default function ReadinessScreen() {
 
         <View>
           <SectionHeader title={t('readinessChecklistTitle')} />
-          <Card>
+          <Card style={{ marginBottom: spacing(3) }}>
             <View style={{ padding: spacing(4), gap: spacing(3) }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('readinessChecklistProgress')}</Text>
@@ -249,6 +250,10 @@ export default function ReadinessScreen() {
                   tone={checklistTone}
                 />
               </View>
+              <AnimatedProgressBar
+                progress={checklist.completionPct}
+                tintColor={checklist.completionPct === 100 ? c.success : c.accent}
+              />
               <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('readinessChecklistHint')}</Text>
             </View>
           </Card>
@@ -265,7 +270,12 @@ export default function ReadinessScreen() {
                     isFirst={index === 0}
                     title={t(task.titleKey)}
                     subtitle={t(task.subtitleKey)}
-                    value={done ? t('statusDone') : t('statusPending')}
+                    trailing={
+                      <Badge
+                        label={done ? t('statusDone') : t('statusPending')}
+                        tone={done ? 'success' : 'neutral'}
+                      />
+                    }
                     onPress={() => void checklist.toggleTask(task.id)}
                   />
                 );

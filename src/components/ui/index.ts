@@ -26,3 +26,14 @@ export { useTokens } from '../../theme/use-tokens';
 
 export { Field, Input, SegmentedControl, Button } from './controls';
 export { Badge, type BadgeTone } from './badge';
+export { AnimatedPressable } from './animated-pressable';
+export { AnimatedSegmentedControl } from './animated-segmented-control';
+export { AnimatedProgressBar } from './animated-progress-bar';
+export { AnimatedDoseRow } from './animated-dose-row';
+export { FloatingUndoToast } from './floating-undo-toast';
+export { GreetingHeroCard } from './greeting-hero-card';
+export { WeekStripPicker } from './week-strip-picker';
+export { CelebrationCard } from './celebration-card';
+export { useTheme } from '../../theme/theme-context';
+export { paletteConfigs, type ThemePalette, type ThemeMode } from '../../theme/tokens';
+

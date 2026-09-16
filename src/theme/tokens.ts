@@ -67,37 +67,116 @@ export const categoryColors = {
   body: '#AF52DE',
   respiratory: '#64D2FF',
   lab: '#007AFF',
-} as const;
+};
 
-export type HealthCategory = keyof typeof categoryColors;
+export type HealthCategory =
+  | 'heart'
+  | 'activity'
+  | 'sleep'
+  | 'nutrition'
+  | 'medication'
+  | 'mindfulness'
+  | 'body'
+  | 'respiratory'
+  | 'lab';
+
+export type CategoryColors = Record<HealthCategory, string>;
+
+export type ThemePalette = 'amber' | 'sage' | 'indigo' | 'plum';
+export type ThemeMode = 'system' | 'light' | 'dark';
+
+export const paletteConfigs: Record<
+  ThemePalette,
+  {
+    name: string;
+    description: string;
+    accentLight: string;
+    accentDark: string;
+    medicationLight: string;
+    medicationDark: string;
+    previewColor: string;
+  }
+> = {
+  amber: {
+    name: 'Takt Amber',
+    description: 'Warm terracotta & sunlit calm',
+    accentLight: '#B4611C',
+    accentDark: '#E07D2C',
+    medicationLight: '#B4611C',
+    medicationDark: '#E07D2C',
+    previewColor: '#B4611C',
+  },
+  sage: {
+    name: 'Nordic Sage',
+    description: 'Serene forest & restorative calm',
+    accentLight: '#23704B',
+    accentDark: '#3DB87E',
+    medicationLight: '#23704B',
+    medicationDark: '#3DB87E',
+    previewColor: '#23704B',
+  },
+  indigo: {
+    name: 'Ocean Slate',
+    description: 'Crisp medical indigo & clarity',
+    accentLight: '#1D63D8',
+    accentDark: '#4D90FE',
+    medicationLight: '#1D63D8',
+    medicationDark: '#4D90FE',
+    previewColor: '#1D63D8',
+  },
+  plum: {
+    name: 'Velvet Plum',
+    description: 'Gentle berry & mindful presence',
+    accentLight: '#853982',
+    accentDark: '#BF66B9',
+    medicationLight: '#853982',
+    medicationDark: '#BF66B9',
+    previewColor: '#853982',
+  },
+};
+
+export const getSemanticColors = (scheme: 'light' | 'dark', palette: ThemePalette = 'amber') => {
+  const p = paletteConfigs[palette] ?? paletteConfigs.amber;
+  const accent = scheme === 'light' ? p.accentLight : p.accentDark;
+
+  if (scheme === 'light') {
+    return {
+      background: '#F9F8F5',
+      surface: '#FFFFFF',
+      surfaceRaised: '#F1EFEB',
+      surfaceSubtle: '#FAF9F6',
+      separator: 'rgba(92,100,111,0.18)',
+      cardBorder: 'rgba(0,0,0,0.06)',
+      textPrimary: '#12171E',
+      textSecondary: 'rgba(68,76,86,0.88)',
+      textTertiary: 'rgba(92,100,111,0.52)',
+      accent,
+      destructive: '#B83226',
+      success: '#1B7248',
+      warning: '#C97726',
+    };
+  }
+
+  return {
+    background: '#0B0F15',
+    surface: '#151A22',
+    surfaceRaised: '#1E2530',
+    surfaceSubtle: '#12161E',
+    separator: 'rgba(255,255,255,0.12)',
+    cardBorder: 'rgba(255,255,255,0.08)',
+    textPrimary: '#F8FAFC',
+    textSecondary: 'rgba(241,245,249,0.76)',
+    textTertiary: 'rgba(241,245,249,0.48)',
+    accent,
+    destructive: '#E5534B',
+    success: '#34D399',
+    warning: '#F59E0B',
+  };
+};
 
 export const semantic = {
-  light: {
-    background: '#FAFAF9',
-    surface: '#FFFFFF',
-    surfaceRaised: '#FFFFFF',
-    separator: 'rgba(92,100,111,0.22)',
-    textPrimary: '#0E1218',
-    textSecondary: 'rgba(92,100,111,0.9)',
-    textTertiary: 'rgba(92,100,111,0.56)',
-    accent: '#B4611C',
-    destructive: '#A8342A',
-    success: '#1F6F4A',
-    warning: '#D98A3D',
-  },
-  dark: {
-    background: '#0E1218',
-    surface: '#171C24',
-    surfaceRaised: '#232935',
-    separator: 'rgba(217,138,61,0.24)',
-    textPrimary: '#FAFAF9',
-    textSecondary: 'rgba(250,250,249,0.74)',
-    textTertiary: 'rgba(250,250,249,0.45)',
-    accent: '#D98A3D',
-    destructive: '#C45C53',
-    success: '#3C9B71',
-    warning: '#D98A3D',
-  },
+  light: getSemanticColors('light', 'amber'),
+  dark: getSemanticColors('dark', 'amber'),
 } as const;
 
 /** Corner radii — Health uses generous corners; 16 is the card value. */

@@ -1,8 +1,11 @@
 import { useEffect } from 'react';
 import { Text, View } from 'react-native';
 import {
+  AnimatedProgressBar,
+  AnimatedSegmentedControl,
   Badge,
   Button,
+  Card,
   Field,
   Input,
   ListGroup,
@@ -11,7 +14,6 @@ import {
   PageHeader,
   PageShell,
   SectionHeader,
-  SegmentedControl,
   Stack,
   spacing,
   typography,
@@ -76,6 +78,17 @@ export default function ReportReviewScreen() {
       <Stack>
         <View>
           <SectionHeader title={t('reportReviewProgressTitle')} />
+          <Card style={{ marginBottom: spacing(3) }}>
+            <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={[typography.headline, { color: c.textPrimary }]}>{t('reportReviewChecksDone')}</Text>
+                <Text style={[typography.subhead, { color: c.accent, fontWeight: '700' }]}>
+                  {review.completionPct}%
+                </Text>
+              </View>
+              <AnimatedProgressBar progress={review.completionPct} tintColor={c.accent} />
+            </View>
+          </Card>
           <ListGroup>
             <ListRow
               isFirst
@@ -96,7 +109,7 @@ export default function ReportReviewScreen() {
 
         <View>
           <SectionHeader title={t('reportReviewVerdict')} />
-          <SegmentedControl
+          <AnimatedSegmentedControl
             value={review.data.verdict}
             onChange={(next) => void review.setVerdict(next as 'pending' | 'pass' | 'minor-edits' | 'fail')}
             options={[
@@ -119,7 +132,12 @@ export default function ReportReviewScreen() {
                   key={item.id}
                   isFirst={index === 0}
                   title={t(item.titleKey)}
-                  value={review.data.checks[item.id] ? t('statusDone') : t('statusPending')}
+                  trailing={
+                    <Badge
+                      label={review.data.checks[item.id] ? t('statusDone') : t('statusPending')}
+                      tone={review.data.checks[item.id] ? 'success' : 'neutral'}
+                    />
+                  }
                   onPress={() => void review.toggleCheck(item.id)}
                 />
               ))}
@@ -129,97 +147,101 @@ export default function ReportReviewScreen() {
 
         <View>
           <SectionHeader title={t('reportReviewReviewerProfile')} />
-          <View style={{ gap: spacing(3) }}>
-            <Field label={t('reportReviewName')}>
-              <Input
-                value={review.data.reviewerName}
-                onChangeText={(value) => void review.updateMeta({ reviewerName: value })}
-                placeholder={t('reportReviewNamePlaceholder')}
-                autoCapitalize="words"
-              />
-            </Field>
+          <Card>
+            <View style={{ padding: spacing(4), gap: spacing(3) }}>
+              <Field label={t('reportReviewName')}>
+                <Input
+                  value={review.data.reviewerName}
+                  onChangeText={(value) => void review.updateMeta({ reviewerName: value })}
+                  placeholder={t('reportReviewNamePlaceholder')}
+                  autoCapitalize="words"
+                />
+              </Field>
 
-            <Field label={t('reportReviewRole')}>
-              <Input
-                value={review.data.reviewerRole}
-                onChangeText={(value) => void review.updateMeta({ reviewerRole: value })}
-                placeholder={t('reportReviewRolePlaceholder')}
-                autoCapitalize="words"
-              />
-            </Field>
+              <Field label={t('reportReviewRole')}>
+                <Input
+                  value={review.data.reviewerRole}
+                  onChangeText={(value) => void review.updateMeta({ reviewerRole: value })}
+                  placeholder={t('reportReviewRolePlaceholder')}
+                  autoCapitalize="words"
+                />
+              </Field>
 
-            <Field label={t('reportReviewSpecialty')}>
-              <Input
-                value={review.data.reviewerSpecialty}
-                onChangeText={(value) => void review.updateMeta({ reviewerSpecialty: value })}
-                placeholder={t('reportReviewSpecialtyPlaceholder')}
-              />
-            </Field>
+              <Field label={t('reportReviewSpecialty')}>
+                <Input
+                  value={review.data.reviewerSpecialty}
+                  onChangeText={(value) => void review.updateMeta({ reviewerSpecialty: value })}
+                  placeholder={t('reportReviewSpecialtyPlaceholder')}
+                />
+              </Field>
 
-            <Field label={t('reportReviewDate')}>
-              <Input
-                value={review.data.reviewDate}
-                onChangeText={(value) => void review.updateMeta({ reviewDate: value })}
-                placeholder={t('reportReviewDatePlaceholder')}
-              />
-            </Field>
+              <Field label={t('reportReviewDate')}>
+                <Input
+                  value={review.data.reviewDate}
+                  onChangeText={(value) => void review.updateMeta({ reviewDate: value })}
+                  placeholder={t('reportReviewDatePlaceholder')}
+                />
+              </Field>
 
-            <Field label={t('reportReviewSampleCount')}>
-              <Input
-                value={review.data.sampleCount}
-                onChangeText={(value) => void review.updateMeta({ sampleCount: value })}
-                placeholder={t('reportReviewSampleCountPlaceholder')}
-                keyboardType="number-pad"
-              />
-            </Field>
+              <Field label={t('reportReviewSampleCount')}>
+                <Input
+                  value={review.data.sampleCount}
+                  onChangeText={(value) => void review.updateMeta({ sampleCount: value })}
+                  placeholder={t('reportReviewSampleCountPlaceholder')}
+                  keyboardType="number-pad"
+                />
+              </Field>
 
-            <Field label={t('reportReviewEvidenceLinks')}>
-              <Input
-                value={review.data.evidenceLinks}
-                onChangeText={(value) => void review.updateMeta({ evidenceLinks: value })}
-                placeholder={t('reportReviewEvidenceLinksPlaceholder')}
-                multiline
-                textAlignVertical="top"
-              />
-            </Field>
-          </View>
+              <Field label={t('reportReviewEvidenceLinks')}>
+                <Input
+                  value={review.data.evidenceLinks}
+                  onChangeText={(value) => void review.updateMeta({ evidenceLinks: value })}
+                  placeholder={t('reportReviewEvidenceLinksPlaceholder')}
+                  multiline
+                  textAlignVertical="top"
+                />
+              </Field>
+            </View>
+          </Card>
         </View>
 
         <View>
           <SectionHeader title={t('reportReviewChangesTitle')} />
-          <View style={{ gap: spacing(3) }}>
-            <Field label={t('reportReviewRequiredChanges')}>
-              <Input
-                value={review.data.requiredChanges}
-                onChangeText={(value) => void review.updateMeta({ requiredChanges: value })}
-                placeholder={t('reportReviewRequiredChangesPlaceholder')}
-                multiline
-                textAlignVertical="top"
-              />
-            </Field>
+          <Card>
+            <View style={{ padding: spacing(4), gap: spacing(3) }}>
+              <Field label={t('reportReviewRequiredChanges')}>
+                <Input
+                  value={review.data.requiredChanges}
+                  onChangeText={(value) => void review.updateMeta({ requiredChanges: value })}
+                  placeholder={t('reportReviewRequiredChangesPlaceholder')}
+                  multiline
+                  textAlignVertical="top"
+                />
+              </Field>
 
-            <Field label={t('reportReviewPriorityBeforeRelease')}>
-              <Input
-                value={review.data.priorityBeforeRelease}
-                onChangeText={(value) => void review.updateMeta({ priorityBeforeRelease: value })}
-                placeholder={t('reportReviewPriorityBeforeReleasePlaceholder')}
-                multiline
-                textAlignVertical="top"
-              />
-            </Field>
+              <Field label={t('reportReviewPriorityBeforeRelease')}>
+                <Input
+                  value={review.data.priorityBeforeRelease}
+                  onChangeText={(value) => void review.updateMeta({ priorityBeforeRelease: value })}
+                  placeholder={t('reportReviewPriorityBeforeReleasePlaceholder')}
+                  multiline
+                  textAlignVertical="top"
+                />
+              </Field>
 
-            <Field label={t('reportReviewOptionalPostV1')}>
-              <Input
-                value={review.data.optionalPostV1}
-                onChangeText={(value) => void review.updateMeta({ optionalPostV1: value })}
-                placeholder={t('reportReviewOptionalPostV1Placeholder')}
-                multiline
-                textAlignVertical="top"
-              />
-            </Field>
+              <Field label={t('reportReviewOptionalPostV1')}>
+                <Input
+                  value={review.data.optionalPostV1}
+                  onChangeText={(value) => void review.updateMeta({ optionalPostV1: value })}
+                  placeholder={t('reportReviewOptionalPostV1Placeholder')}
+                  multiline
+                  textAlignVertical="top"
+                />
+              </Field>
 
-            <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('reportReviewHint')}</Text>
-          </View>
+              <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('reportReviewHint')}</Text>
+            </View>
+          </Card>
         </View>
 
         <Badge

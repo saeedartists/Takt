@@ -1,20 +1,22 @@
-import { useColorScheme } from 'react-native';
-
-import { iosPalette, semantic } from './tokens';
+import { iosPalette } from './tokens';
+import { useTheme } from './theme-context';
 
 /*
  * useTokens — resolve the scheme-dependent half of the token set.
  *
- * Scheme-independent tokens (categoryColors, radius, typography,
- * spacing) are imported directly from ./tokens; only colours that flip
- * between light and dark come through this hook. That keeps most
- * components free of hook plumbing.
+ * Fully integrated with ThemeContext: returns active dynamic semantic colors,
+ * palette, and scheme (light/dark) reflecting user preference.
  */
 export const useTokens = () => {
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const { scheme, c, isDark, paletteConfig, palette: currentPalette } = useTheme();
+
   return {
     scheme,
-    c: semantic[scheme],
+    isDark,
+    c,
     palette: iosPalette[scheme],
+    paletteName: currentPalette,
+    paletteConfig,
   } as const;
 };
+

@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import { Text, View } from 'react-native';
 import {
+  AnimatedProgressBar,
   Badge,
   Button,
+  Card,
   Field,
   Input,
   ListGroup,
@@ -95,6 +97,17 @@ export default function ReminderCertificationScreen() {
       <Stack>
         <View>
           <SectionHeader title={t('reminderCertProgressTitle')} />
+          <Card style={{ marginBottom: spacing(3) }}>
+            <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={[typography.headline, { color: c.textPrimary }]}>{t('reminderCertCaseProgress')}</Text>
+                <Text style={[typography.subhead, { color: c.accent, fontWeight: '700' }]}>
+                  {cert.completionPct}%
+                </Text>
+              </View>
+              <AnimatedProgressBar progress={cert.completionPct} tintColor={c.accent} />
+            </View>
+          </Card>
           <ListGroup>
             <ListRow
               isFirst
@@ -129,7 +142,12 @@ export default function ReminderCertificationScreen() {
                   isFirst={index === 0}
                   title={t(item.titleKey)}
                   subtitle={t(item.subtitleKey)}
-                  value={cert.data.cases[item.id] ? t('statusDone') : t('statusPending')}
+                  trailing={
+                    <Badge
+                      label={cert.data.cases[item.id] ? t('statusDone') : t('statusPending')}
+                      tone={cert.data.cases[item.id] ? 'success' : 'neutral'}
+                    />
+                  }
                   onPress={() => void cert.toggleCase(item.id)}
                 />
               ))}
@@ -139,62 +157,64 @@ export default function ReminderCertificationScreen() {
 
         <View>
           <SectionHeader title={t('reminderCertEvidenceTitle')} />
-          <View style={{ gap: spacing(3) }}>
-            <Field label={t('reminderCertTesterName')}>
-              <Input
-                value={cert.data.testerName}
-                onChangeText={(value) => void cert.updateMeta({ testerName: value })}
-                placeholder={t('reminderCertTesterPlaceholder')}
-                autoCapitalize="words"
-              />
-            </Field>
+          <Card>
+            <View style={{ padding: spacing(4), gap: spacing(3) }}>
+              <Field label={t('reminderCertTesterName')}>
+                <Input
+                  value={cert.data.testerName}
+                  onChangeText={(value) => void cert.updateMeta({ testerName: value })}
+                  placeholder={t('reminderCertTesterPlaceholder')}
+                  autoCapitalize="words"
+                />
+              </Field>
 
-            <Field label={t('reminderCertRunDate')}>
-              <Input
-                value={cert.data.runDate}
-                onChangeText={(value) => void cert.updateMeta({ runDate: value })}
-                placeholder={t('reminderCertRunDatePlaceholder')}
-              />
-            </Field>
+              <Field label={t('reminderCertRunDate')}>
+                <Input
+                  value={cert.data.runDate}
+                  onChangeText={(value) => void cert.updateMeta({ runDate: value })}
+                  placeholder={t('reminderCertRunDatePlaceholder')}
+                />
+              </Field>
 
-            <Field label={t('reminderCertDeviceSummary')}>
-              <Input
-                value={cert.data.deviceSummary}
-                onChangeText={(value) => void cert.updateMeta({ deviceSummary: value })}
-                placeholder={t('reminderCertDevicePlaceholder')}
-              />
-            </Field>
+              <Field label={t('reminderCertDeviceSummary')}>
+                <Input
+                  value={cert.data.deviceSummary}
+                  onChangeText={(value) => void cert.updateMeta({ deviceSummary: value })}
+                  placeholder={t('reminderCertDevicePlaceholder')}
+                />
+              </Field>
 
-            <Field label={t('reminderCertAppVersion')}>
-              <Input
-                value={cert.data.appVersion}
-                onChangeText={(value) => void cert.updateMeta({ appVersion: value })}
-                placeholder={t('reminderCertAppVersionPlaceholder')}
-              />
-            </Field>
+              <Field label={t('reminderCertAppVersion')}>
+                <Input
+                  value={cert.data.appVersion}
+                  onChangeText={(value) => void cert.updateMeta({ appVersion: value })}
+                  placeholder={t('reminderCertAppVersionPlaceholder')}
+                />
+              </Field>
 
-            <Field label={t('reminderCertEvidenceLinks')}>
-              <Input
-                value={cert.data.evidenceLinks}
-                onChangeText={(value) => void cert.updateMeta({ evidenceLinks: value })}
-                placeholder={t('reminderCertEvidenceLinksPlaceholder')}
-                multiline
-                textAlignVertical="top"
-              />
-            </Field>
+              <Field label={t('reminderCertEvidenceLinks')}>
+                <Input
+                  value={cert.data.evidenceLinks}
+                  onChangeText={(value) => void cert.updateMeta({ evidenceLinks: value })}
+                  placeholder={t('reminderCertEvidenceLinksPlaceholder')}
+                  multiline
+                  textAlignVertical="top"
+                />
+              </Field>
 
-            <Field label={t('reminderCertNotes')}>
-              <Input
-                value={cert.data.notes}
-                onChangeText={(value) => void cert.updateMeta({ notes: value })}
-                placeholder={t('reminderCertNotesPlaceholder')}
-                multiline
-                textAlignVertical="top"
-              />
-            </Field>
+              <Field label={t('reminderCertNotes')}>
+                <Input
+                  value={cert.data.notes}
+                  onChangeText={(value) => void cert.updateMeta({ notes: value })}
+                  placeholder={t('reminderCertNotesPlaceholder')}
+                  multiline
+                  textAlignVertical="top"
+                />
+              </Field>
 
-            <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('reminderCertEvidenceHint')}</Text>
-          </View>
+              <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('reminderCertEvidenceHint')}</Text>
+            </View>
+          </Card>
         </View>
 
 
