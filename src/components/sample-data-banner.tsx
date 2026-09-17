@@ -33,27 +33,38 @@ export const SampleDataBanner = () => {
         styles.bar,
         {
           paddingTop: insets.top + 6,
-          backgroundColor: `${c.warning}1F`,
-          borderBottomColor: `${c.warning}66`,
+          backgroundColor: c.surface,
+          borderBottomColor: c.separator,
         },
       ]}
       accessibilityRole="alert"
     >
-      <View style={[styles.dot, { backgroundColor: c.warning }]} />
-      <Text style={[styles.label, { color: c.textPrimary }]}>Sample data — not real patient records</Text>
+      <View style={[styles.chip, { backgroundColor: `${c.warning}1F`, borderColor: `${c.warning}4D` }]}>
+        <View style={[styles.dot, { backgroundColor: c.warning }]} />
+        <Text style={[styles.label, { color: c.textSecondary }]}>Sample data — not real patient records</Text>
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   bar: {
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    maxWidth: 480,
+    alignSelf: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   dot: {
     width: 6,
