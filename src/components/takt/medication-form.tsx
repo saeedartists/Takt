@@ -411,7 +411,7 @@ const styles = StyleSheet.create({
   cardBody: { padding: spacing(4), gap: spacing(4) },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) },
   chip: {
-    minHeight: 36,
+    minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(1.5),

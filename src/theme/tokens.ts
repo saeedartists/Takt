@@ -212,20 +212,25 @@ export const radius = {
 /*
  * iOS type ramp. Names match Apple's text styles so a HIG reference
  * maps directly to a token. `metric` is the big number on a tile.
+ * letterSpacing follows SF Pro tracking: tightening on display sizes,
+ * neutral on body text, a wide track for the uppercase overline.
  */
 export const typography = {
-  largeTitle: { fontSize: 34, lineHeight: 41, fontWeight: '700' },
-  title1: { fontSize: 28, lineHeight: 34, fontWeight: '700' },
-  title2: { fontSize: 22, lineHeight: 28, fontWeight: '700' },
-  title3: { fontSize: 20, lineHeight: 25, fontWeight: '600' },
-  headline: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
-  body: { fontSize: 17, lineHeight: 22, fontWeight: '400' },
-  callout: { fontSize: 16, lineHeight: 21, fontWeight: '400' },
-  subhead: { fontSize: 15, lineHeight: 20, fontWeight: '400' },
-  footnote: { fontSize: 13, lineHeight: 18, fontWeight: '400' },
-  caption: { fontSize: 12, lineHeight: 16, fontWeight: '400' },
-  metric: { fontSize: 40, lineHeight: 44, fontWeight: '700' },
-  metricSm: { fontSize: 28, lineHeight: 32, fontWeight: '700' },
+  largeTitle: { fontSize: 30, lineHeight: 36, fontWeight: '700', letterSpacing: -0.35 },
+  title1: { fontSize: 25, lineHeight: 30, fontWeight: '700', letterSpacing: -0.3 },
+  title2: { fontSize: 21, lineHeight: 26, fontWeight: '700', letterSpacing: -0.22 },
+  title3: { fontSize: 18, lineHeight: 23, fontWeight: '600', letterSpacing: -0.15 },
+  headline: { fontSize: 16, lineHeight: 21, fontWeight: '600', letterSpacing: 0 },
+  body: { fontSize: 16, lineHeight: 21, fontWeight: '400', letterSpacing: 0 },
+  callout: { fontSize: 15, lineHeight: 20, fontWeight: '400', letterSpacing: 0 },
+  subhead: { fontSize: 14, lineHeight: 19, fontWeight: '400', letterSpacing: 0 },
+  footnote: { fontSize: 13, lineHeight: 18, fontWeight: '400', letterSpacing: 0 },
+  caption: { fontSize: 12, lineHeight: 16, fontWeight: '400', letterSpacing: 0 },
+  caption2: { fontSize: 11, lineHeight: 13, fontWeight: '400', letterSpacing: 0 },
+  /** Uppercase eyebrow / tab label: small, semi-bold, letter-spaced. */
+  overline: { fontSize: 11, lineHeight: 13, fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase' },
+  metric: { fontSize: 34, lineHeight: 38, fontWeight: '700', letterSpacing: -0.45 },
+  metricSm: { fontSize: 24, lineHeight: 28, fontWeight: '700', letterSpacing: -0.28 },
 } as const;
 
 /** Matches the SDK's DEFAULT_MULTIPLIERS.spacing — spacing(n) = n * 4. */

@@ -243,7 +243,7 @@ export default function SettingsTabScreen() {
                           style={[styles.paletteCircle, { backgroundColor: config.previewColor }]}
                         />
                         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                          <Text style={[typography.headline, { color: c.textPrimary, fontSize: 15 }]}>{name}</Text>
+                          <Text style={[typography.subhead, { color: c.textPrimary, fontWeight: '600' }]}>{name}</Text>
                           <Text style={[typography.caption, { color: c.textSecondary }]}>
                             {t(config.descriptionKey)}
                           </Text>

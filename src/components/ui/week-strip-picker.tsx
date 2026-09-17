@@ -111,6 +111,7 @@ export function WeekStripPicker({
             onPress={() => onSelectDate(new Date())}
             accessibilityRole="button"
             accessibilityLabel={todayLabel}
+            hitSlop={8}
             style={[styles.todayButton, { backgroundColor: `${c.accent}1A`, borderColor: `${c.accent}33` }]}
           >
             <Ionicons name="calendar-outline" size={13} color={c.accent} />
@@ -153,7 +154,7 @@ export function WeekStripPicker({
             >
               <Text
                 style={[
-                  typography.caption,
+                  typography.overline,
                   styles.dayLabel,
                   {
                     color: item.isSelected ? c.surface : item.isToday ? c.accent : c.textSecondary,
@@ -166,7 +167,7 @@ export function WeekStripPicker({
 
               <Text
                 style={[
-                  typography.subhead,
+                  typography.callout,
                   styles.numberLabel,
                   {
                     color: item.isSelected ? c.surface : c.textPrimary,
@@ -236,13 +237,11 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   dayLabel: {
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.2,
+    paddingHorizontal: spacing(0.5),
   },
   numberLabel: {
-    fontSize: 16,
     fontVariant: ['tabular-nums'],
+    lineHeight: 20,
   },
   dotContainer: {
     height: 6,

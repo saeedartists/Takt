@@ -187,6 +187,7 @@ export function AnimatedDoseRow({
                 onPress={() => void run('skip', onSkip)}
                 disabled={locked}
                 haptic="warning"
+                hitSlop={4}
                 accessibilityRole="button"
                 accessibilityLabel={`${labels.markSkipped}, ${who}`}
                 accessibilityState={{ disabled: locked, busy: pending === 'skip' }}
@@ -208,6 +209,7 @@ export function AnimatedDoseRow({
               <AnimatedPressable
                 onPress={() => setSnoozeOpen((open) => !open)}
                 disabled={locked}
+                hitSlop={4}
                 accessibilityRole="button"
                 accessibilityLabel={`${labels.snooze}, ${who}`}
                 accessibilityState={{ disabled: locked, expanded: snoozeOpen }}
@@ -283,6 +285,7 @@ export function AnimatedDoseRow({
             <AnimatedPressable
               onPress={() => void run('undo', onUndo)}
               disabled={locked}
+              hitSlop={4}
               accessibilityRole="button"
               accessibilityLabel={`${labels.undo}, ${who}`}
               accessibilityState={{ disabled: locked, busy: pending === 'undo' }}
@@ -362,7 +365,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(1.5),
-    minHeight: 36,
+    minHeight: 40,
     paddingHorizontal: spacing(3),
     borderRadius: radius.full,
     borderWidth: StyleSheet.hairlineWidth,

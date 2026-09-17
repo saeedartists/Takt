@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing(6),
-    paddingVertical: spacing(10),
+    paddingVertical: spacing(8),
   },
   mt: { marginTop: spacing(2) },
   center: { textAlign: 'center' },

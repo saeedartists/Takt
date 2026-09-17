@@ -35,7 +35,7 @@ export const AuthHero = ({
       <View style={[styles.logoCircle, { backgroundColor: `${c.accent}1A`, borderColor: `${c.accent}33` }]}>
         <Ionicons name={icon} size={32} color={c.accent} />
       </View>
-      <Text style={[typography.title1, { color: c.textPrimary, letterSpacing: -0.5 }]}>{title}</Text>
+      <Text style={[typography.title1, { color: c.textPrimary }]}>{title}</Text>
       <Text style={[typography.subhead, { color: c.textSecondary, textAlign: 'center' }]}>{description}</Text>
     </View>
   );

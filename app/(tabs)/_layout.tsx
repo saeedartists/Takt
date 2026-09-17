@@ -10,7 +10,7 @@ import { useReminderResponseRouting, useReminderSync } from '@/lib/takt/reminder
 import { buildDoseOccurrencesForDay } from '@/lib/takt/schedule';
 import { startOfDay } from '@/lib/takt/time';
 import { resolveSessionGate } from '@/lib/auth-session';
-import { CONTENT_MAX_WIDTH, radius, spacing } from '@/theme/tokens';
+import { CONTENT_MAX_WIDTH, radius, spacing, typography } from '@/theme/tokens';
 import { useTokens } from '@/theme/use-tokens';
 
 export default function TabsLayout() {
@@ -71,7 +71,7 @@ export default function TabsLayout() {
           backgroundColor: c.surface,
           borderTopColor: c.separator,
           borderTopWidth: 0.5,
-          height: 70,
+          height: 64,
           paddingTop: spacing(1),
           borderTopLeftRadius: radius.lg,
           borderTopRightRadius: radius.lg,
@@ -81,8 +81,10 @@ export default function TabsLayout() {
             : null),
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: typography.caption.fontSize,
+          lineHeight: typography.caption.lineHeight,
           fontWeight: '600',
+          letterSpacing: 0.2,
         },
       }}
     >
@@ -91,7 +93,13 @@ export default function TabsLayout() {
         options={{
           title: t('today'),
           tabBarBadge: dueNowCount > 0 ? dueNowCount : undefined,
-          tabBarBadgeStyle: { backgroundColor: c.accent, color: c.surface, fontSize: 11, fontWeight: '700' },
+          tabBarBadgeStyle: {
+            backgroundColor: c.accent,
+            color: c.surface,
+            fontSize: typography.caption2.fontSize,
+            lineHeight: typography.caption2.lineHeight,
+            fontWeight: '700',
+          },
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons name={focused ? 'home' : 'home-outline'} color={color} size={size} />
           ),

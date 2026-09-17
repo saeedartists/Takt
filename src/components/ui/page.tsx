@@ -66,9 +66,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing(4),
-    marginBottom: spacing(5),
+    marginBottom: spacing(4),
   },
   headerText: { flex: 1, minWidth: 0 },
   subtitle: { marginTop: spacing(1) },
-  stack: { gap: spacing(6) },
+  stack: { gap: spacing(5) },
 });

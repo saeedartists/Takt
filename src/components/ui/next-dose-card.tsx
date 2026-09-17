@@ -82,9 +82,7 @@ export function NextDoseCard({
     <Card>
       <Animated.View layout={LinearTransition} style={styles.body}>
         <View style={styles.labelRow}>
-          <Text style={[typography.footnote, { color: c.textSecondary, fontWeight: '600', letterSpacing: 0.3 }]}>
-            {t('nextDose').toUpperCase()}
-          </Text>
+          <Text style={[typography.overline, { color: c.textSecondary }]}>{t('nextDose')}</Text>
           {dose ? <Badge label={stateLabel(dose.state)} tone={due ? 'warning' : 'neutral'} /> : null}
         </View>
 

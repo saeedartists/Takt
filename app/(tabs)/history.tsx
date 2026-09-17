@@ -440,7 +440,7 @@ export default function HistoryScreen() {
                     <View key={group.dayLabel} style={{ gap: spacing(2.5) }}>
                       <Text
                         accessibilityRole="header"
-                        style={[typography.footnote, styles.dayLabel, { color: c.textSecondary }]}
+                        style={[typography.overline, styles.dayLabel, { color: c.textSecondary }]}
                       >
                         {group.dayLabel}
                       </Text>
@@ -591,8 +591,5 @@ const styles = {
   },
   dayLabel: {
     paddingHorizontal: spacing(1),
-    fontWeight: '600' as const,
-    letterSpacing: 0.3,
-    textTransform: 'uppercase' as const,
   },
 };

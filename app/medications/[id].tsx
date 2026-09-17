@@ -272,7 +272,7 @@ export default function MedicationDetailsScreen() {
               </View>
 
               <View style={{ gap: spacing(1.5) }}>
-                <Text style={[typography.caption, styles.eyebrow, { color: c.textSecondary }]}>{t('medicationTimes')}</Text>
+                <Text style={[typography.overline, { color: c.textSecondary }]}>{t('medicationTimes')}</Text>
                 <View style={styles.wrapRow}>
                   {plan.times.map((time) => (
                     <View
@@ -479,7 +479,7 @@ export default function MedicationDetailsScreen() {
             <View style={{ gap: spacing(3) }}>
               {dayGroups.map((group) => (
                 <View key={group.key} style={{ gap: spacing(1.5) }}>
-                  <Text style={[typography.caption, styles.eyebrow, { color: c.textSecondary, paddingHorizontal: spacing(1) }]}>
+                  <Text style={[typography.overline, { color: c.textSecondary, paddingHorizontal: spacing(1) }]}>
                     {formatDate(group.date, { weekday: 'short', day: 'numeric', month: 'short' })}
                   </Text>
                   <ListGroup>
@@ -521,7 +521,6 @@ const styles = StyleSheet.create({
   },
   grow: { flex: 1, minWidth: 0 },
   wrapRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing(2) },
-  eyebrow: { textTransform: 'uppercase', letterSpacing: 0.5 },
   timeChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -536,6 +535,6 @@ const styles = StyleSheet.create({
   gridItem: { flexBasis: '47%', flexGrow: 1 },
   actionRow: { flexDirection: 'row', gap: spacing(2) },
   customInput: { width: 104 },
-  customInputField: { minHeight: 36, paddingVertical: 0 },
+  customInputField: { minHeight: 40, paddingVertical: 0 },
   dot: { width: 10, height: 10, borderRadius: radius.full },
 });

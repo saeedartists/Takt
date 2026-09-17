@@ -53,7 +53,7 @@ type AnimatedPressableProps = PressableProps & {
 export function AnimatedPressable({
   children,
   style,
-  scaleTo = 0.97,
+  scaleTo = 0.96,
   activeOpacity = 0.88,
   disabled,
   onPress,

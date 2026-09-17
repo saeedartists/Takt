@@ -4,6 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -66,6 +67,22 @@ function ThemedAppContainer() {
   useEffect(() => {
     background.value = withTiming(c.background, { duration: 250 });
   }, [background, c.background]);
+
+  // Web-only: antialiased system type + an overscroll background that matches
+  // the app surface (the native side ignores this).
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const existing = document.getElementById('takt-web-chrome');
+    if (existing) existing.remove();
+    const style = document.createElement('style');
+    style.id = 'takt-web-chrome';
+    style.textContent = [
+      `html, body { background: ${c.background}; }`,
+      `@media (prefers-color-scheme: dark) { html, body { background: #0B0F15; } }`,
+      `body, div, span, p, h1, h2, h3, input, textarea, button, label { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }`,
+    ].join('\n');
+    document.head.appendChild(style);
+  }, [c.background]);
   const crossfade = useAnimatedStyle(() => ({ backgroundColor: background.value }));
 
   return (
