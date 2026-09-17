@@ -249,6 +249,22 @@ export const requestReminderPermissionsAtConsent = async (): Promise<boolean> =>
   return granted;
 };
 
+/** Read-only permission probe for the Settings screen; never prompts, never throws. */
+export const readReminderPermissionStatus = async (): Promise<
+  'granted' | 'denied' | 'undetermined' | 'unavailable'
+> => {
+  if (Platform.OS === 'web') return 'unavailable';
+  try {
+    const status = await Notifications.getPermissionsAsync();
+    if (status.granted || status.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL) {
+      return 'granted';
+    }
+    return status.status === 'undetermined' ? 'undetermined' : 'denied';
+  } catch {
+    return 'unavailable';
+  }
+};
+
 const canScheduleWithoutPrompt = async (): Promise<boolean> => {
   const status = await Notifications.getPermissionsAsync();
   if (status.granted || status.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL) {
@@ -502,7 +518,8 @@ export const useReminderSync = (plans: MedicationPlan[], enabled: boolean): void
   const timezoneRef = useRef(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
   const sync = useCallback(async () => {
-    if (!enabled) return;
+    // ponytail: expo-notifications has no web scheduler; every call throws UnavailabilityError there
+    if (!enabled || Platform.OS === 'web') return;
 
     const wasRebooted = await checkForReboot();
     if (wasRebooted) {
@@ -571,6 +588,7 @@ type ReminderRouter = {
 
 export const useReminderResponseRouting = (router: ReminderRouter): void => {
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     const receivedSub = Notifications.addNotificationReceivedListener((notification) => {
       const target = parseReminderNavigation(notification);
       if (!target) return;
@@ -595,6 +613,7 @@ export const useReminderResponseRouting = (router: ReminderRouter): void => {
 
   useFocusEffect(
     useCallback(() => {
+      if (Platform.OS === 'web') return;
       void Notifications.getLastNotificationResponseAsync().then((response) => {
         if (!response) return;
         const target = parseReminderNavigation(response);

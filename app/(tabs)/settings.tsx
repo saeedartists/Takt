@@ -1,7 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import Constants from 'expo-constants';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState, type ReactNode } from 'react';
+import { AppState, Linking, Platform, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn, LinearTransition, ZoomIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
   AnimatedPressable,
@@ -20,8 +22,10 @@ import {
   radius,
   spacing,
   typography,
+  useMotion,
   useTheme,
   useTokens,
+  type BadgeTone,
   type ThemeMode,
   type ThemePalette,
 } from '@/components/ui';
@@ -31,42 +35,134 @@ import { useWithdrawConsent } from '@/lib/hooks/use-takt-mutations';
 import { CONSENT_STORAGE_KEY } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
 import { useReminderPreferences } from '@/lib/takt/preferences';
+import { readReminderPermissionStatus } from '@/lib/takt/reminders';
 import { env } from '@/lib/env';
 
 const SNOOZE_OPTIONS = [5, 10, 15, 30] as const;
+const PALETTES = ['amber', 'sage', 'indigo', 'plum'] as const;
 
-function SettingsIconBadge({
-  name,
-  color,
-}: {
-  name: keyof typeof Ionicons.glyphMap;
-  color: string;
-}) {
+type PermissionStatus = Awaited<ReturnType<typeof readReminderPermissionStatus>>;
+type MessageKey = Parameters<ReturnType<typeof useLocale>['t']>[0];
+
+const PERMISSION_BADGE: Record<PermissionStatus, { key: MessageKey; tone: BadgeTone }> = {
+  granted: { key: 'notificationStatusGranted', tone: 'success' },
+  denied: { key: 'notificationStatusDenied', tone: 'warning' },
+  undetermined: { key: 'notificationStatusUndetermined', tone: 'neutral' },
+  unavailable: { key: 'notificationStatusUnavailable', tone: 'neutral' },
+};
+
+/** Internal QA boards. Rendered only in dev / mock builds. */
+const DEVELOPER_BOARDS: { key: MessageKey; route: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: 'reminderTestTitle', route: '/settings/reminder-test', icon: 'notifications-outline' },
+  { key: 'reminderCertTitle', route: '/settings/reminder-certification', icon: 'ribbon-outline' },
+  { key: 'reportReviewTitle', route: '/settings/report-review', icon: 'document-text-outline' },
+  { key: 'sessionQaTitle', route: '/settings/session-security', icon: 'key-outline' },
+  { key: 'consentAuditTitle', route: '/settings/consent-audit', icon: 'lock-closed-outline' },
+  { key: 'isolationTitle', route: '/settings/isolation', icon: 'cube-outline' },
+  { key: 'releaseHubTitle', route: '/settings/release-hub', icon: 'sparkles-outline' },
+  { key: 'readinessTitle', route: '/settings/readiness', icon: 'checkmark-circle-outline' },
+  { key: 'a11yPassTitle', route: '/settings/accessibility-pass', icon: 'accessibility-outline' },
+];
+
+function SettingsIconBadge({ name, color }: { name: keyof typeof Ionicons.glyphMap; color: string }) {
+  const { c } = useTokens();
+  // Alpha suffix only works on hex tokens; rgba tokens (textSecondary) fall back to the raised surface.
+  const backgroundColor = color.startsWith('#') ? `${color}1F` : c.surfaceRaised;
   return (
-    <View
-      style={{
-        width: 32,
-        height: 32,
-        borderRadius: radius.md,
-        backgroundColor: `${color}1F`,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
+    <View style={[styles.iconBadge, { backgroundColor }]}>
       <Ionicons name={name} size={17} color={color} />
     </View>
+  );
+}
+
+function Section({ index, title, children }: { index: number; title: string; children: ReactNode }) {
+  const { enter } = useMotion();
+  return (
+    <Animated.View entering={enter(index)}>
+      <SectionHeader title={title} />
+      {children}
+    </Animated.View>
+  );
+}
+
+/** Two-step destructive action: trigger button, then an inline confirm row. No Alert.alert (web no-op). */
+function ConfirmExpander({
+  open,
+  onOpen,
+  onCancel,
+  onConfirm,
+  triggerLabel,
+  triggerKind = 'secondary',
+  body,
+  loading = false,
+  disabled = false,
+}: {
+  open: boolean;
+  onOpen: () => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+  triggerLabel: string;
+  triggerKind?: 'secondary' | 'destructive';
+  body: string;
+  loading?: boolean;
+  disabled?: boolean;
+}) {
+  const { c } = useTokens();
+  const { t } = useLocale();
+  const { duration } = useMotion();
+  return (
+    <Animated.View layout={LinearTransition}>
+      {open ? (
+        <Animated.View entering={FadeIn.duration(duration.fast)} style={{ gap: spacing(3) }}>
+          <Text style={[typography.subhead, { color: c.textPrimary }]}>{body}</Text>
+          <View style={styles.confirmRow}>
+            <View style={{ flex: 1 }}>
+              <Button kind="secondary" label={t('cancel')} onPress={onCancel} disabled={loading} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button kind="destructive" label={triggerLabel} onPress={onConfirm} loading={loading} />
+            </View>
+          </View>
+        </Animated.View>
+      ) : (
+        <Button kind={triggerKind} label={triggerLabel} onPress={onOpen} disabled={disabled} />
+      )}
+    </Animated.View>
   );
 }
 
 export default function SettingsTabScreen() {
   const router = useRouter();
   const { c } = useTokens();
+  const { spring, enter } = useMotion();
   const { themeMode, palette, setThemeMode, setPalette } = useTheme();
   const { locale, setLocale, t } = useLocale();
   const patient = usePrimaryPatient();
   const withdrawConsent = useWithdrawConsent();
   const reminderPrefs = useReminderPreferences();
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [permission, setPermission] = useState<PermissionStatus>('unavailable');
+
+  // Re-read on focus and when the app returns from the system settings sheet.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      const refresh = () =>
+        void readReminderPermissionStatus().then((next) => {
+          if (active) setPermission(next);
+        });
+      refresh();
+      const sub = AppState.addEventListener('change', (state) => {
+        if (state === 'active') refresh();
+      });
+      return () => {
+        active = false;
+        sub.remove();
+      };
+    }, []),
+  );
 
   const patientRef = patient.data ? `Patient/${patient.data.id}` : null;
 
@@ -89,13 +185,19 @@ export default function SettingsTabScreen() {
     router.replace('/auth/sign-in' as never);
   };
 
+  const showDeveloper = __DEV__ || env.ovokMockEnabled;
+  const version = Constants.expoConfig?.version ?? '0.0.0';
+  const runtimeVersion = Constants.expoConfig?.runtimeVersion;
+  const build = typeof runtimeVersion === 'string' ? runtimeVersion : Constants.expoConfig?.ios?.buildNumber;
+  const permissionBadge = PERMISSION_BADGE[permission];
+  const checkmarkEnter = ZoomIn.springify().damping(spring.snappy.damping).stiffness(spring.snappy.stiffness);
+
   return (
     <PageShell>
       <PageHeader title={t('settings')} />
 
       <Stack>
-        <View>
-          <SectionHeader title={t('appearance')} />
+        <Section index={0} title={t('appearance')}>
           <Card>
             <View style={{ padding: spacing(4), gap: spacing(4) }}>
               <View style={{ gap: spacing(2) }}>
@@ -113,14 +215,18 @@ export default function SettingsTabScreen() {
 
               <View style={{ gap: spacing(2.5) }}>
                 <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('themePalette')}</Text>
-                <View style={{ gap: spacing(2) }}>
-                  {(['amber', 'sage', 'indigo', 'plum'] as const).map((pKey) => {
+                <View style={{ gap: spacing(2) }} accessibilityRole="radiogroup">
+                  {PALETTES.map((pKey) => {
                     const config = paletteConfigs[pKey];
                     const isSelected = palette === pKey;
+                    const name = t(config.nameKey);
                     return (
                       <AnimatedPressable
                         key={pKey}
                         onPress={() => void setPalette(pKey as ThemePalette)}
+                        accessibilityRole="radio"
+                        accessibilityLabel={name}
+                        accessibilityState={{ selected: isSelected, checked: isSelected }}
                         style={[
                           styles.paletteChip,
                           {
@@ -130,17 +236,22 @@ export default function SettingsTabScreen() {
                           },
                         ]}
                       >
-                        <View style={[styles.paletteCircle, { backgroundColor: config.previewColor }]} />
+                        {/* Key change remounts the swatch, so it pops exactly once per selection. */}
+                        <Animated.View
+                          key={isSelected ? 'selected' : 'idle'}
+                          entering={isSelected ? checkmarkEnter : undefined}
+                          style={[styles.paletteCircle, { backgroundColor: config.previewColor }]}
+                        />
                         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                          <Text style={[typography.headline, { color: c.textPrimary, fontSize: 15 }]}>
-                            {config.name}
-                          </Text>
+                          <Text style={[typography.headline, { color: c.textPrimary, fontSize: 15 }]}>{name}</Text>
                           <Text style={[typography.caption, { color: c.textSecondary }]}>
-                            {config.description}
+                            {t(config.descriptionKey)}
                           </Text>
                         </View>
                         {isSelected ? (
-                          <Ionicons name="checkmark-circle" size={22} color={c.accent} />
+                          <Animated.View entering={checkmarkEnter}>
+                            <Ionicons name="checkmark-circle" size={22} color={c.accent} />
+                          </Animated.View>
                         ) : null}
                       </AnimatedPressable>
                     );
@@ -149,10 +260,9 @@ export default function SettingsTabScreen() {
               </View>
             </View>
           </Card>
-        </View>
+        </Section>
 
-        <View>
-          <SectionHeader title={t('language')} />
+        <Section index={1} title={t('language')}>
           <Card>
             <View style={{ padding: spacing(4), gap: spacing(3) }}>
               <AnimatedSegmentedControl
@@ -166,10 +276,9 @@ export default function SettingsTabScreen() {
               <Badge label={locale === 'de' ? t('languageActiveDe') : t('languageActiveEn')} tone="accent" />
             </View>
           </Card>
-        </View>
+        </Section>
 
-        <View>
-          <SectionHeader title={t('reminders')} />
+        <Section index={2} title={t('reminders')}>
           <Card>
             <View style={{ padding: spacing(4), gap: spacing(3) }}>
               <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('snoozeAfter')}</Text>
@@ -188,122 +297,139 @@ export default function SettingsTabScreen() {
             </View>
           </Card>
           {reminderPrefs.saveError ? <ErrorState description={t('saveReminderPrefError')} /> : null}
-        </View>
+        </Section>
 
-        {/* Care & Quality */}
-        <View>
-          <SectionHeader title={t('settingsCareCoordination')} />
+        <Section index={3} title={t('notificationsSection')}>
+          <Card>
+            <View style={{ padding: spacing(4), gap: spacing(3) }}>
+              <View style={styles.permissionRow}>
+                <SettingsIconBadge name="notifications-outline" color={c.accent} />
+                <Text style={[typography.body, { color: c.textPrimary, flex: 1, minWidth: 0 }]}>
+                  {t('notificationPermissionLabel')}
+                </Text>
+                <Badge label={t(permissionBadge.key)} tone={permissionBadge.tone} />
+              </View>
+              {Platform.OS === 'web' ? (
+                <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('notificationsWebHint')}</Text>
+              ) : (
+                <Button
+                  kind="secondary"
+                  size="sm"
+                  label={t('openSystemSettings')}
+                  icon={<Ionicons name="open-outline" size={16} color={c.textPrimary} />}
+                  onPress={() => void Linking.openSettings()}
+                />
+              )}
+            </View>
+          </Card>
+        </Section>
+
+        <Section index={4} title={t('careSection')}>
           <ListGroup>
             <ListRow
               isFirst
               title={t('familySharingTitle')}
               subtitle={t('familySharingRouteSubtitle')}
-              leading={<SettingsIconBadge name="people-outline" color="#8B5CF6" />}
+              leading={<SettingsIconBadge name="people-outline" color={c.accent} />}
               onPress={() => router.push('/settings/family-sharing' as never)}
             />
-            <ListRow
-              title={t('reminderTestTitle')}
-              subtitle={t('reminderTestSubtitle')}
-              leading={<SettingsIconBadge name="notifications-outline" color="#3B82F6" />}
-              onPress={() => router.push('/settings/reminder-test')}
-            />
-            <ListRow
-              title={t('reminderCertTitle')}
-              leading={<SettingsIconBadge name="ribbon-outline" color="#F59E0B" />}
-              onPress={() => router.push('/settings/reminder-certification')}
-            />
-            <ListRow
-              title={t('reportReviewTitle')}
-              leading={<SettingsIconBadge name="document-text-outline" color="#10B981" />}
-              onPress={() => router.push('/settings/report-review')}
-            />
           </ListGroup>
-        </View>
+        </Section>
 
-        {/* Privacy & Security */}
-        <View>
-          <SectionHeader title={t('settingsPrivacySecurity')} />
+        <Section index={5} title={t('legal')}>
           <ListGroup>
             <ListRow
               isFirst
               title={t('privacyNotice')}
-              leading={<SettingsIconBadge name="shield-checkmark-outline" color="#059669" />}
+              leading={<SettingsIconBadge name="shield-checkmark-outline" color={c.success} />}
               onPress={() => router.push('/settings/privacy')}
             />
             <ListRow
-              title={t('sessionQaTitle')}
-              leading={<SettingsIconBadge name="key-outline" color="#6366F1" />}
-              onPress={() => router.push('/settings/session-security')}
-            />
-            <ListRow
-              title={t('consentAuditTitle')}
-              leading={<SettingsIconBadge name="lock-closed-outline" color="#D97706" />}
-              onPress={() => router.push('/settings/consent-audit')}
-            />
-            <ListRow
-              title={t('isolationTitle')}
-              leading={<SettingsIconBadge name="cube-outline" color="#64748B" />}
-              onPress={() => router.push('/settings/isolation')}
-            />
-          </ListGroup>
-        </View>
-
-        {/* Standards & Compliance */}
-        <View>
-          <SectionHeader title={t('settingsCompliance')} />
-          <ListGroup>
-            <ListRow
-              isFirst
-              title={t('releaseHubTitle')}
-              leading={<SettingsIconBadge name="sparkles-outline" color="#EC4899" />}
-              onPress={() => router.push('/settings/release-hub' as never)}
-            />
-            <ListRow
-              title={t('readinessTitle')}
-              leading={<SettingsIconBadge name="checkmark-circle-outline" color="#0D9488" />}
-              onPress={() => router.push('/settings/readiness')}
-            />
-            <ListRow
-              title={t('a11yPassTitle')}
-              leading={<SettingsIconBadge name="accessibility-outline" color="#0284C7" />}
-              onPress={() => router.push('/settings/accessibility-pass' as never)}
-            />
-            <ListRow
               title={t('imprint')}
-              leading={<SettingsIconBadge name="information-circle-outline" color="#6B7280" />}
+              leading={<SettingsIconBadge name="information-circle-outline" color={c.textSecondary} />}
               onPress={() => router.push('/settings/imprint')}
             />
           </ListGroup>
-        </View>
+        </Section>
 
         {env.ovokMockEnabled ? null : (
-          <Card>
-            <View style={{ padding: spacing(4), gap: spacing(3) }}>
-              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('accountSectionTitle')}</Text>
-              <Button label={t('signOut')} kind="secondary" onPress={signOut} />
-            </View>
-          </Card>
+          <Section index={6} title={t('accountSectionTitle')}>
+            <Card>
+              <View style={{ padding: spacing(4) }}>
+                <ConfirmExpander
+                  open={confirmSignOut}
+                  onOpen={() => setConfirmSignOut(true)}
+                  onCancel={() => setConfirmSignOut(false)}
+                  onConfirm={signOut}
+                  triggerLabel={t('signOut')}
+                  body={t('signOutConfirmBody')}
+                />
+              </View>
+            </Card>
+          </Section>
         )}
 
-        <Card>
-          <View style={{ padding: spacing(4), gap: spacing(3) }}>
-            <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('safetyNote')}</Text>
-            <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('aboutTakt')}</Text>
-            <Button
-              label={t('withdrawConsent')}
-              kind="destructive"
-              onPress={() => void withdraw()}
-              disabled={withdrawConsent.isPending || patient.isLoading}
-            />
-            {withdrawError ? <Text style={[typography.footnote, { color: c.destructive }]}>{withdrawError}</Text> : null}
-          </View>
-        </Card>
+        <Animated.View entering={enter(7)}>
+          <Card>
+            <View style={{ padding: spacing(4), gap: spacing(3) }}>
+              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('safetyNote')}</Text>
+              <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('aboutTakt')}</Text>
+              <ConfirmExpander
+                open={confirmWithdraw}
+                onOpen={() => setConfirmWithdraw(true)}
+                onCancel={() => setConfirmWithdraw(false)}
+                onConfirm={() => void withdraw()}
+                triggerLabel={t('withdrawConsent')}
+                triggerKind="destructive"
+                body={t('withdrawConsentConfirmBody')}
+                loading={withdrawConsent.isPending}
+                disabled={patient.isLoading}
+              />
+              {withdrawError ? (
+                <Text accessibilityRole="alert" style={[typography.footnote, { color: c.destructive }]}>
+                  {withdrawError}
+                </Text>
+              ) : null}
+            </View>
+          </Card>
+        </Animated.View>
+
+        {showDeveloper ? (
+          <Section index={8} title={t('developerSection')}>
+            <ListGroup>
+              {DEVELOPER_BOARDS.map((board, index) => (
+                <ListRow
+                  key={board.route}
+                  isFirst={index === 0}
+                  title={t(board.key)}
+                  leading={<SettingsIconBadge name={board.icon} color={c.textSecondary} />}
+                  onPress={() => router.push(board.route as never)}
+                />
+              ))}
+            </ListGroup>
+            <Text style={[typography.footnote, styles.footnote, { color: c.textTertiary }]}>
+              {t('developerSectionFootnote')}
+            </Text>
+          </Section>
+        ) : null}
+
+        <Text style={[typography.caption, styles.version, { color: c.textTertiary }]}>
+          {t('versionLabel').replace('{version}', version)}
+          {build ? ` · ${t('buildLabel').replace('{build}', build)}` : ''}
+        </Text>
       </Stack>
     </PageShell>
   );
 }
 
 const styles = StyleSheet.create({
+  iconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   paletteChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -316,5 +442,21 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: radius.full,
   },
+  permissionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(3),
+  },
+  confirmRow: {
+    flexDirection: 'row',
+    gap: spacing(2),
+  },
+  footnote: {
+    marginTop: spacing(2),
+    paddingHorizontal: spacing(1),
+  },
+  version: {
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
+  },
 });
-

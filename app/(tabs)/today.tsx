@@ -1,29 +1,31 @@
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
   AnimatedDoseRow,
   AnimatedSegmentedControl,
-  Badge,
   Button,
   Card,
-  CelebrationCard,
   EmptyState,
   ErrorState,
   FloatingUndoToast,
   GreetingHeroCard,
-  LoadingState,
   PageHeader,
   PageShell,
   SectionHeader,
+  SkeletonCard,
+  SkeletonRow,
   Stack,
   WeekStripPicker,
   radius,
   spacing,
   typography,
+  useMotion,
   useTokens,
 } from '@/components/ui';
+import { NextDoseCard, type NextDosePending } from '@/components/ui/next-dose-card';
 import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
@@ -35,24 +37,28 @@ import { reminderDoseKey, scheduleSnoozeReminder } from '@/lib/takt/reminders';
 import { addDays, isoDateKey, startOfDay } from '@/lib/takt/time';
 import type { DoseOccurrence, DoseState } from '@/lib/takt/types';
 
+const SNOOZE_OPTIONS = [5, 10, 15, 30];
+
 const canUndo = (dose: DoseOccurrence): boolean => {
   if (!dose.eventId || !dose.eventTimestamp) return false;
+  // Optimistic entries have no server id yet; the toast's Undo covers that window.
+  if (dose.eventId.startsWith('optimistic-')) return false;
   if (!['taken', 'skipped'].includes(dose.state)) return false;
   const ageMs = Date.now() - new Date(dose.eventTimestamp).getTime();
   return ageMs <= 10 * 60 * 1000;
 };
 
-const getTimeIcon = (timeStr: string) => {
-  const hour = parseInt(timeStr.split(':')[0] ?? '12', 10);
-  if (hour < 12) return { name: 'sunny-outline' as const, color: '#F59E0B' };
-  if (hour < 18) return { name: 'partly-sunny-outline' as const, color: '#3B82F6' };
-  return { name: 'moon-outline' as const, color: '#8B5CF6' };
+const getTimeIcon = (hour: number, c: ReturnType<typeof useTokens>['c']) => {
+  if (hour < 12) return { name: 'sunny-outline' as const, color: c.warning };
+  if (hour < 18) return { name: 'partly-sunny-outline' as const, color: c.accent };
+  return { name: 'moon-outline' as const, color: c.textSecondary };
 };
 
 export default function TodayScreen() {
   const router = useRouter();
   const { c } = useTokens();
   const { t, formatDate, formatTime } = useLocale();
+  const { enter, duration } = useMotion();
 
   const params = useLocalSearchParams<{ focus?: string }>();
   const patient = usePrimaryPatient();
@@ -63,8 +69,12 @@ export default function TodayScreen() {
   const recordDose = useRecordDose();
   const undoDose = useUndoDose();
   const reminderPrefs = useReminderPreferences();
+  const defaultSnoozeMinutes = reminderPrefs.data?.snoozeMinutes ?? 15;
   const autoMarkedMissed = useRef<Set<string>>(new Set());
+  const firstLoadDone = useRef(false);
+  const [autoMissedCount, setAutoMissedCount] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [nextPending, setNextPending] = useState<NextDosePending>(null);
   const [timelineFilter, setTimelineFilter] = useState<'all' | 'due' | 'pending' | 'completed'>('all');
   const [undoToast, setUndoToast] = useState<{
     visible: boolean;
@@ -75,31 +85,37 @@ export default function TodayScreen() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const isSelectedToday = isoDateKey(selectedDate) === isoDateKey(new Date());
 
+  const eventResources = useMemo(
+    () => (events.data?.entry ?? []).map((x) => x.resource),
+    [events.data?.entry],
+  );
+
   const selectedDoses = useMemo(
+    () => buildDoseOccurrencesForDay(plans.plans, eventResources, startOfDay(selectedDate), new Date()),
+    [eventResources, plans.plans, selectedDate],
+  );
+
+  // The next-dose card is always about today, whichever day the strip shows.
+  const todayDoses = useMemo(
     () =>
-      buildDoseOccurrencesForDay(
-        plans.plans,
-        (events.data?.entry ?? []).map((x) => x.resource),
-        startOfDay(selectedDate),
-        new Date(),
-      ),
-    [events.data?.entry, plans.plans, selectedDate],
+      isSelectedToday
+        ? selectedDoses
+        : buildDoseOccurrencesForDay(plans.plans, eventResources, startOfDay(new Date()), new Date()),
+    [eventResources, isSelectedToday, plans.plans, selectedDoses],
   );
 
   const adherenceMap = useMemo(() => {
     const map: Record<string, { total: number; taken: number; missed: number }> = {};
-    const bundle = (events.data?.entry ?? []).map((x) => x.resource);
     const now = new Date();
     for (let offset = -7; offset <= 7; offset++) {
       const d = addDays(selectedDate, offset);
-      const dayStart = startOfDay(d);
-      const doses = buildDoseOccurrencesForDay(plans.plans, bundle, dayStart, now);
+      const doses = buildDoseOccurrencesForDay(plans.plans, eventResources, startOfDay(d), now);
       const taken = doses.filter((x) => x.state === 'taken').length;
       const missed = doses.filter((x) => x.state === 'missed').length;
       map[isoDateKey(d)] = { total: doses.length, taken, missed };
     }
     return map;
-  }, [events.data?.entry, plans.plans, selectedDate]);
+  }, [eventResources, plans.plans, selectedDate]);
 
   const summary = adherenceSummary(selectedDoses);
   const toCome = upcomingCount(selectedDoses);
@@ -110,9 +126,8 @@ export default function TodayScreen() {
       ? Math.round((selectedDoses.filter((dose) => dose.state === 'taken').length / selectedDoses.length) * 100)
       : 0;
 
-  const loggedDoseCount = (events.data?.entry ?? []).length;
   const needsFirstMedication = plans.plans.length === 0;
-  const needsFirstDoseLog = !needsFirstMedication && loggedDoseCount === 0;
+  const needsFirstDoseLog = !needsFirstMedication && eventResources.length === 0;
 
   const filteredTimelineDoses = useMemo(() => {
     if (timelineFilter === 'all') return selectedDoses;
@@ -135,6 +150,13 @@ export default function TodayScreen() {
     return [...buckets.entries()].map(([time, doses]) => ({ time, doses }));
   }, [filteredTimelineDoses, formatTime]);
 
+  const isFirstLoad = patient.isLoading || plans.isLoading || events.isLoading;
+  const loadError = patient.error || plans.error || events.error;
+
+  useEffect(() => {
+    if (!isFirstLoad) firstLoadDone.current = true;
+  }, [isFirstLoad]);
+
   useEffect(() => {
     if (!patientRef || !isSelectedToday) return;
 
@@ -155,6 +177,7 @@ export default function TodayScreen() {
             scheduledAt: dose.scheduledAt,
             action: 'missed',
           });
+          setAutoMissedCount((n) => n + 1);
         } catch {
           autoMarkedMissed.current.delete(dose.id);
         }
@@ -200,14 +223,14 @@ export default function TodayScreen() {
     }
   };
 
-  const snoozeDose = async (dose: DoseOccurrence) => {
+  const snoozeDose = async (dose: DoseOccurrence, minutes: number) => {
     setActionError(null);
 
     try {
       const result = await scheduleSnoozeReminder(
         {
           label: dose.label,
-          delayMinutes: reminderPrefs.data?.snoozeMinutes ?? 15,
+          delayMinutes: minutes,
           doseKey: reminderDoseKey(dose.requestId, dose.scheduledAt),
         },
         {
@@ -224,6 +247,16 @@ export default function TodayScreen() {
     }
   };
 
+  const runNextAction = async (kind: Exclude<NextDosePending, null>, dose: DoseOccurrence) => {
+    setNextPending(kind);
+    try {
+      if (kind === 'snooze') await snoozeDose(dose, defaultSnoozeMinutes);
+      else await takeAction(dose, kind === 'take' ? 'taken' : 'skipped');
+    } finally {
+      setNextPending(null);
+    }
+  };
+
   const stateLabel = (state: DoseState): string => {
     if (state === 'due') return t('statusDue');
     if (state === 'taken') return t('statusTaken');
@@ -232,7 +265,15 @@ export default function TodayScreen() {
     return t('statusScheduled');
   };
 
+  const refetchAll = () => {
+    void patient.refetch();
+    void plans.requestsQuery.refetch();
+    void plans.medicationsQuery.refetch();
+    void events.refetch();
+  };
+
   const patientFirstName = patient.data?.name?.[0]?.given?.[0];
+  let rowIndex = 0;
 
   return (
     <View style={{ flex: 1 }}>
@@ -242,200 +283,212 @@ export default function TodayScreen() {
           subtitle={formatDate(new Date(), { weekday: 'long', month: 'long', day: 'numeric' })}
           action={
             <Link href="/report" asChild>
-              <Pressable style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
-                <Text style={[typography.subhead, { color: c.accent, fontWeight: '600' }]}>
-                  {t('report')}
-                </Text>
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel={t('openReport')}
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, minHeight: 44, justifyContent: 'center' })}
+              >
+                <Text style={[typography.subhead, { color: c.accent, fontWeight: '600' }]}>{t('report')}</Text>
               </Pressable>
             </Link>
           }
         />
 
         <Stack>
-          <WeekStripPicker
-            selectedDate={selectedDate}
-            onSelectDate={(d) => setSelectedDate(d)}
-            adherenceMap={adherenceMap}
-            todayLabel={t('today')}
-          />
+          {isFirstLoad ? (
+            <>
+              <SkeletonCard rows={1} />
+              <Card>
+                <SkeletonRow isFirst />
+                <SkeletonRow />
+                <SkeletonRow />
+              </Card>
+            </>
+          ) : loadError ? (
+            <ErrorState description={t('loadScheduleError')} onRetry={refetchAll} />
+          ) : (
+            <>
+              <NextDoseCard
+                doses={todayDoses}
+                hasPlans={!needsFirstMedication}
+                showFirstDoseHint={needsFirstDoseLog}
+                pending={nextPending}
+                snoozeMinutes={defaultSnoozeMinutes}
+                stateLabel={stateLabel}
+                onTake={(dose) => void runNextAction('take', dose)}
+                onSkip={(dose) => void runNextAction('skip', dose)}
+                onSnooze={(dose) => void runNextAction('snooze', dose)}
+                onAddMedication={() => router.push('/medications/new')}
+              />
 
-          {needsFirstMedication || needsFirstDoseLog ? (
-            <Card>
-              <View style={{ padding: spacing(4), gap: spacing(3) }}>
-                <Badge
-                  label={
-                    needsFirstMedication
-                      ? t('journeyStepOneLabel')
-                      : needsFirstDoseLog
-                        ? t('journeyStepTwoLabel')
-                        : t('journeyCompleteLabel')
-                  }
-                  tone="accent"
-                />
-                <Text style={[typography.headline, { color: c.textPrimary }]}>
-                  {t('journeyCardTitle')}
-                </Text>
-                <Text style={[typography.subhead, { color: c.textSecondary }]}>
-                  {needsFirstMedication ? t('journeyCardNeedMedication') : t('journeyCardNeedDose')}
-                </Text>
-                <Button
-                  label={needsFirstMedication ? t('journeyAddMedicationCta') : t('journeyLogDoseCta')}
-                  onPress={() => {
-                    if (needsFirstMedication) {
-                      router.push('/medications/new');
-                      return;
-                    }
-                    router.push('/(tabs)/today');
-                  }}
-                  disabled={recordDose.isPending || patient.isLoading}
-                />
-              </View>
-            </Card>
-          ) : null}
-
-          <GreetingHeroCard
-            patientName={patientFirstName}
-            dateLabel={formatDate(selectedDate, { weekday: 'long', month: 'long', day: 'numeric' })}
-            takenCount={summary.taken}
-            totalCount={selectedDoses.length}
-            dueNowCount={dueNow}
-            upcomingCount={toCome}
-            completionPct={completionPct}
-            labels={{
-              greetingMorning: t('greetingMorning'),
-              greetingAfternoon: t('greetingAfternoon'),
-              greetingEvening: t('greetingEvening'),
-              rhythmToday: t('rhythmToday'),
-              takenToday: t('takenToday'),
-              completion: t('completion'),
-              allDoneToday: t('allDoneToday'),
-              dueNow: t('dueNow'),
-              toCome: t('toCome'),
-              logged: t('logged'),
-            }}
-          />
-
-          {selectedDoses.length > 0 && completionPct === 100 ? (
-            <CelebrationCard count={selectedDoses.length} />
-          ) : null}
-
-          {actionError ? (
-            <Text style={[typography.footnote, { color: c.destructive, paddingHorizontal: spacing(1) }]}>
-              {actionError}
-            </Text>
-          ) : null}
-
-          <View>
-            <SectionHeader
-              title={t('timeline')}
-              action={
-                <Button
-                  kind="secondary"
-                  label={t('addMedication')}
-                  onPress={() => router.push('/medications/new')}
-                />
-              }
-            />
-            <Card style={{ marginBottom: spacing(3) }}>
-              <View style={{ padding: spacing(2.5) }}>
-                <AnimatedSegmentedControl
-                  value={timelineFilter}
-                  onChange={(next) =>
-                    setTimelineFilter(next as 'all' | 'due' | 'pending' | 'completed')
-                  }
-                  options={[
-                    { value: 'all', label: t('todayFilterAll') },
-                    { value: 'due', label: t('todayFilterDue') },
-                    { value: 'pending', label: t('todayFilterPending') },
-                    { value: 'completed', label: t('todayFilterCompleted') },
-                  ]}
-                />
-              </View>
-            </Card>
-
-            {patient.isLoading || plans.isLoading || events.isLoading ? (
-              <LoadingState label={t('loadingDoses')} />
-            ) : patient.error || plans.error || events.error ? (
-              <ErrorState
-                description={t('loadScheduleError')}
-                onRetry={() => {
-                  void patient.refetch();
-                  void plans.requestsQuery.refetch();
-                  void plans.medicationsQuery.refetch();
-                  void events.refetch();
+              <GreetingHeroCard
+                patientName={patientFirstName}
+                takenCount={summary.taken}
+                totalCount={selectedDoses.length}
+                dueNowCount={dueNow}
+                upcomingCount={toCome}
+                completionPct={completionPct}
+                labels={{
+                  greetingMorning: t('greetingMorning'),
+                  greetingAfternoon: t('greetingAfternoon'),
+                  greetingEvening: t('greetingEvening'),
+                  takenToday: t('takenToday'),
+                  dueNow: t('dueNow'),
+                  toCome: t('toCome'),
                 }}
               />
-            ) : grouped.length === 0 ? (
-              <EmptyState
-                title={timelineFilter === 'all' ? t('noDosesToday') : t('noDosesForFilter')}
-                description={t('addMedicationHint')}
-                action={<Button label={t('addMedication')} onPress={() => router.push('/medications/new')} />}
+
+              <WeekStripPicker
+                selectedDate={selectedDate}
+                onSelectDate={(d) => setSelectedDate(d)}
+                adherenceMap={adherenceMap}
+                todayLabel={t('today')}
               />
-            ) : (
-              <Stack>
-                {grouped.map((bucket) => {
-                  const timeIcon = getTimeIcon(bucket.time);
-                  const doseCountText = `${bucket.doses.length} ${
-                    bucket.doses.length === 1 ? t('singleDoseLabel') : t('multipleDosesLabel')
-                  }`;
 
-                  return (
-                    <Card key={bucket.time}>
-                      <View style={{ overflow: 'hidden', borderRadius: radius.lg }}>
-                        <View style={styles.timeHeader}>
-                          <View style={styles.timeHeaderLeft}>
-                            <View style={[styles.timeIconBadge, { backgroundColor: `${timeIcon.color}18` }]}>
-                              <Ionicons name={timeIcon.name} size={15} color={timeIcon.color} />
+              {autoMissedCount > 0 ? (
+                <Card>
+                  <View style={styles.noticeRow}>
+                    <Ionicons name="information-circle-outline" size={18} color={c.textSecondary} />
+                    <Text style={[typography.footnote, { color: c.textSecondary, flex: 1, minWidth: 0 }]}>
+                      {autoMissedCount === 1
+                        ? t('autoMissedNoticeOne')
+                        : t('autoMissedNoticeMany').replace('{count}', String(autoMissedCount))}
+                    </Text>
+                    <Link href="/(tabs)/history" asChild>
+                      <Pressable accessibilityRole="link" accessibilityLabel={t('fixInHistory')} hitSlop={8}>
+                        <Text style={[typography.footnote, { color: c.accent, fontWeight: '600' }]}>
+                          {t('fixInHistory')}
+                        </Text>
+                      </Pressable>
+                    </Link>
+                  </View>
+                </Card>
+              ) : null}
+
+              {actionError ? (
+                <Text
+                  accessibilityRole="alert"
+                  style={[typography.footnote, { color: c.destructive, paddingHorizontal: spacing(1) }]}
+                >
+                  {actionError}
+                </Text>
+              ) : null}
+
+              <View>
+                <SectionHeader
+                  title={t('timeline')}
+                  action={
+                    <Button
+                      kind="secondary"
+                      size="sm"
+                      label={t('addMedication')}
+                      icon={<Ionicons name="add" size={16} color={c.textPrimary} />}
+                      onPress={() => router.push('/medications/new')}
+                    />
+                  }
+                />
+                <Card style={{ marginBottom: spacing(3) }}>
+                  <View style={{ padding: spacing(2.5) }}>
+                    <AnimatedSegmentedControl
+                      value={timelineFilter}
+                      onChange={(next) => setTimelineFilter(next as 'all' | 'due' | 'pending' | 'completed')}
+                      options={[
+                        { value: 'all', label: t('todayFilterAll') },
+                        { value: 'due', label: t('todayFilterDue') },
+                        { value: 'pending', label: t('todayFilterPending') },
+                        { value: 'completed', label: t('todayFilterCompleted') },
+                      ]}
+                    />
+                  </View>
+                </Card>
+
+                {grouped.length === 0 ? (
+                  <EmptyState
+                    title={timelineFilter === 'all' ? t('noDosesToday') : t('noDosesForFilter')}
+                    description={t('addMedicationHint')}
+                    action={<Button label={t('addMedication')} onPress={() => router.push('/medications/new')} />}
+                  />
+                ) : (
+                  // Filter change: crossfade the whole group container; rows only stagger on first load.
+                  <Animated.View key={timelineFilter} entering={FadeIn.duration(duration.fast)} style={styles.groups}>
+                    {grouped.map((bucket) => {
+                      const timeIcon = getTimeIcon(bucket.doses[0]?.scheduledAt.getHours() ?? 12, c);
+                      const doseCountText = `${bucket.doses.length} ${
+                        bucket.doses.length === 1 ? t('singleDoseLabel') : t('multipleDosesLabel')
+                      }`;
+
+                      return (
+                        <Animated.View key={bucket.time} layout={LinearTransition}>
+                          <Card>
+                            <View style={{ overflow: 'hidden', borderRadius: radius.xl }}>
+                              <View style={styles.timeHeader}>
+                                <View style={styles.timeHeaderLeft}>
+                                  <View style={[styles.timeIconBadge, { backgroundColor: `${timeIcon.color}18` }]}>
+                                    <Ionicons name={timeIcon.name} size={15} color={timeIcon.color} />
+                                  </View>
+                                  <Text
+                                    style={[typography.headline, { color: c.textPrimary, fontVariant: ['tabular-nums'] }]}
+                                  >
+                                    {bucket.time}
+                                  </Text>
+                                </View>
+                                <View style={[styles.doseCountPill, { backgroundColor: c.surfaceSubtle }]}>
+                                  <Text style={[typography.caption, { color: c.textSecondary, fontWeight: '600' }]}>
+                                    {doseCountText}
+                                  </Text>
+                                </View>
+                              </View>
+                              {bucket.doses.map((dose, index) => {
+                                const isFocused =
+                                  typeof params.focus === 'string' &&
+                                  params.focus === reminderDoseKey(dose.requestId, dose.scheduledAt);
+                                const entering = firstLoadDone.current ? undefined : enter(rowIndex++);
+
+                                return (
+                                  <Animated.View key={dose.id} entering={entering} layout={LinearTransition}>
+                                    <AnimatedDoseRow
+                                      dose={dose}
+                                      isFirst={index === 0}
+                                      isFocused={isFocused}
+                                      canUndo={canUndo(dose)}
+                                      stateLabel={stateLabel(dose.state)}
+                                      onTake={() => takeAction(dose, 'taken')}
+                                      onSkip={() => takeAction(dose, 'skipped')}
+                                      onSnooze={(minutes) => snoozeDose(dose, minutes)}
+                                      onUndo={async () => {
+                                        try {
+                                          await undoDose.mutateAsync(dose.eventId!);
+                                        } catch {
+                                          setActionError(t('undoDoseError'));
+                                        }
+                                      }}
+                                      busy={nextPending !== null}
+                                      snoozeOptions={SNOOZE_OPTIONS}
+                                      defaultSnoozeMinutes={defaultSnoozeMinutes}
+                                      labels={{
+                                        time: bucket.time,
+                                        confirmTaken: t('confirmTaken'),
+                                        markSkipped: t('markSkipped'),
+                                        snooze: t('snooze'),
+                                        snoozeRemindIn: t('snoozeRemindIn'),
+                                        cancel: t('cancel'),
+                                        undo: t('undo'),
+                                        contextBadge: t('reminderContextBadge'),
+                                      }}
+                                    />
+                                  </Animated.View>
+                                );
+                              })}
                             </View>
-                            <Text style={[typography.headline, { color: c.textPrimary }]}>{bucket.time}</Text>
-                          </View>
-                          <View style={[styles.doseCountPill, { backgroundColor: c.surfaceSubtle }]}>
-                            <Text style={[typography.caption, { color: c.textSecondary, fontWeight: '600' }]}>
-                              {doseCountText}
-                            </Text>
-                          </View>
-                        </View>
-                        {bucket.doses.map((dose, index) => {
-                          const isFocused =
-                            typeof params.focus === 'string' &&
-                            params.focus === reminderDoseKey(dose.requestId, dose.scheduledAt);
-
-                          return (
-                            <AnimatedDoseRow
-                              key={dose.id}
-                              dose={dose}
-                              isFirst={index === 0}
-                              isFocused={isFocused}
-                              canUndo={canUndo(dose)}
-                              stateLabel={stateLabel(dose.state)}
-                              onTake={() => takeAction(dose, 'taken')}
-                              onSkip={() => takeAction(dose, 'skipped')}
-                              onSnooze={() => snoozeDose(dose)}
-                              onUndo={async () => {
-                                try {
-                                  await undoDose.mutateAsync(dose.eventId!);
-                                } catch {
-                                  setActionError(t('undoDoseError'));
-                                }
-                              }}
-                              busy={recordDose.isPending || undoDose.isPending}
-                              labels={{
-                                confirmTaken: t('confirmTaken'),
-                                markSkipped: t('markSkipped'),
-                                snooze: `${t('snooze')} ${reminderPrefs.data?.snoozeMinutes ?? 15}m`,
-                                undo: t('undo'),
-                                contextBadge: t('reminderContextBadge'),
-                              }}
-                            />
-                          );
-                        })}
-                      </View>
-                    </Card>
-                  );
-                })}
-              </Stack>
-            )}
-          </View>
+                          </Card>
+                        </Animated.View>
+                      );
+                    })}
+                  </Animated.View>
+                )}
+              </View>
+            </>
+          )}
         </Stack>
       </PageShell>
 
@@ -451,6 +504,14 @@ export default function TodayScreen() {
 }
 
 const styles = StyleSheet.create({
+  groups: { gap: spacing(3) },
+  noticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(2.5),
+    paddingHorizontal: spacing(4),
+    paddingVertical: spacing(3),
+  },
   timeHeader: {
     paddingHorizontal: spacing(4),
     paddingTop: spacing(3.5),

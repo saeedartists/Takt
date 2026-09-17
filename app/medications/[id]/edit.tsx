@@ -1,54 +1,24 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
-import {
-  AnimatedPressable,
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  ErrorState,
-  Field,
-  Input,
-  LoadingState,
-  PageHeader,
-  PageShell,
-  SectionHeader,
-  SegmentedControl,
-  Stack,
-  radius,
-  spacing,
-  typography,
-  useTokens,
-} from '@/components/ui';
-import { WeekdayPicker } from '@/components/takt/weekday-picker';
+import { EmptyState, ErrorState, PageShell, SkeletonCard, Stack } from '@/components/ui';
+import { MedicationForm } from '@/components/takt/medication-form';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useUpdateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
 import { useLocale } from '@/lib/takt/l10n';
-import { formatDayLabel, normalizeTimesInput, parseTimeList } from '@/lib/takt/medication-form';
+import {
+  normalizeDateInput,
+  parseSupply,
+  resolveDayOfWeek,
+  type MedicationFormValues,
+  type MedicationStatus,
+} from '@/lib/takt/medication-form';
 import { getDaysUntilRefill, getLastRefilledAt, getSupplyCount } from '@/lib/takt/supply-tracker';
-import { WEEKDAY_ORDER, WEEKDAYS_ONLY } from '@/lib/takt/time';
-import type { MedicationCadence, WeekdayCode } from '@/lib/takt/types';
 
-const statusToFilter = (status: string): 'active' | 'on-hold' | 'stopped' => {
-  if (status === 'on-hold') return 'on-hold';
-  if (status === 'stopped') return 'stopped';
-  return 'active';
-};
-
-const normalizeDateInput = (value: string): string | null => {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return null;
-  const asDate = new Date(`${trimmed}T12:00:00.000Z`);
-  if (Number.isNaN(asDate.getTime())) return null;
-  return asDate.toISOString();
-};
+const toStatus = (status: string): MedicationStatus =>
+  status === 'on-hold' || status === 'stopped' ? status : 'active';
 
 export default function EditMedicationScreen() {
-  const { c } = useTokens();
   const { t } = useLocale();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -56,125 +26,73 @@ export default function EditMedicationScreen() {
   const patient = usePrimaryPatient();
   const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
   const plans = useMedicationPlans(patientRef);
-  const updateMedicationPlan = useUpdateMedicationPlan();
+  const updatePlan = useUpdateMedicationPlan();
 
   const plan = useMemo(() => plans.plans.find((entry) => entry.request.id === id), [id, plans.plans]);
 
-  const [name, setName] = useState('');
-  const [form, setForm] = useState('');
-  const [strength, setStrength] = useState('');
-  const [timesInput, setTimesInput] = useState('');
-  const [cadence, setCadence] = useState<MedicationCadence>('daily');
-  const [selectedDays, setSelectedDays] = useState<WeekdayCode[]>(WEEKDAYS_ONLY);
-  const [status, setStatus] = useState<'active' | 'on-hold' | 'stopped'>('active');
-  const [supply, setSupply] = useState('');
-  const [lastRefilled, setLastRefilled] = useState('');
-  const [storedDaysUntilRefill, setStoredDaysUntilRefill] = useState<number | null>(null);
+  const [initial, setInitial] = useState<MedicationFormValues | null>(null);
+  const [daysUntilRefill, setDaysUntilRefill] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Supply lives in local storage; seed the form once both sources are in.
   useEffect(() => {
-    if (!plan) return;
-
-    setName(plan.label);
-    setForm(plan.form || 'Tablet');
-    setStrength(plan.strength || '');
-    setTimesInput(plan.times.join(', '));
-    setCadence(plan.cadence);
-    setSelectedDays(plan.dayOfWeek);
-    setStatus(statusToFilter(plan.request.status));
-
+    if (!plan || initial) return;
+    const medicationId = plan.medication?.id;
+    let active = true;
     void (async () => {
-      const medicationId = plan.medication?.id;
-      if (!medicationId) return;
-
-      const [localCount, localLastRefilled, localDays] = await Promise.all([
-        getSupplyCount(medicationId),
-        getLastRefilledAt(medicationId),
-        getDaysUntilRefill(medicationId),
-      ]);
-
-      if (typeof localCount === 'number') {
-        setSupply(localCount.toString());
-      } else {
-        setSupply(typeof plan.supplyCount === 'number' ? Math.round(plan.supplyCount).toString() : '');
-      }
-
-      setLastRefilled(localLastRefilled ? localLastRefilled.slice(0, 10) : '');
-      setStoredDaysUntilRefill(localDays);
+      const [count, refilledAt, days] = medicationId
+        ? await Promise.all([getSupplyCount(medicationId), getLastRefilledAt(medicationId), getDaysUntilRefill(medicationId)])
+        : [null, null, null];
+      if (!active) return;
+      setDaysUntilRefill(days);
+      setInitial({
+        name: plan.label,
+        form: plan.form || 'Tablet',
+        strength: plan.strength || '',
+        times: plan.times,
+        cadence: plan.cadence,
+        days: plan.dayOfWeek,
+        supply:
+          typeof count === 'number'
+            ? count.toString()
+            : typeof plan.supplyCount === 'number'
+              ? Math.round(plan.supplyCount).toString()
+              : '',
+        status: toStatus(plan.request.status),
+        lastRefilled: refilledAt ? refilledAt.slice(0, 10) : '',
+      });
     })();
-  }, [plan]);
+    return () => {
+      active = false;
+    };
+  }, [plan, initial]);
 
-  const toggleDay = (day: WeekdayCode) => {
-    setSelectedDays((prev) =>
-      prev.includes(day) ? prev.filter((entry) => entry !== day) : [...prev, day],
-    );
-  };
-
-  const saveChanges = async () => {
+  const submit = async (values: MedicationFormValues) => {
     if (!plan || !patientRef || !plan.medication) {
       setError(t('medicationNotFoundHint'));
       return;
     }
-
-    if (!name.trim()) {
-      setError(t('addMedicationNameError'));
-      return;
-    }
-
-    const times = parseTimeList(timesInput);
-    if (times.length === 0) {
-      setError(t('invalidTimesError'));
-      return;
-    }
-
-    if (cadence === 'custom' && selectedDays.length === 0) {
-      setError(t('selectAtLeastOneDayError'));
-      return;
-    }
-
-    const dayOfWeek =
-      cadence === 'daily' ? WEEKDAY_ORDER : cadence === 'weekdays' ? WEEKDAYS_ONLY : selectedDays;
-
-    const parsedSupply = Number.parseInt(supply, 10);
-    const supplyCount = Number.isFinite(parsedSupply) && parsedSupply > 0 ? parsedSupply : undefined;
-
-    const lastRefilledIso = normalizeDateInput(lastRefilled);
-    if (lastRefilled.trim() && !lastRefilledIso) {
-      setError(t('supplyLastRefilledInvalid'));
-      return;
-    }
-
     setError(null);
-
     try {
-      await updateMedicationPlan.mutateAsync({
+      await updatePlan.mutateAsync({
         patientRef,
-        name,
-        form,
-        strength,
-        cadence,
-        dayOfWeek,
-        times,
-        supplyCount,
-        lastRefilledDate: lastRefilledIso ?? '',
-        status,
+        name: values.name,
+        form: values.form,
+        strength: values.strength,
+        cadence: values.cadence,
+        dayOfWeek: resolveDayOfWeek(values.cadence, values.days),
+        times: values.times,
+        supplyCount: parseSupply(values.supply),
+        lastRefilledDate: normalizeDateInput(values.lastRefilled) ?? '',
+        status: values.status,
         request: plan.request,
         medication: plan.medication,
       });
-
       router.replace({ pathname: '/medications/[id]', params: { id: plan.request.id } });
     } catch {
       setError(t('saveChangesError'));
     }
   };
-
-  if (patient.isLoading || plans.isLoading) {
-    return (
-      <PageShell>
-        <LoadingState label={t('loadingMedication')} />
-      </PageShell>
-    );
-  }
 
   if (patient.error || plans.error) {
     return (
@@ -191,7 +109,7 @@ export default function EditMedicationScreen() {
     );
   }
 
-  if (!plan || !plan.medication) {
+  if (!patient.isLoading && !plans.isLoading && (!plan || !plan.medication)) {
     return (
       <PageShell>
         <EmptyState title={t('medicationNotFound')} description={t('medicationNotFoundHint')} />
@@ -199,243 +117,25 @@ export default function EditMedicationScreen() {
     );
   }
 
-  const FORM_PRESETS = ['Tablet', 'Capsule', 'Drops', 'Inhaler', 'Syrup'];
-  const TIME_PRESETS = ['08:00', '12:00', '18:00', '22:00'];
-  const SUPPLY_PRESETS = ['14', '28', '30', '60', '90'];
-
-  const toggleTimePreset = (timeStr: string) => {
-    const current = parseTimeList(timesInput);
-    let next: string[];
-    if (current.includes(timeStr)) {
-      next = current.filter((t) => t !== timeStr);
-    } else {
-      next = [...current, timeStr].sort();
-    }
-    setTimesInput(next.join(', '));
-  };
-
-  const currentTimes = parseTimeList(timesInput);
+  if (!initial) {
+    return (
+      <PageShell>
+        <Stack>
+          <SkeletonCard rows={2} />
+          <SkeletonCard rows={1} />
+        </Stack>
+      </PageShell>
+    );
+  }
 
   return (
-    <PageShell>
-      <PageHeader title={t('editMedicationRouteTitle')} subtitle={t('medicationEditSubtitle')} />
-      <Stack>
-        <Card>
-          <View style={{ padding: spacing(4), gap: spacing(4) }}>
-            <View style={{ flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' }}>
-              <Badge
-                label={
-                  cadence === 'daily'
-                    ? t('cadenceDaily')
-                    : cadence === 'weekdays'
-                      ? t('cadenceWeekdays')
-                      : t('cadenceSpecificDays')
-                }
-                tone="accent"
-              />
-              <Badge
-                label={status === 'active' ? t('statusActive') : status === 'on-hold' ? t('statusPaused') : t('statusArchived')}
-                tone={status === 'active' ? 'success' : status === 'on-hold' ? 'warning' : 'destructive'}
-              />
-            </View>
-
-            <View style={{ gap: spacing(3) }}>
-              <SectionHeader title={t('medicationIdentitySectionTitle')} />
-              <Field label={t('medicationName')}>
-                <Input value={name} onChangeText={setName} placeholder={t('medicationNamePlaceholder')} />
-              </Field>
-              <Field label={t('medicationForm')}>
-                <Input value={form} onChangeText={setForm} placeholder={t('medicationFormPlaceholder')} />
-                <View style={{ flexDirection: 'row', gap: spacing(1.5), flexWrap: 'wrap', marginTop: spacing(2) }}>
-                  {FORM_PRESETS.map((item) => {
-                    const isSelected = form.toLowerCase() === item.toLowerCase();
-                    return (
-                      <AnimatedPressable
-                        key={item}
-                        onPress={() => setForm(item)}
-                        style={{
-                          paddingHorizontal: spacing(3),
-                          paddingVertical: spacing(1),
-                          borderRadius: radius.full,
-                          backgroundColor: isSelected ? `${c.accent}20` : c.surfaceRaised,
-                          borderWidth: 1,
-                          borderColor: isSelected ? c.accent : c.separator,
-                        }}
-                      >
-                        <Text
-                          style={[
-                            typography.caption,
-                            {
-                              color: isSelected ? c.accent : c.textSecondary,
-                              fontWeight: isSelected ? '700' : '500',
-                            },
-                          ]}
-                        >
-                          {item}
-                        </Text>
-                      </AnimatedPressable>
-                    );
-                  })}
-                </View>
-              </Field>
-              <Field label={t('medicationStrength')}>
-                <Input value={strength} onChangeText={setStrength} placeholder={t('medicationStrengthPlaceholder')} />
-              </Field>
-            </View>
-
-            <View style={{ gap: spacing(3) }}>
-              <SectionHeader title={t('medicationScheduleSectionTitle')} />
-              <Field label={t('medicationCadence')}>
-                <SegmentedControl
-                  value={cadence}
-                  onChange={(next) => setCadence(next as MedicationCadence)}
-                  options={[
-                    { value: 'daily', label: t('cadenceDaily') },
-                    { value: 'weekdays', label: t('cadenceWeekdays') },
-                    { value: 'custom', label: t('cadenceSpecificDays') },
-                  ]}
-                />
-              </Field>
-
-              {cadence === 'custom' ? (
-                <Field label={t('specificDaysLabel')}>
-                  <WeekdayPicker
-                    days={WEEKDAY_ORDER}
-                    selected={selectedDays}
-                    onToggle={toggleDay}
-                    labelFor={(day) => formatDayLabel(day, t)}
-                  />
-                </Field>
-              ) : null}
-
-              <Field label={t('medicationTimes')}>
-                <Input
-                  value={timesInput}
-                  onChangeText={setTimesInput}
-                  onBlur={() => {
-                    const normalized = normalizeTimesInput(timesInput);
-                    if (normalized) setTimesInput(normalized);
-                  }}
-                  placeholder={t('medicationTimesPlaceholder')}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <View style={{ flexDirection: 'row', gap: spacing(1.5), flexWrap: 'wrap', marginTop: spacing(2) }}>
-                  {TIME_PRESETS.map((time) => {
-                    const isSelected = currentTimes.includes(time);
-                    return (
-                      <AnimatedPressable
-                        key={time}
-                        onPress={() => toggleTimePreset(time)}
-                        style={{
-                          paddingHorizontal: spacing(3),
-                          paddingVertical: spacing(1),
-                          borderRadius: radius.full,
-                          backgroundColor: isSelected ? `${c.accent}20` : c.surfaceRaised,
-                          borderWidth: 1,
-                          borderColor: isSelected ? c.accent : c.separator,
-                        }}
-                      >
-                        <Text
-                          style={[
-                            typography.caption,
-                            {
-                              color: isSelected ? c.accent : c.textSecondary,
-                              fontWeight: isSelected ? '700' : '500',
-                            },
-                          ]}
-                        >
-                          {time} {isSelected ? '✓' : '+'}
-                        </Text>
-                      </AnimatedPressable>
-                    );
-                  })}
-                </View>
-              </Field>
-              <Text style={[typography.caption, { color: c.textSecondary }]}>{t('medicationTimesHint')}</Text>
-            </View>
-
-            <View style={{ gap: spacing(3) }}>
-              <SectionHeader title={t('medicationSupplySectionTitle')} />
-              <Field label={t('medicationSupplyOptional')}>
-                <Input
-                  value={supply}
-                  onChangeText={setSupply}
-                  keyboardType="number-pad"
-                  placeholder={t('medicationSupplyPlaceholder')}
-                />
-                <View style={{ flexDirection: 'row', gap: spacing(1.5), flexWrap: 'wrap', marginTop: spacing(2) }}>
-                  {SUPPLY_PRESETS.map((count) => {
-                    const isSelected = supply === count;
-                    return (
-                      <AnimatedPressable
-                        key={count}
-                        onPress={() => setSupply(count)}
-                        style={{
-                          paddingHorizontal: spacing(3),
-                          paddingVertical: spacing(1),
-                          borderRadius: radius.full,
-                          backgroundColor: isSelected ? `${c.accent}20` : c.surfaceRaised,
-                          borderWidth: 1,
-                          borderColor: isSelected ? c.accent : c.separator,
-                        }}
-                      >
-                        <Text
-                          style={[
-                            typography.caption,
-                            {
-                              color: isSelected ? c.accent : c.textSecondary,
-                              fontWeight: isSelected ? '700' : '500',
-                            },
-                          ]}
-                        >
-                          {count}
-                        </Text>
-                      </AnimatedPressable>
-                    );
-                  })}
-                </View>
-              </Field>
-              <Field label={t('supplyLastRefilled')}>
-                <Input
-                  value={lastRefilled}
-                  onChangeText={setLastRefilled}
-                  placeholder="YYYY-MM-DD"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </Field>
-              <Text style={[typography.caption, { color: c.textSecondary }]}>
-                {t('supplyDaysUntilRefill')}: {typeof storedDaysUntilRefill === 'number' ? storedDaysUntilRefill.toString() : '—'}
-              </Text>
-            </View>
-
-            <View style={{ gap: spacing(3) }}>
-              <SectionHeader title={t('statusLabel')} />
-              <SegmentedControl
-                value={status}
-                onChange={(next) => setStatus(next as 'active' | 'on-hold' | 'stopped')}
-                options={[
-                  { value: 'active', label: t('statusActive') },
-                  { value: 'on-hold', label: t('statusPaused') },
-                  { value: 'stopped', label: t('statusArchived') },
-                ]}
-              />
-            </View>
-
-            {error ? <Text style={[typography.footnote, { color: c.destructive }]}>{error}</Text> : null}
-            {updateMedicationPlan.error ? (
-              <Text style={[typography.footnote, { color: c.destructive }]}>{t('saveChangesError')}</Text>
-            ) : null}
-
-            <Button
-              label={updateMedicationPlan.isPending ? t('savingMedicationChanges') : t('saveChanges')}
-              onPress={() => void saveChanges()}
-              disabled={updateMedicationPlan.isPending}
-            />
-          </View>
-        </Card>
-      </Stack>
-    </PageShell>
+    <MedicationForm
+      mode="edit"
+      initialValues={initial}
+      onSubmit={submit}
+      submitting={updatePlan.isPending}
+      submitError={error}
+      supplyHint={`${t('supplyDaysUntilRefill')}: ${typeof daysUntilRefill === 'number' ? daysUntilRefill : '—'}`}
+    />
   );
 }

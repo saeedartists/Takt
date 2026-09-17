@@ -8,6 +8,7 @@ import { normalizeWeekdayCodes, sortTimes, toTimeOfDay, WEEKDAY_ORDER, WEEKDAYS_
 import { clearSupplyCount, deductSupply, setDailyConsumptionRate, setLastRefilledAt, setSupplyCount } from '@/lib/takt/supply-tracker';
 import type {
   ConsentResource,
+  FhirBundle,
   FhirExtension,
   MedicationAdministrationResource,
   MedicationCadence,
@@ -325,6 +326,22 @@ export const useUpdateMedicationPlan = () => {
   });
 };
 
+const DOSE_EVENTS_KEY = ['takt', 'MedicationAdministration'] as const;
+
+const notGivenReason = (action: 'skipped' | 'missed') => ({
+  statusReason: [
+    {
+      coding: [
+        {
+          system: 'http://terminology.hl7.org/CodeSystem/reason-medication-not-given',
+          code: action === 'missed' ? 'not-available' : 'patient-refusal',
+          display: action,
+        },
+      ],
+    },
+  ],
+});
+
 export const useRecordDose = () => {
   const qc = useQueryClient();
   return useMutation({
@@ -348,21 +365,7 @@ export const useRecordDose = () => {
             valueDateTime: input.scheduledAt.toISOString(),
           },
         ],
-        ...(input.action !== 'taken'
-          ? {
-              statusReason: [
-                {
-                  coding: [
-                    {
-                      system: 'http://terminology.hl7.org/CodeSystem/reason-medication-not-given',
-                      code: input.action === 'missed' ? 'not-available' : 'patient-refusal',
-                      display: input.action,
-                    },
-                  ],
-                },
-              ],
-            }
-          : {}),
+        ...(input.action !== 'taken' ? notGivenReason(input.action) : {}),
       };
 
       const created = await ovokFetch<MedicationAdministrationResource>('/fhir/R4/MedicationAdministration', {
@@ -379,8 +382,33 @@ export const useRecordDose = () => {
 
       return created;
     },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['takt', 'MedicationAdministration'] });
+    // Optimistic: the row flips instantly; the server copy replaces it on settle.
+    onMutate: async (input) => {
+      const key = [...DOSE_EVENTS_KEY, input.patientRef];
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<FhirBundle<MedicationAdministrationResource>>(key);
+      const optimistic: MedicationAdministrationResource = {
+        resourceType: 'MedicationAdministration',
+        id: `optimistic-${Date.now()}`,
+        status: input.action === 'taken' ? 'completed' : 'not-done',
+        subject: { reference: input.patientRef },
+        request: { reference: input.requestRef },
+        medicationReference: input.medicationRef ? { reference: input.medicationRef } : undefined,
+        effectiveDateTime: new Date().toISOString(),
+        extension: [{ url: TAKT_EXT.scheduledTime, valueDateTime: input.scheduledAt.toISOString() }],
+        ...(input.action !== 'taken' ? notGivenReason(input.action) : {}),
+      };
+      qc.setQueryData<FhirBundle<MedicationAdministrationResource>>(key, (old) => ({
+        total: (old?.total ?? 0) + 1,
+        entry: [{ resource: optimistic }, ...(old?.entry ?? [])],
+      }));
+      return { key, previous };
+    },
+    onError: (_error, _input, context) => {
+      if (context) qc.setQueryData(context.key, context.previous);
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: DOSE_EVENTS_KEY });
     },
   });
 };
@@ -393,8 +421,19 @@ export const useUndoDose = () => {
         method: 'DELETE',
       });
     },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['takt', 'MedicationAdministration'] });
+    onMutate: async (eventId) => {
+      await qc.cancelQueries({ queryKey: DOSE_EVENTS_KEY });
+      const previous = qc.getQueriesData<FhirBundle<MedicationAdministrationResource>>({ queryKey: DOSE_EVENTS_KEY });
+      qc.setQueriesData<FhirBundle<MedicationAdministrationResource>>({ queryKey: DOSE_EVENTS_KEY }, (old) =>
+        old ? { ...old, entry: (old.entry ?? []).filter((item) => item.resource.id !== eventId) } : old,
+      );
+      return { previous };
+    },
+    onError: (_error, _eventId, context) => {
+      context?.previous.forEach(([key, data]) => qc.setQueryData(key, data));
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: DOSE_EVENTS_KEY });
     },
   });
 };

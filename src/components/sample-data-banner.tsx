@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { isOvokMockActive } from '../lib/mock-server';
+import { useTokens } from '../theme/use-tokens';
 
 /*
  * Persistent, non-dismissible banner shown whenever the app is serving
@@ -21,22 +22,25 @@ import { isOvokMockActive } from '../lib/mock-server';
  * navigator, so it sits under the status bar on every screen.
  */
 export const SampleDataBanner = () => {
-  /*
-   * Hooks must run unconditionally, so read insets before the early
-   * return. The banner sits above <Stack> — i.e. outside any screen's
-   * SafeAreaView — so without the top inset it renders under the
-   * status bar / notch and the text is clipped on most devices.
-   */
+  // Hooks run unconditionally; the early return comes after.
   const insets = useSafeAreaInsets();
+  const { c } = useTokens();
   if (!isOvokMockActive()) return null;
 
   return (
     <View
-      style={[styles.bar, { paddingTop: insets.top + 6 }]}
+      style={[
+        styles.bar,
+        {
+          paddingTop: insets.top + 6,
+          backgroundColor: `${c.warning}1F`,
+          borderBottomColor: `${c.warning}66`,
+        },
+      ]}
       accessibilityRole="alert"
     >
-      <View style={styles.dot} />
-      <Text style={styles.label}>Sample data — not real patient records</Text>
+      <View style={[styles.dot, { backgroundColor: c.warning }]} />
+      <Text style={[styles.label, { color: c.textPrimary }]}>Sample data — not real patient records</Text>
     </View>
   );
 };
@@ -49,19 +53,15 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: '#FFF5EB',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#FDC687',
   },
   dot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#C06C0C',
   },
   label: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#63300D',
   },
 });

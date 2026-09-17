@@ -1,14 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
-import { useEffect } from 'react';
-import { radius, spacing, typography } from '@/theme/tokens';
+import Animated, { ZoomIn } from 'react-native-reanimated';
+import { motion, spacing, typography } from '@/theme/tokens';
 import { useTokens } from '@/theme/use-tokens';
 import { Card } from './card';
 
@@ -16,51 +9,39 @@ type CelebrationCardProps = {
   title?: string;
   subtitle?: string;
   count: number;
+  /** Localized "logged" for the "(4/4 logged)" suffix. */
+  loggedLabel?: string;
 };
 
 export function CelebrationCard({
   title = 'All caught up for today',
   subtitle = 'You have taken all scheduled medications.',
   count,
+  loggedLabel = 'logged',
 }: CelebrationCardProps) {
   const { c } = useTokens();
-  const scale = useSharedValue(1);
-
-  useEffect(() => {
-    scale.value = withRepeat(
-      withSequence(
-        withTiming(1.05, { duration: 1200 }),
-        withTiming(1, { duration: 1200 })
-      ),
-      -1,
-      true
-    );
-  }, [scale]);
-
-  const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
 
   return (
     <Card>
       <View style={styles.content}>
-        <View style={styles.iconWrapper}>
-          <Animated.View
-            style={[
-              styles.pulseGlow,
-              { backgroundColor: `${c.success}20` },
-              pulseStyle,
-            ]}
-          />
+        {/* One-shot spring-in; the soft ring is static (Calm UX B.13). */}
+        <Animated.View
+          entering={ZoomIn.springify()
+            .damping(motion.spring.snappy.damping)
+            .stiffness(motion.spring.snappy.stiffness)}
+          style={styles.iconWrapper}
+        >
+          <View style={[styles.softRing, { backgroundColor: `${c.success}20` }]} />
           <View style={[styles.iconCircle, { backgroundColor: `${c.success}1A` }]}>
             <Ionicons name="checkmark-done-circle" size={32} color={c.success} />
           </View>
-        </View>
+        </Animated.View>
 
         <View style={styles.textColumn}>
           <Text style={[typography.headline, { color: c.textPrimary }]}>{title}</Text>
           <Text style={[typography.footnote, { color: c.textSecondary, marginTop: 2 }]}>
-            {subtitle} {count > 0 ? `(${count}/${count} logged)` : ''}
+            {subtitle}
+            {count > 0 ? ` (${count}/${count} ${loggedLabel})` : ''}
           </Text>
         </View>
       </View>
@@ -82,7 +63,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
   },
-  pulseGlow: {
+  softRing: {
     position: 'absolute',
     width: 48,
     height: 48,

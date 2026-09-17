@@ -41,20 +41,25 @@ export const ListGroup = ({
 export const ListRow = ({
   title,
   subtitle,
+  meta,
   value,
   leading,
   onPress,
   trailing,
   isFirst = false,
+  accessibilityLabel,
 }: {
   title: string;
   subtitle?: string;
+  /** Optional third line: a string (tertiary footnote) or a node such as a Badge. */
+  meta?: ReactNode;
   value?: string;
   leading?: ReactNode;
   onPress?: () => void;
   trailing?: ReactNode;
   /** Suppresses the top hairline. Set on the first row of a group. */
   isFirst?: boolean;
+  accessibilityLabel?: string;
 }) => {
   const { c } = useTokens();
 
@@ -72,6 +77,15 @@ export const ListRow = ({
           >
             {subtitle}
           </Text>
+        ) : null}
+        {meta ? (
+          typeof meta === 'string' ? (
+            <Text numberOfLines={1} style={[typography.footnote, styles.meta, { color: c.textTertiary }]}>
+              {meta}
+            </Text>
+          ) : (
+            <View style={styles.meta}>{meta}</View>
+          )
         ) : null}
       </View>
       {trailing ??
@@ -106,6 +120,7 @@ export const ListRow = ({
         pressed && { backgroundColor: c.background },
       ]}
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? (subtitle ? `${title}, ${subtitle}` : title)}
     >
       {body}
     </Pressable>
@@ -122,6 +137,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing(2.5),
   },
   textCol: { flex: 1, minWidth: 0 },
+  meta: { marginTop: spacing(1), alignSelf: 'flex-start' },
   lightShadow: {
     shadowColor: '#000000',
     shadowOpacity: 0.05,

@@ -3,9 +3,10 @@ import { OvokProvider } from '@ovok/core';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { DEFAULT_COLORS, DEFAULT_MULTIPLIERS, OvokThemeProvider } from '@/lib/ovok-theme-provider';
 import { SampleDataBanner } from '@/components/sample-data-banner';
 import { installOvokMocks } from '@/lib/mock-server';
 import { ovokClient } from '@/lib/ovok-client';
@@ -60,24 +61,21 @@ function AppStack() {
 
 function ThemedAppContainer() {
   const { isDark, c } = useTheme();
+  // Crossfade the app background on scheme change so a theme switch does not flash.
+  const background = useSharedValue(c.background);
+  useEffect(() => {
+    background.value = withTiming(c.background, { duration: 250 });
+  }, [background, c.background]);
+  const crossfade = useAnimatedStyle(() => ({ backgroundColor: background.value }));
 
   return (
-    <OvokThemeProvider
-      theme={{
-        colors: {
-          ...DEFAULT_COLORS,
-          primary: c.accent,
-          background: c.background,
-        },
-        dark: isDark,
-        spacingMultiplier: DEFAULT_MULTIPLIERS.spacing,
-        borderRadiusMultiplier: DEFAULT_MULTIPLIERS.borderRadius,
-      }}
-    >
+    <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <SampleDataBanner />
-      <AppStack />
-    </OvokThemeProvider>
+      <Animated.View style={[{ flex: 1 }, crossfade]}>
+        <AppStack />
+      </Animated.View>
+    </>
   );
 }
 

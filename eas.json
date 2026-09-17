@@ -7,11 +7,17 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "channel": "development"
+      "channel": "development",
+      "env": {
+        "EXPO_PUBLIC_OVOK_MOCK": "1"
+      }
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview"
+      "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_OVOK_MOCK": "1"
+      }
     },
     "production": {
       "channel": "production",
@@ -20,7 +26,17 @@
       },
       "android": {
         "buildType": "app-bundle"
+      },
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_OVOK_MOCK": "0",
+        "EXPO_PUBLIC_OVOK_API_URL": "https://api.ovok.com"
       }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {}
     }
   }
 }

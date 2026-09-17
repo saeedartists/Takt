@@ -1,7 +1,8 @@
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Stack as RouterStack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState, type ComponentProps } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import {
   AnimatedProgressBar,
   Badge,
@@ -9,54 +10,81 @@ import {
   Card,
   EmptyState,
   ErrorState,
+  Input,
   ListGroup,
   ListRow,
-  LoadingState,
-  PageHeader,
   PageShell,
   SectionHeader,
+  SkeletonCard,
+  SkeletonRow,
   Stack,
+  motion,
   radius,
   spacing,
   typography,
+  useMotion,
   useTokens,
 } from '@/components/ui';
+import { ConfirmSheet } from '@/components/ui/confirm-sheet';
+import { Chip } from '@/components/takt/medication-form';
 import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useUpdateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
 import { TAKT_EXT } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
+import { parseSupply } from '@/lib/takt/medication-form';
 import {
   getDaysUntilRefill,
   getLastRefilledAt,
   getSupplyCount,
   setSupplyCount,
 } from '@/lib/takt/supply-tracker';
+import { isoDateKey } from '@/lib/takt/time';
+import type { MedicationAdministrationResource } from '@/lib/takt/types';
 
-const statusTone = (status: string): 'success' | 'warning' | 'destructive' => {
-  if (status === 'on-hold') return 'warning';
-  if (status === 'stopped') return 'destructive';
-  return 'success';
-};
+type IconName = ComponentProps<typeof Ionicons>['name'];
+type PlanStatus = 'active' | 'on-hold' | 'stopped';
 
-const statusLabelKey = (status: string): 'statusActive' | 'statusPaused' | 'statusArchived' => {
-  if (status === 'on-hold') return 'statusPaused';
-  if (status === 'stopped') return 'statusArchived';
-  return 'statusActive';
-};
+const REFILL_PRESETS = [28, 30, 60, 90];
+const LOW_SUPPLY = 7;
+
+const expand = LinearTransition.springify()
+  .damping(motion.spring.gentle.damping)
+  .stiffness(motion.spring.gentle.stiffness);
+
+const statusTone = (status: string): 'success' | 'warning' | 'destructive' =>
+  status === 'on-hold' ? 'warning' : status === 'stopped' ? 'destructive' : 'success';
+
+const statusLabelKey = (status: string): 'statusActive' | 'statusPaused' | 'statusArchived' =>
+  status === 'on-hold' ? 'statusPaused' : status === 'stopped' ? 'statusArchived' : 'statusActive';
 
 const cadenceLabelKey = (
   cadence: 'daily' | 'weekdays' | 'custom',
-): 'cadenceDaily' | 'cadenceWeekdays' | 'cadenceSpecificDays' => {
-  if (cadence === 'weekdays') return 'cadenceWeekdays';
-  if (cadence === 'custom') return 'cadenceSpecificDays';
-  return 'cadenceDaily';
+): 'cadenceDaily' | 'cadenceWeekdays' | 'cadenceSpecificDays' =>
+  cadence === 'weekdays' ? 'cadenceWeekdays' : cadence === 'custom' ? 'cadenceSpecificDays' : 'cadenceDaily';
+
+const formIcon = (form: string): IconName => {
+  const key = form.toLowerCase();
+  if (key.includes('capsule')) return 'medkit';
+  if (key.includes('drop')) return 'water';
+  if (key.includes('inhal')) return 'cloud-outline';
+  if (key.includes('syrup')) return 'flask';
+  return 'medical';
+};
+
+const eventTimestamp = (event: MedicationAdministrationResource): string | undefined =>
+  event.extension?.find((entry) => entry.url === TAKT_EXT.scheduledTime)?.valueDateTime ?? event.effectiveDateTime;
+
+const eventState = (event: MedicationAdministrationResource): 'taken' | 'skipped' | 'missed' => {
+  if (event.status === 'completed') return 'taken';
+  return event.statusReason?.[0]?.coding?.[0]?.code === 'patient-refusal' ? 'skipped' : 'missed';
 };
 
 export default function MedicationDetailsScreen() {
   const { c } = useTokens();
-  const { t, formatDateTime } = useLocale();
+  const { t, formatDate, formatTime } = useLocale();
+  const { enter, duration } = useMotion();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 
@@ -67,10 +95,15 @@ export default function MedicationDetailsScreen() {
   const updatePlan = useUpdateMedicationPlan();
 
   const plan = useMemo(() => plans.plans.find((entry) => entry.request.id === id), [id, plans.plans]);
+
   const [statusError, setStatusError] = useState<string | null>(null);
   const [supplyCount, setSupplyCountState] = useState<number | null>(null);
   const [daysUntilRefill, setDaysUntilRefill] = useState<number | null>(null);
   const [lastRefilledAt, setLastRefilledAtState] = useState<string | null>(null);
+  const [panel, setPanel] = useState<'refill' | 'archive' | null>(null);
+  const [pendingAction, setPendingAction] = useState<'pause' | 'resume' | 'archive' | null>(null);
+  const [refillInput, setRefillInput] = useState('30');
+  const [refilling, setRefilling] = useState(false);
 
   const reloadSupply = useCallback(async () => {
     const medicationId = plan?.medication?.id;
@@ -80,13 +113,11 @@ export default function MedicationDetailsScreen() {
       setLastRefilledAtState(null);
       return;
     }
-
     const [count, days, refilledAt] = await Promise.all([
       getSupplyCount(medicationId),
       getDaysUntilRefill(medicationId),
       getLastRefilledAt(medicationId),
     ]);
-
     setSupplyCountState(count);
     setDaysUntilRefill(days);
     setLastRefilledAtState(refilledAt);
@@ -98,18 +129,82 @@ export default function MedicationDetailsScreen() {
     }, [reloadSupply]),
   );
 
-  const relatedEvents = useMemo(() => {
+  // Recent logs, newest first, grouped by calendar day.
+  const dayGroups = useMemo(() => {
     if (!plan) return [];
-    return (events.data?.entry ?? [])
+    const related = (events.data?.entry ?? [])
       .map((entry) => entry.resource)
       .filter((entry) => entry.request?.reference === `MedicationRequest/${plan.request.id}`)
+      .map((event) => ({ event, at: new Date(eventTimestamp(event) ?? 0) }))
+      .filter(({ at }) => !Number.isNaN(at.getTime()))
+      .sort((a, b) => b.at.getTime() - a.at.getTime())
       .slice(0, 8);
+
+    const groups = new Map<string, { date: Date; items: typeof related }>();
+    for (const item of related) {
+      const key = isoDateKey(item.at);
+      const group = groups.get(key) ?? { date: item.at, items: [] };
+      group.items.push(item);
+      groups.set(key, group);
+    }
+    return [...groups.entries()].map(([key, group]) => ({ key, ...group }));
   }, [events.data?.entry, plan]);
+
+  const updateStatus = async (nextStatus: PlanStatus, action: 'pause' | 'resume' | 'archive') => {
+    if (!plan || !patientRef || !plan.medication) return;
+    setStatusError(null);
+    setPendingAction(action);
+    try {
+      await updatePlan.mutateAsync({
+        patientRef,
+        name: plan.label,
+        form: plan.form,
+        strength: plan.strength,
+        cadence: plan.cadence,
+        dayOfWeek: plan.dayOfWeek,
+        times: plan.times,
+        supplyCount: supplyCount ?? undefined,
+        status: nextStatus,
+        request: plan.request,
+        medication: plan.medication,
+      });
+      setPanel(null);
+    } catch {
+      setStatusError(t('medicationStatusActionError'));
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const refillAmount = parseSupply(refillInput);
+  const logRefill = async () => {
+    const medicationId = plan?.medication?.id;
+    if (!medicationId || !refillAmount) return;
+    setRefilling(true);
+    try {
+      await setSupplyCount(medicationId, (supplyCount ?? 0) + refillAmount);
+      await reloadSupply();
+      setPanel(null);
+    } finally {
+      setRefilling(false);
+    }
+  };
+
+  const title = plan?.label ?? t('medicationDetailsRouteTitle');
 
   if (patient.isLoading || plans.isLoading || events.isLoading) {
     return (
       <PageShell>
-        <LoadingState label={t('loadingMedication')} />
+        <RouterStack.Screen options={{ title }} />
+        <Stack>
+          <SkeletonCard rows={2} />
+          <SkeletonCard rows={1} />
+          <ListGroup>
+            <SkeletonRow isFirst />
+            <SkeletonRow />
+            <SkeletonRow />
+          </ListGroup>
+        </Stack>
       </PageShell>
     );
   }
@@ -117,6 +212,7 @@ export default function MedicationDetailsScreen() {
   if (patient.error || plans.error || events.error) {
     return (
       <PageShell>
+        <RouterStack.Screen options={{ title }} />
         <ErrorState
           description={t('loadMedicationsError')}
           onRetry={() => {
@@ -134,286 +230,312 @@ export default function MedicationDetailsScreen() {
   if (!plan || !patientRef || !plan.medication) {
     return (
       <PageShell>
+        <RouterStack.Screen options={{ title }} />
         <EmptyState title={t('medicationNotFound')} description={t('medicationNotFoundHint')} />
       </PageShell>
     );
   }
 
-  const medication = plan.medication;
-
-  const [quickRefilling, setQuickRefilling] = useState(false);
-
-  const handleQuickRefill = async (amount: number = 30) => {
-    const medicationId = plan?.medication?.id;
-    if (!medicationId) return;
-    setQuickRefilling(true);
-    try {
-      const current = supplyCount ?? 0;
-      const next = current + amount;
-      await setSupplyCount(medicationId, next);
-      await reloadSupply();
-    } finally {
-      setQuickRefilling(false);
-    }
-  };
-
-  const updateStatus = async (nextStatus: 'active' | 'on-hold' | 'stopped') => {
-    setStatusError(null);
-
-    try {
-      await updatePlan.mutateAsync({
-        patientRef,
-        name: plan.label,
-        form: plan.form,
-        strength: plan.strength,
-        cadence: plan.cadence,
-        dayOfWeek: plan.dayOfWeek,
-        times: plan.times,
-        supplyCount: supplyCount ?? undefined,
-        status: nextStatus,
-        request: plan.request,
-        medication,
-      });
-    } catch {
-      setStatusError(t('medicationStatusActionError'));
-    }
-  };
+  const status = plan.request.status;
+  const busy = updatePlan.isPending || refilling;
+  const supplyColor =
+    typeof supplyCount !== 'number' ? c.textPrimary : supplyCount <= 0 ? c.destructive : supplyCount <= LOW_SUPPLY ? c.warning : c.textPrimary;
+  const barColor =
+    typeof supplyCount === 'number' && supplyCount <= 0 ? c.destructive : typeof supplyCount === 'number' && supplyCount <= LOW_SUPPLY ? c.warning : c.accent;
 
   return (
     <PageShell>
-      <PageHeader title={plan.label} subtitle={t('medicationDetailsSubtitle')} />
+      <RouterStack.Screen options={{ title }} />
 
       <Stack>
-        {/* Visual Hero Card */}
-        <Card>
-          <View style={{ padding: spacing(4), gap: spacing(3.5) }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
-              <View
-                style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: radius.lg,
-                  backgroundColor: `${c.accent}1A`,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderWidth: 1,
-                  borderColor: `${c.accent}33`,
-                }}
-              >
-                <Ionicons name="medkit" size={26} color={c.accent} />
+        {/* Hero */}
+        <Animated.View entering={enter(0)} layout={expand}>
+          <Card>
+            <View style={styles.cardBody}>
+              <View style={styles.heroRow}>
+                <View style={[styles.heroIcon, { backgroundColor: `${c.accent}1A`, borderColor: `${c.accent}33` }]}>
+                  <Ionicons name={formIcon(plan.form)} size={26} color={c.accent} />
+                </View>
+                <View style={styles.grow}>
+                  <Text style={[typography.title2, { color: c.textPrimary }]} numberOfLines={2}>
+                    {plan.label}
+                  </Text>
+                  <Text style={[typography.subhead, { color: c.textSecondary, marginTop: 2 }]}>
+                    {[plan.form || t('formNotSet'), plan.strength].filter(Boolean).join(' · ')}
+                  </Text>
+                </View>
               </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[typography.title2, { color: c.textPrimary }]} numberOfLines={2}>
-                  {plan.label}
-                </Text>
-                <Text style={[typography.subhead, { color: c.textSecondary, marginTop: 2 }]}>
-                  {[plan.form || t('formNotSet'), plan.strength].filter(Boolean).join(' · ')}
-                </Text>
+
+              <View style={styles.wrapRow}>
+                <Badge label={t(statusLabelKey(status))} tone={statusTone(status)} />
+                <Badge label={t(cadenceLabelKey(plan.cadence))} tone="accent" />
               </View>
-            </View>
 
-            <View style={{ flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' }}>
-              <Badge label={t(statusLabelKey(plan.request.status))} tone={statusTone(plan.request.status)} />
-              <Badge label={t(cadenceLabelKey(plan.cadence))} tone="accent" />
-            </View>
-
-            <View style={{ gap: spacing(1.5), paddingTop: spacing(1) }}>
-              <Text style={[typography.caption, { color: c.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }]}>
-                {t('medicationTimes')}
-              </Text>
-              <View style={{ flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' }}>
-                {plan.times.map((time) => (
-                  <View
-                    key={time}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 6,
-                      paddingHorizontal: spacing(3),
-                      paddingVertical: spacing(1.5),
-                      borderRadius: radius.full,
-                      backgroundColor: c.surfaceRaised,
-                      borderWidth: StyleSheet.hairlineWidth,
-                      borderColor: c.separator,
-                    }}
-                  >
-                    <Ionicons name="time-outline" size={14} color={c.accent} />
-                    <Text style={[typography.headline, { color: c.textPrimary, fontSize: 13 }]}>{time}</Text>
-                  </View>
-                ))}
+              <View style={{ gap: spacing(1.5) }}>
+                <Text style={[typography.caption, styles.eyebrow, { color: c.textSecondary }]}>{t('medicationTimes')}</Text>
+                <View style={styles.wrapRow}>
+                  {plan.times.map((time) => (
+                    <View
+                      key={time}
+                      style={[styles.timeChip, { backgroundColor: c.surfaceRaised, borderColor: c.separator }]}
+                    >
+                      <Ionicons name="time-outline" size={14} color={c.accent} />
+                      <Text style={[typography.subhead, { color: c.textPrimary, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>
+                        {time}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
               </View>
+
+              <Button
+                kind="primary"
+                label={t('editMedicationPlanCta')}
+                icon={<Ionicons name="create-outline" size={18} color={c.surface} />}
+                onPress={() => router.push(`/medications/${plan.request.id}/edit`)}
+              />
             </View>
+          </Card>
+        </Animated.View>
 
-            <Button
-              kind="primary"
-              label={t('editMedicationPlanCta')}
-              onPress={() => router.push(`/medications/${plan.request.id}/edit`)}
-            />
-          </View>
-        </Card>
-
-        {/* Visual Supply & Refill Meter */}
-        <View>
+        {/* Supply */}
+        <Animated.View entering={enter(1)} layout={expand}>
           <SectionHeader title={t('medicationSupplySectionTitle')} />
           <Card>
-            <View style={{ padding: spacing(4), gap: spacing(3) }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={styles.cardBody}>
+              <View style={styles.spaceBetween}>
                 <View>
-                  <Text
-                    style={[
-                      typography.metricSm,
-                      {
-                        color:
-                          typeof supplyCount === 'number' && supplyCount <= 0
-                            ? c.destructive
-                            : typeof supplyCount === 'number' && supplyCount <= 7
-                              ? c.warning
-                              : c.textPrimary,
-                        fontVariant: ['tabular-nums'],
-                      },
-                    ]}
-                  >
+                  <Text style={[typography.metricSm, { color: supplyColor, fontVariant: ['tabular-nums'] }]}>
                     {typeof supplyCount === 'number' ? supplyCount.toString() : '—'}
                   </Text>
                   <Text style={[typography.footnote, { color: c.textSecondary }]}>
                     {t('supplyRemaining').replace('{count}', (supplyCount ?? 0).toString())}
                   </Text>
                 </View>
-
                 {typeof daysUntilRefill === 'number' ? (
                   <Badge
-                    label={`${daysUntilRefill.toString()} ${t('supplyDaysUntilRefill').toLowerCase()}`}
-                    tone={daysUntilRefill <= 7 ? 'warning' : 'neutral'}
+                    label={`${daysUntilRefill} ${t('supplyDaysUntilRefill').toLowerCase()}`}
+                    tone={daysUntilRefill <= 0 ? 'destructive' : daysUntilRefill <= LOW_SUPPLY ? 'warning' : 'neutral'}
                   />
                 ) : null}
               </View>
 
               {typeof supplyCount === 'number' ? (
-                <View style={{ gap: spacing(1.5) }}>
-                  <AnimatedProgressBar
-                    progress={Math.min(1, Math.max(0, supplyCount / 30))}
-                    color={supplyCount <= 0 ? c.destructive : supplyCount <= 7 ? c.warning : c.accent}
-                    height={8}
-                  />
-                </View>
+                <AnimatedProgressBar progress={Math.min(1, Math.max(0, supplyCount / 30))} color={barColor} height={8} />
               ) : null}
 
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={[typography.caption, { color: c.textSecondary }]}>
-                  {t('supplyLastRefilled')}:{' '}
-                  {lastRefilledAt
-                    ? formatDateTime(new Date(lastRefilledAt), {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                      })
-                    : '—'}
-                </Text>
-              </View>
-
-              <Button
-                kind="secondary"
-                label={quickRefilling ? t('quickRefillAdding') : t('quickRefillAction')}
-                onPress={() => void handleQuickRefill(30)}
-                disabled={quickRefilling}
-              />
+              <Text style={[typography.caption, { color: c.textSecondary }]}>
+                {t('supplyLastRefilled')}:{' '}
+                {lastRefilledAt
+                  ? formatDate(new Date(lastRefilledAt), { year: 'numeric', month: 'short', day: 'numeric' })
+                  : '—'}
+              </Text>
             </View>
           </Card>
-        </View>
+        </Animated.View>
 
-        {/* Actions Section */}
-        <View>
+        {/* Actions */}
+        <Animated.View entering={enter(2)} layout={expand}>
           <SectionHeader title={t('medicationFlowActionsTitle')} />
           <Card>
-            <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
-              {plan.request.status === 'active' ? (
-                <Button
-                  kind="secondary"
-                  label={t('pauseMedicationCta')}
-                  onPress={() => void updateStatus('on-hold')}
-                  disabled={updatePlan.isPending}
-                />
+            <View style={styles.cardBody}>
+              <View style={styles.grid}>
+                {status === 'active' ? (
+                  <View style={styles.gridItem}>
+                    <Button
+                      size="sm"
+                      kind="secondary"
+                      label={t('pauseCta')}
+                      accessibilityLabel={t('pauseMedicationCta')}
+                      icon={<Ionicons name="pause-circle-outline" size={18} color={c.textPrimary} />}
+                      onPress={() => void updateStatus('on-hold', 'pause')}
+                      loading={pendingAction === 'pause'}
+                      disabled={busy}
+                    />
+                  </View>
+                ) : null}
+                {status === 'on-hold' ? (
+                  <View style={styles.gridItem}>
+                    <Button
+                      size="sm"
+                      kind="secondary"
+                      label={t('resumeCta')}
+                      accessibilityLabel={t('resumeMedicationCta')}
+                      icon={<Ionicons name="play-circle-outline" size={18} color={c.textPrimary} />}
+                      onPress={() => void updateStatus('active', 'resume')}
+                      loading={pendingAction === 'resume'}
+                      disabled={busy}
+                    />
+                  </View>
+                ) : null}
+                <View style={styles.gridItem}>
+                  <Button
+                    size="sm"
+                    kind="secondary"
+                    label={t('refillCta')}
+                    accessibilityLabel={t('logRefillCta')}
+                    icon={<Ionicons name="add-circle-outline" size={18} color={c.textPrimary} />}
+                    onPress={() => setPanel((prev) => (prev === 'refill' ? null : 'refill'))}
+                    disabled={busy}
+                  />
+                </View>
+                <View style={styles.gridItem}>
+                  <Button
+                    size="sm"
+                    kind="secondary"
+                    label={t('timelineCta')}
+                    accessibilityLabel={t('openTodayTimelineCta')}
+                    icon={<Ionicons name="calendar-outline" size={18} color={c.textPrimary} />}
+                    onPress={() => router.push('/(tabs)/today')}
+                  />
+                </View>
+                {status !== 'stopped' ? (
+                  <View style={styles.gridItem}>
+                    <Button
+                      size="sm"
+                      kind="destructive"
+                      label={t('archiveCta')}
+                      accessibilityLabel={t('archiveMedicationCta')}
+                      icon={<Ionicons name="archive-outline" size={18} color={c.destructive} />}
+                      onPress={() => setPanel((prev) => (prev === 'archive' ? null : 'archive'))}
+                      disabled={busy}
+                    />
+                  </View>
+                ) : null}
+              </View>
+
+              {panel === 'refill' ? (
+                <Animated.View
+                  entering={FadeIn.duration(duration.fast)}
+                  exiting={FadeOut.duration(duration.fast)}
+                  style={{ gap: spacing(3) }}
+                >
+                  <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('refillAmountLabel')}</Text>
+                  <View style={styles.wrapRow}>
+                    {REFILL_PRESETS.map((amount) => (
+                      <Chip
+                        key={amount}
+                        label={`+${amount}`}
+                        selected={refillInput === amount.toString()}
+                        onPress={() => setRefillInput(amount.toString())}
+                      />
+                    ))}
+                    <View style={styles.customInput}>
+                      <Input
+                        value={REFILL_PRESETS.some((amount) => amount.toString() === refillInput) ? '' : refillInput}
+                        onChangeText={(next) => setRefillInput(next.replace(/[^\d]/g, ''))}
+                        keyboardType="number-pad"
+                        inputMode="numeric"
+                        placeholder={t('refillCustomPlaceholder')}
+                        accessibilityLabel={t('refillCustomPlaceholder')}
+                        style={styles.customInputField}
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.actionRow}>
+                    <View style={styles.grow}>
+                      <Button size="sm" kind="secondary" label={t('cancel')} onPress={() => setPanel(null)} disabled={refilling} />
+                    </View>
+                    <View style={styles.grow}>
+                      <Button
+                        size="sm"
+                        label={refillAmount ? `${t('logRefillCta')} (+${refillAmount})` : t('logRefillCta')}
+                        onPress={() => void logRefill()}
+                        loading={refilling}
+                        disabled={!refillAmount}
+                        haptic="success"
+                      />
+                    </View>
+                  </View>
+                </Animated.View>
               ) : null}
 
-              {plan.request.status === 'on-hold' ? (
-                <Button
-                  kind="secondary"
-                  label={t('resumeMedicationCta')}
-                  onPress={() => void updateStatus('active')}
-                  disabled={updatePlan.isPending}
-                />
-              ) : null}
-
-              {plan.request.status !== 'stopped' ? (
-                <Button
-                  kind="destructive"
-                  label={t('archiveMedicationCta')}
-                  onPress={() => void updateStatus('stopped')}
-                  disabled={updatePlan.isPending}
-                />
-              ) : null}
-
-              <Button
-                kind="secondary"
-                label={t('openTodayTimelineCta')}
-                onPress={() => router.push('/(tabs)/today')}
+              <ConfirmSheet
+                open={panel === 'archive'}
+                title={t('archiveConfirmTitle')}
+                body={t('archiveConfirmBody')}
+                confirmLabel={t('archiveCta')}
+                cancelLabel={t('cancel')}
+                onConfirm={() => void updateStatus('stopped', 'archive')}
+                onCancel={() => setPanel(null)}
+                loading={pendingAction === 'archive'}
               />
 
-              {statusError ? <Text style={[typography.footnote, { color: c.destructive }]}>{statusError}</Text> : null}
+              {statusError ? (
+                <Text accessibilityRole="alert" style={[typography.footnote, { color: c.destructive }]}>
+                  {statusError}
+                </Text>
+              ) : null}
             </View>
           </Card>
-        </View>
+        </Animated.View>
 
-        {/* Dose History Logs with Status Icons */}
-        <View>
+        {/* Recent dose logs */}
+        <Animated.View entering={enter(3)} layout={expand}>
           <SectionHeader title={t('recentDoseLogsTitle')} />
-          {relatedEvents.length === 0 ? (
+          {dayGroups.length === 0 ? (
             <EmptyState title={t('noDoseLogsYetTitle')} description={t('noDoseLogsYetHint')} />
           ) : (
-            <ListGroup>
-              {relatedEvents.map((event, index) => {
-                const scheduledAt = event.extension?.find((entry) => entry.url === TAKT_EXT.scheduledTime)?.valueDateTime;
-                const effectiveAt = event.effectiveDateTime;
-
-                const isTaken = event.status === 'completed';
-                const isSkipped = event.statusReason?.[0]?.coding?.[0]?.code === 'patient-refusal';
-                const actionLabel = isTaken ? t('statusTaken') : isSkipped ? t('statusSkipped') : t('statusMissed');
-                const iconName = isTaken ? 'checkmark' : isSkipped ? 'pause' : 'alert';
-                const iconColor = isTaken ? c.success : isSkipped ? c.warning : c.destructive;
-                const iconBg = isTaken ? `${c.success}1A` : isSkipped ? `${c.warning}1A` : `${c.destructive}1A`;
-
-                const timestamp = scheduledAt ?? effectiveAt;
-                const subtitle = timestamp
-                  ? `${actionLabel} · ${formatDateTime(new Date(timestamp))}`
-                  : actionLabel;
-
-                return (
-                  <ListRow
-                    key={event.id}
-                    isFirst={index === 0}
-                    title={plan.label}
-                    subtitle={subtitle}
-                    leading={
-                      <View
-                        style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: radius.md,
-                          backgroundColor: iconBg,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <Ionicons name={iconName} size={16} color={iconColor} />
-                      </View>
-                    }
-                  />
-                );
-              })}
-            </ListGroup>
+            <View style={{ gap: spacing(3) }}>
+              {dayGroups.map((group) => (
+                <View key={group.key} style={{ gap: spacing(1.5) }}>
+                  <Text style={[typography.caption, styles.eyebrow, { color: c.textSecondary, paddingHorizontal: spacing(1) }]}>
+                    {formatDate(group.date, { weekday: 'short', day: 'numeric', month: 'short' })}
+                  </Text>
+                  <ListGroup>
+                    {group.items.map(({ event, at }, index) => {
+                      const state = eventState(event);
+                      const dotColor = state === 'taken' ? c.success : state === 'skipped' ? c.warning : c.destructive;
+                      const label = state === 'taken' ? t('statusTaken') : state === 'skipped' ? t('statusSkipped') : t('statusMissed');
+                      return (
+                        <ListRow
+                          key={event.id}
+                          isFirst={index === 0}
+                          title={label}
+                          value={formatTime(at)}
+                          leading={<View style={[styles.dot, { backgroundColor: dotColor }]} />}
+                        />
+                      );
+                    })}
+                  </ListGroup>
+                </View>
+              ))}
+            </View>
           )}
-        </View>
+        </Animated.View>
       </Stack>
     </PageShell>
   );
 }
+
+const styles = StyleSheet.create({
+  cardBody: { padding: spacing(4), gap: spacing(3.5) },
+  heroRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
+  heroIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  grow: { flex: 1, minWidth: 0 },
+  wrapRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing(2) },
+  eyebrow: { textTransform: 'uppercase', letterSpacing: 0.5 },
+  timeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing(3),
+    paddingVertical: spacing(1.5),
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  spaceBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing(2) },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) },
+  gridItem: { flexBasis: '47%', flexGrow: 1 },
+  actionRow: { flexDirection: 'row', gap: spacing(2) },
+  customInput: { width: 104 },
+  customInputField: { minHeight: 36, paddingVertical: 0 },
+  dot: { width: 10, height: 10, borderRadius: radius.full },
+});

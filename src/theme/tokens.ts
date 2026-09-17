@@ -85,11 +85,24 @@ export type CategoryColors = Record<HealthCategory, string>;
 export type ThemePalette = 'amber' | 'sage' | 'indigo' | 'plum';
 export type ThemeMode = 'system' | 'light' | 'dark';
 
+type PaletteMessageKey =
+  | 'themeAmberName'
+  | 'themeAmberDesc'
+  | 'themeSageName'
+  | 'themeSageDesc'
+  | 'themeIndigoName'
+  | 'themeIndigoDesc'
+  | 'themePlumName'
+  | 'themePlumDesc';
+
 export const paletteConfigs: Record<
   ThemePalette,
   {
     name: string;
     description: string;
+    /** Locale keys for the user-facing name/description (see locales/en.ts). */
+    nameKey: PaletteMessageKey;
+    descriptionKey: PaletteMessageKey;
     accentLight: string;
     accentDark: string;
     medicationLight: string;
@@ -100,6 +113,8 @@ export const paletteConfigs: Record<
   amber: {
     name: 'Takt Amber',
     description: 'Warm terracotta & sunlit calm',
+    nameKey: 'themeAmberName',
+    descriptionKey: 'themeAmberDesc',
     accentLight: '#B4611C',
     accentDark: '#E07D2C',
     medicationLight: '#B4611C',
@@ -109,6 +124,8 @@ export const paletteConfigs: Record<
   sage: {
     name: 'Nordic Sage',
     description: 'Serene forest & restorative calm',
+    nameKey: 'themeSageName',
+    descriptionKey: 'themeSageDesc',
     accentLight: '#23704B',
     accentDark: '#3DB87E',
     medicationLight: '#23704B',
@@ -118,6 +135,8 @@ export const paletteConfigs: Record<
   indigo: {
     name: 'Ocean Slate',
     description: 'Crisp medical indigo & clarity',
+    nameKey: 'themeIndigoName',
+    descriptionKey: 'themeIndigoDesc',
     accentLight: '#1D63D8',
     accentDark: '#4D90FE',
     medicationLight: '#1D63D8',
@@ -127,6 +146,8 @@ export const paletteConfigs: Record<
   plum: {
     name: 'Velvet Plum',
     description: 'Gentle berry & mindful presence',
+    nameKey: 'themePlumName',
+    descriptionKey: 'themePlumDesc',
     accentLight: '#853982',
     accentDark: '#BF66B9',
     medicationLight: '#853982',
@@ -212,3 +233,23 @@ export const spacing = (n: number): number => n * 4;
 
 /** Minimum touch target per Apple HIG. Do not go below this. */
 export const MIN_TOUCH_TARGET = 44;
+
+/*
+ * Motion tokens. Two springs and three durations cover every animation
+ * in the app; pick from here (via useMotion) so screens move the same way.
+ */
+export const motion = {
+  spring: {
+    /** Layout shifts, progress, expanders. */
+    gentle: { damping: 20, stiffness: 180 },
+    /** Press feedback, checkmarks, selection pills. */
+    snappy: { damping: 18, stiffness: 350 },
+  },
+  duration: { fast: 150, base: 220, slow: 320 },
+  /** ms between staggered list items, capped after `staggerMax` items. */
+  stagger: 40,
+  staggerMax: 8,
+} as const;
+
+/** Reading-column width on wide (web / tablet) viewports. */
+export const CONTENT_MAX_WIDTH = 680;

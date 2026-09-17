@@ -9,7 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from './animated-pressable';
-import { radius, spacing, typography } from '../../theme/tokens';
+import { CONTENT_MAX_WIDTH, motion, radius, spacing, typography } from '../../theme/tokens';
 import { useTokens } from '../../theme/use-tokens';
 
 type FloatingUndoToastProps = {
@@ -27,12 +27,11 @@ export function FloatingUndoToast({
   undoLabel,
   onUndo,
   onDismiss,
-  durationMs = 10000,
+  durationMs = 8000,
 }: FloatingUndoToastProps) {
   const { c, scheme } = useTokens();
   const progress = useSharedValue(1);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
 
   useEffect(() => {
     if (visible) {
@@ -59,56 +58,70 @@ export function FloatingUndoToast({
   if (!visible) return null;
 
   return (
-    <Animated.View
-      entering={FadeInDown.springify().damping(18).stiffness(200)}
-      exiting={FadeOutDown.springify().damping(20).stiffness(250)}
-      style={[
-        styles.container,
-        {
-          backgroundColor: c.surface,
-          borderColor: c.separator,
-        },
-        scheme === 'light' && styles.lightShadow,
-      ]}
-    >
-      <View style={styles.contentRow}>
-        <View style={[styles.iconWrap, { backgroundColor: `${c.success}1A` }]}>
-          <Ionicons name="checkmark-circle" size={20} color={c.success} />
+    // Full-width overlay so the toast is never clipped by the reading column; the card inside is capped.
+    <View pointerEvents="box-none" style={styles.overlay}>
+      <Animated.View
+        accessibilityLiveRegion="polite"
+        entering={FadeInDown.springify()
+          .damping(motion.spring.gentle.damping)
+          .stiffness(motion.spring.gentle.stiffness)}
+        exiting={FadeOutDown.duration(motion.duration.base)}
+        style={[
+          styles.container,
+          {
+            backgroundColor: c.surface,
+            borderColor: c.separator,
+          },
+          scheme === 'light' && styles.lightShadow,
+        ]}
+      >
+        <View style={styles.contentRow}>
+          <View style={[styles.iconWrap, { backgroundColor: `${c.success}1A` }]}>
+            <Ionicons name="checkmark-circle" size={20} color={c.success} />
+          </View>
+
+          <Text numberOfLines={1} style={[typography.subhead, styles.message, { color: c.textPrimary }]}>
+            {message}
+          </Text>
+
+          <AnimatedPressable
+            onPress={onUndo}
+            accessibilityRole="button"
+            accessibilityLabel={`${undoLabel}: ${message}`}
+            style={[styles.undoButton, { backgroundColor: `${c.accent}1F`, borderColor: `${c.accent}44` }]}
+          >
+            <Text style={[typography.footnote, { color: c.accent, fontWeight: '700' }]}>{undoLabel}</Text>
+          </AnimatedPressable>
+
+          <AnimatedPressable onPress={onDismiss} accessibilityRole="button" style={styles.closeButton}>
+            <Ionicons name="close" size={18} color={c.textTertiary} />
+          </AnimatedPressable>
         </View>
 
-        <Text numberOfLines={1} style={[typography.subhead, styles.message, { color: c.textPrimary }]}>
-          {message}
-        </Text>
-
-        <AnimatedPressable
-          onPress={onUndo}
-          style={[styles.undoButton, { backgroundColor: `${c.accent}1F`, borderColor: `${c.accent}44` }]}
-        >
-          <Text style={[typography.footnote, { color: c.accent, fontWeight: '700' }]}>{undoLabel}</Text>
-        </AnimatedPressable>
-
-        <AnimatedPressable onPress={onDismiss} style={styles.closeButton}>
-          <Ionicons name="close" size={18} color={c.textTertiary} />
-        </AnimatedPressable>
-      </View>
-
-      <View style={[styles.progressTrack, { backgroundColor: c.surfaceRaised }]}>
-        <Animated.View style={[styles.progressBar, { backgroundColor: c.accent }, progressStyle]} />
-      </View>
-    </Animated.View>
+        <View style={[styles.progressTrack, { backgroundColor: c.surfaceRaised }]}>
+          <Animated.View style={[styles.progressBar, { backgroundColor: c.accent }, progressStyle]} />
+        </View>
+      </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  overlay: {
     position: 'absolute',
+    left: 0,
+    right: 0,
     bottom: spacing(6),
-    left: spacing(4),
-    right: spacing(4),
+    alignItems: 'center',
+    paddingHorizontal: spacing(4),
+    zIndex: 999,
+  },
+  container: {
+    width: '100%',
+    maxWidth: CONTENT_MAX_WIDTH - spacing(8),
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    zIndex: 999,
   },
   contentRow: {
     flexDirection: 'row',

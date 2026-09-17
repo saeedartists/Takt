@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { spacing, typography } from '../../theme/tokens';
+import { CONTENT_MAX_WIDTH, spacing, typography } from '../../theme/tokens';
 import { useTokens } from '../../theme/use-tokens';
 
 /*
@@ -56,6 +56,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing(4),
     paddingTop: spacing(4),
     paddingBottom: spacing(12),
+    // Reading column on wide viewports; a no-op on phones.
+    width: '100%',
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: 'center',
   },
   header: {
     flexDirection: 'row',

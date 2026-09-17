@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { useLocale } from '../../lib/takt/l10n';
 import {
   MIN_TOUCH_TARGET,
   radius,
@@ -70,15 +71,19 @@ export const EmptyState = ({
 };
 
 export const ErrorState = ({
-  title = 'Couldn’t load this',
+  title,
   description,
   onRetry,
+  retryLabel,
 }: {
   title?: string;
   description?: string;
   onRetry?: () => void;
+  retryLabel?: string;
 }) => {
   const { c } = useTokens();
+  const { t } = useLocale();
+  const heading = title ?? t('couldNotLoad');
   return (
     <View
       accessibilityRole="alert"
@@ -92,7 +97,7 @@ export const ErrorState = ({
         },
       ]}
     >
-      <Text style={[typography.headline, { color: c.textPrimary }]}>{title}</Text>
+      <Text style={[typography.headline, { color: c.textPrimary }]}>{heading}</Text>
       {description ? (
         <Text
           style={[typography.subhead, styles.mt, styles.center, { color: c.textSecondary }]}
@@ -110,7 +115,7 @@ export const ErrorState = ({
           ]}
         >
           <Text style={[typography.subhead, { color: c.accent, fontWeight: '600' }]}>
-            Try again
+            {retryLabel ?? t('tryAgain')}
           </Text>
         </Pressable>
       ) : null}

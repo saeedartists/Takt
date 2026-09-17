@@ -31,6 +31,8 @@ type ThemeContextValue = {
   c: ReturnType<typeof getSemanticColors>;
   paletteConfig: (typeof paletteConfigs)[ThemePalette];
   categoryColors: CategoryColors;
+  /** False until the persisted mode/palette have been read. */
+  hydrated: boolean;
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -112,8 +114,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       c,
       paletteConfig,
       categoryColors: dynamicCategoryColors,
+      hydrated,
     }),
-    [themeMode, palette, setThemeMode, setPalette, isDark, scheme, c, paletteConfig, dynamicCategoryColors],
+    [themeMode, palette, setThemeMode, setPalette, isDark, scheme, c, paletteConfig, dynamicCategoryColors, hydrated],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
@@ -140,6 +143,7 @@ export function useTheme(): ThemeContextValue {
         ...defaultCategoryColors,
         medication: c.accent,
       },
+      hydrated: true,
     };
   }
 

@@ -1,8 +1,10 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
+import Animated, { LinearTransition } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
+  AnimatedPressable,
   AnimatedSegmentedControl,
   Badge,
   Button,
@@ -12,38 +14,62 @@ import {
   Input,
   ListGroup,
   ListRow,
-  LoadingState,
   PageHeader,
   PageShell,
   SectionHeader,
+  SkeletonRow,
   Stack,
-  categoryColors,
   radius,
   spacing,
   typography,
+  useMotion,
   useTokens,
 } from '@/components/ui';
+import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useLocale } from '@/lib/takt/l10n';
+import { buildDoseOccurrencesForDay } from '@/lib/takt/schedule';
 import { getSupplyCount } from '@/lib/takt/supply-tracker';
+import { startOfDay } from '@/lib/takt/time';
+import type { MedicationPlan } from '@/lib/takt/types';
 
 const SUPPLY_LOW_THRESHOLD = 7;
+const CLEAR_HIT = 44;
 
 type SupplyMap = Record<string, number | null>;
+type StatusFilter = 'all' | 'active' | 'paused' | 'archived';
+
+const getFormIconName = (form?: string): keyof typeof Ionicons.glyphMap => {
+  const normalized = (form ?? '').toLowerCase();
+  if (normalized.includes('capsul') || normalized.includes('kapsel')) return 'bandage-outline';
+  if (normalized.includes('drop') || normalized.includes('tropf')) return 'water-outline';
+  if (normalized.includes('inhal')) return 'fitness-outline';
+  if (normalized.includes('inject') || normalized.includes('injekt')) return 'color-filter-outline';
+  return 'medkit';
+};
 
 export default function MedicationsScreen() {
   const { c } = useTokens();
-  const { t } = useLocale();
+  const { t, formatTime } = useLocale();
+  const { enter } = useMotion();
   const router = useRouter();
 
   const patient = usePrimaryPatient();
   const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
   const plans = useMedicationPlans(patientRef);
+  const events = useDoseEvents(patientRef);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused' | 'archived'>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [supplyByMedication, setSupplyByMedication] = useState<SupplyMap>({});
+
+  const isLoading = patient.isLoading || plans.isLoading;
+  // Stagger rows once, on the first render that has data; filter/search changes only re-layout.
+  const firstLoad = useRef(true);
+  useEffect(() => {
+    if (!isLoading) firstLoad.current = false;
+  }, [isLoading]);
 
   const refreshSupply = useCallback(async () => {
     const next: SupplyMap = {};
@@ -60,6 +86,24 @@ export default function MedicationsScreen() {
       void refreshSupply();
     }, [refreshSupply]),
   );
+
+  // First still-open dose today per request, for the "Next today" line.
+  const nextTodayByRequest = useMemo(() => {
+    const now = new Date();
+    const doses = buildDoseOccurrencesForDay(
+      plans.plans,
+      (events.data?.entry ?? []).map((x) => x.resource),
+      startOfDay(now),
+      now,
+    );
+    const next = new Map<string, Date>();
+    for (const dose of doses) {
+      if ((dose.state === 'scheduled' || dose.state === 'due') && !next.has(dose.requestId)) {
+        next.set(dose.requestId, dose.scheduledAt);
+      }
+    }
+    return next;
+  }, [events.data?.entry, plans.plans]);
 
   const filteredPlans = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
@@ -78,24 +122,24 @@ export default function MedicationsScreen() {
   const pausedPlans = filteredPlans.filter((plan) => plan.request.status === 'on-hold');
   const archivedPlans = filteredPlans.filter((plan) => plan.request.status === 'stopped');
 
-  const cadenceLabel = (plan: (typeof plans.plans)[number]): string => {
+  const cadenceLabel = (plan: MedicationPlan): string => {
     if (plan.cadence === 'daily') return t('cadenceDaily');
     if (plan.cadence === 'weekdays') return t('cadenceWeekdays');
     return t('cadenceSpecificDays');
   };
 
-  const supplyBadge = (plan: (typeof plans.plans)[number]) => {
+  const statusTint = (plan: MedicationPlan): string =>
+    plan.request.status === 'active' ? c.accent : plan.request.status === 'on-hold' ? c.warning : c.textTertiary;
+
+  // Third line: low-supply chip wins, otherwise the next open dose today.
+  const rowMeta = (plan: MedicationPlan) => {
     const medicationId = plan.medication?.id;
-    if (!medicationId) return null;
+    const count = medicationId ? supplyByMedication[medicationId] : undefined;
 
-    const count = supplyByMedication[medicationId];
-    if (typeof count !== 'number') return null;
-
-    if (count <= 0) {
+    if (typeof count === 'number' && count <= 0) {
       return <Badge label={t('supplyRefillNeeded')} tone="destructive" />;
     }
-
-    if (count <= SUPPLY_LOW_THRESHOLD) {
+    if (typeof count === 'number' && count <= SUPPLY_LOW_THRESHOLD) {
       return (
         <Badge
           label={`${t('supplyLow')} · ${t('supplyRemaining').replace('{count}', count.toString())}`}
@@ -104,44 +148,44 @@ export default function MedicationsScreen() {
       );
     }
 
-    return <Badge label={t('supplyRemaining').replace('{count}', count.toString())} tone="neutral" />;
+    const next = nextTodayByRequest.get(plan.request.id);
+    return next ? t('medsNextToday').replace('{time}', formatTime(next)) : undefined;
   };
 
-  const getFormIconName = (form?: string): keyof typeof Ionicons.glyphMap => {
-    const normalized = (form ?? '').toLowerCase();
-    if (normalized.includes('capsul') || normalized.includes('kapsel')) return 'bandage-outline';
-    if (normalized.includes('drop') || normalized.includes('tropf')) return 'water-outline';
-    if (normalized.includes('inhal')) return 'fitness-outline';
-    if (normalized.includes('inject') || normalized.includes('injekt')) return 'color-filter-outline';
-    return 'medkit';
-  };
-
-  const renderList = (rows: typeof plans.plans) => (
+  const renderList = (rows: MedicationPlan[], offset: number) => (
     <ListGroup>
-      {rows.map((plan, index) => (
-        <ListRow
-          key={plan.request.id}
-          isFirst={index === 0}
-          title={plan.label}
-          subtitle={`${cadenceLabel(plan)} · ${plan.times.join(', ')} · ${plan.form || t('formNotSet')}`}
-          trailing={supplyBadge(plan) ?? undefined}
-          leading={
-            <View
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: radius.md,
-                backgroundColor: `${c.accent}1A`,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Ionicons name={getFormIconName(plan.form)} size={16} color={c.accent} />
-            </View>
-          }
-          onPress={() => router.push({ pathname: '/medications/[id]', params: { id: plan.request.id } })}
-        />
-      ))}
+      {rows.map((plan, index) => {
+        const tint = statusTint(plan);
+        return (
+          <Animated.View
+            key={plan.request.id}
+            entering={firstLoad.current ? enter(offset + index) : undefined}
+            layout={LinearTransition}
+          >
+            <ListRow
+              isFirst={index === 0}
+              title={plan.label}
+              subtitle={[cadenceLabel(plan), plan.times.join(', '), plan.strength || plan.form || t('formNotSet')].join(' · ')}
+              meta={rowMeta(plan)}
+              leading={
+                <View
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: radius.md,
+                    backgroundColor: `${tint}1A`,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name={getFormIconName(plan.form)} size={16} color={tint} />
+                </View>
+              }
+              onPress={() => router.push({ pathname: '/medications/[id]', params: { id: plan.request.id } })}
+            />
+          </Animated.View>
+        );
+      })}
     </ListGroup>
   );
 
@@ -167,15 +211,37 @@ export default function MedicationsScreen() {
 
         <Card>
           <View style={{ padding: spacing(4), gap: spacing(3) }}>
-            <Input
-              value={searchTerm}
-              onChangeText={setSearchTerm}
-              placeholder={t('medsSearchPlaceholder')}
-              returnKeyType="search"
-            />
+            <View>
+              <Input
+                value={searchTerm}
+                onChangeText={setSearchTerm}
+                placeholder={t('medsSearchPlaceholder')}
+                returnKeyType="search"
+                accessibilityLabel={t('medsSearchPlaceholder')}
+                style={{ paddingRight: CLEAR_HIT }}
+              />
+              {searchTerm ? (
+                <AnimatedPressable
+                  onPress={() => setSearchTerm('')}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('medsSearchClear')}
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: CLEAR_HIT,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="close-circle" size={18} color={c.textTertiary} />
+                </AnimatedPressable>
+              ) : null}
+            </View>
             <AnimatedSegmentedControl
               value={statusFilter}
-              onChange={(next) => setStatusFilter(next as 'all' | 'active' | 'paused' | 'archived')}
+              onChange={(next) => setStatusFilter(next as StatusFilter)}
               options={[
                 { value: 'all', label: t('medsFilterAll') },
                 { value: 'active', label: t('medsFilterActive') },
@@ -187,8 +253,12 @@ export default function MedicationsScreen() {
         </Card>
 
         <View>
-          {patient.isLoading || plans.isLoading ? (
-            <LoadingState label={t('loadingMeds')} />
+          {isLoading ? (
+            <Card>
+              {[0, 1, 2, 3].map((i) => (
+                <SkeletonRow key={i} isFirst={i === 0} />
+              ))}
+            </Card>
           ) : patient.error || plans.error ? (
             <ErrorState
               description={t('loadMedicationsError')}
@@ -212,21 +282,21 @@ export default function MedicationsScreen() {
               {activePlans.length > 0 ? (
                 <View>
                   <SectionHeader title={t('activeMeds')} />
-                  {renderList(activePlans)}
+                  {renderList(activePlans, 0)}
                 </View>
               ) : null}
 
               {pausedPlans.length > 0 ? (
                 <View>
                   <SectionHeader title={t('pausedMeds')} />
-                  {renderList(pausedPlans)}
+                  {renderList(pausedPlans, activePlans.length)}
                 </View>
               ) : null}
 
               {archivedPlans.length > 0 ? (
                 <View>
                   <SectionHeader title={t('archivedMeds')} />
-                  {renderList(archivedPlans)}
+                  {renderList(archivedPlans, activePlans.length + pausedPlans.length)}
                 </View>
               ) : null}
             </Stack>

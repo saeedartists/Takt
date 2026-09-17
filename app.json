@@ -8,16 +8,26 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.actimi.takt"
+      "bundleIdentifier": "com.actimi.takt",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.actimi.takt",
       "permissions": [
         "SCHEDULE_EXACT_ALARM"
-      ]
+      ],
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#B4611C"
+      }
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
     },
     "updates": {
       "url": "https://u.expo.dev/d4b1c55c-cddf-4e3e-a188-25ebbe9388ba",
@@ -43,13 +53,26 @@
             "minSdkVersion": 26
           }
         }
+      ],
+      "expo-font",
+      "@react-native-community/datetimepicker",
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#F9F8F5",
+          "dark": {
+            "backgroundColor": "#0B0F15"
+          }
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true
-    },
-    "notification": {
-      "color": "#B4611C"
     },
     "extra": {
       "router": {},
@@ -60,6 +83,7 @@
     "owner": "saeedartists1s-team",
     "runtimeVersion": {
       "policy": "appVersion"
-    }
+    },
+    "icon": "./assets/icon.png"
   }
 }

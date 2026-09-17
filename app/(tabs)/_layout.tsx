@@ -1,12 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs, useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
+import { Platform } from 'react-native';
+import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useLocale } from '@/lib/takt/l10n';
 import { useReminderResponseRouting, useReminderSync } from '@/lib/takt/reminders';
+import { buildDoseOccurrencesForDay } from '@/lib/takt/schedule';
+import { startOfDay } from '@/lib/takt/time';
 import { resolveSessionGate } from '@/lib/auth-session';
-import { radius, spacing } from '@/theme/tokens';
+import { CONTENT_MAX_WIDTH, radius, spacing } from '@/theme/tokens';
 import { useTokens } from '@/theme/use-tokens';
 
 export default function TabsLayout() {
@@ -20,6 +24,17 @@ export default function TabsLayout() {
 
   useReminderSync(plans.plans, Boolean(patientRef) && !plans.isLoading);
   useReminderResponseRouting(router);
+
+  const events = useDoseEvents(patientRef);
+  const dueNowCount = useMemo(() => {
+    const now = new Date();
+    return buildDoseOccurrencesForDay(
+      plans.plans,
+      (events.data?.entry ?? []).map((x) => x.resource),
+      startOfDay(now),
+      now,
+    ).filter((dose) => dose.state === 'due').length;
+  }, [events.data?.entry, plans.plans]);
 
 
   useEffect(() => {
@@ -60,6 +75,10 @@ export default function TabsLayout() {
           paddingTop: spacing(1),
           borderTopLeftRadius: radius.lg,
           borderTopRightRadius: radius.lg,
+          // Match the content reading column on wide web viewports.
+          ...(Platform.OS === 'web'
+            ? { width: '100%' as const, maxWidth: CONTENT_MAX_WIDTH, alignSelf: 'center' as const }
+            : null),
         },
         tabBarLabelStyle: {
           fontSize: 12,
@@ -71,6 +90,8 @@ export default function TabsLayout() {
         name="today"
         options={{
           title: t('today'),
+          tabBarBadge: dueNowCount > 0 ? dueNowCount : undefined,
+          tabBarBadgeStyle: { backgroundColor: c.accent, color: c.surface, fontSize: 11, fontWeight: '700' },
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons name={focused ? 'home' : 'home-outline'} color={color} size={size} />
           ),

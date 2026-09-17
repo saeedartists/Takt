@@ -1,39 +1,33 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import {
-  Button,
-  Card,
-  Field,
-  Input,
-  PageHeader,
-  PageShell,
-  Stack,
-  radius,
-  spacing,
-  typography,
-  useTokens,
-} from '@/components/ui';
+import { View } from 'react-native';
+import { Button, Card, Field, Input, PageShell, Stack, spacing } from '@/components/ui';
 import { env } from '@/lib/env';
 import { ovokClient } from '@/lib/ovok-client';
 import { CONSENT_STORAGE_KEY } from '@/lib/takt/constants';
 import { mapAuthError } from '@/lib/takt/auth-errors';
 import { useLocale } from '@/lib/takt/l10n';
+import { AuthBanner, AuthHero, AuthLinkRow, PasswordInput } from './auth-shared';
 
 export default function SignInScreen() {
   const router = useRouter();
-  const { c } = useTokens();
   const { t } = useLocale();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
+
+  // Derived so errors clear as the user types; shown only after a submit attempt.
+  const emailError = submitted && !email.trim() ? t('authEmailRequired') : null;
+  const passwordError = submitted && !password ? t('authPasswordRequired') : null;
 
   const submit = async () => {
     setErrorText(null);
+    setSubmitted(true);
+    if (!email.trim() || !password) return;
 
     if (!env.ovokTenantCode) {
       setErrorText(t('authTenantMissing'));
@@ -75,33 +69,15 @@ export default function SignInScreen() {
   return (
     <PageShell>
       <Stack>
-        {/* Brand Icon Header */}
-        <View style={styles.brandHero}>
-          <View
-            style={[
-              styles.logoCircle,
-              {
-                backgroundColor: `${c.accent}1A`,
-                borderColor: `${c.accent}33`,
-              },
-            ]}
-          >
-            <Ionicons name="medkit" size={36} color={c.accent} />
-          </View>
-          <Text style={[typography.title1, { color: c.textPrimary, letterSpacing: -0.5 }]}>
-            Takt
-          </Text>
-          <Text style={[typography.subhead, { color: c.textSecondary, textAlign: 'center' }]}>
-            {t('authSignInDescription')}
-          </Text>
-        </View>
+        <AuthHero icon="medkit" title={t('appName')} description={t('authSignInDescription')} />
 
         <Card>
           <View style={{ padding: spacing(4), gap: spacing(3.5) }}>
-            <Field label={t('authEmailLabel')}>
+            <Field label={t('authEmailLabel')} error={emailError}>
               <Input
                 value={email}
                 onChangeText={setEmail}
+                invalid={Boolean(emailError)}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
@@ -111,62 +87,37 @@ export default function SignInScreen() {
               />
             </Field>
 
-            <Field label={t('authPasswordLabel')}>
-              <Input
+            <Field label={t('authPasswordLabel')} error={passwordError}>
+              <PasswordInput
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry
+                invalid={Boolean(passwordError)}
                 textContentType="password"
                 autoComplete="password"
                 placeholder={t('authPasswordPlaceholder')}
+                onSubmitEditing={() => void submit()}
               />
             </Field>
 
-            {errorText ? (
-              <Text style={[typography.footnote, { color: c.destructive }]}>{errorText}</Text>
-            ) : null}
+            <View style={{ alignItems: 'flex-end' }}>
+              <AuthLinkRow
+                label={`${t('authForgotPasswordCta')}?`}
+                onPress={() => router.push('/auth/reset-password' as never)}
+              />
+            </View>
 
-            <Button
-              label={busy ? t('authSigningIn') : t('authSignInTitle')}
-              disabled={busy}
-              onPress={() => void submit()}
-            />
+            {errorText ? <AuthBanner tone="destructive" message={errorText} /> : null}
+
+            <Button label={t('authSignInTitle')} loading={busy} onPress={() => void submit()} />
           </View>
         </Card>
 
-        <Card>
-          <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
-            <Button
-              kind="secondary"
-              label={t('authCreateAccountCta')}
-              onPress={() => router.push('/auth/register' as never)}
-            />
-            <Button
-              kind="secondary"
-              label={t('authForgotPasswordCta')}
-              onPress={() => router.push('/auth/reset-password' as never)}
-            />
-          </View>
-        </Card>
+        <AuthLinkRow
+          prompt={t('authNoAccountYet')}
+          label={t('authCreateAccountCta')}
+          onPress={() => router.push('/auth/register' as never)}
+        />
       </Stack>
     </PageShell>
   );
 }
-
-const styles = StyleSheet.create({
-  brandHero: {
-    alignItems: 'center',
-    paddingVertical: spacing(3),
-    gap: spacing(1.5),
-  },
-  logoCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: radius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    marginBottom: spacing(1),
-  },
-});
-

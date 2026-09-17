@@ -1,7 +1,9 @@
-import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef } from 'react';
+import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { radius, spacing, typography } from '@/theme/tokens';
+import { useMotion } from '@/theme/use-motion';
 import { useTokens } from '@/theme/use-tokens';
 import { addDays, isoDateKey, startOfDay } from '@/lib/takt/time';
 import { AnimatedPressable } from './animated-pressable';
@@ -38,49 +40,77 @@ export function WeekStripPicker({
   todayLabel = 'Today',
 }: WeekStripPickerProps) {
   const { c } = useTokens();
+  const { spring } = useMotion();
   const today = useMemo(() => startOfDay(new Date()), []);
-  const selectedDayStart = useMemo(() => startOfDay(selectedDate), [selectedDate]);
+  const selectedKey = isoDateKey(selectedDate);
 
   const weekDays = useMemo(() => {
     const start = getStartOfWeek(selectedDate);
     return Array.from({ length: 7 }, (_, i) => {
       const d = addDays(start, i);
       const key = isoDateKey(d);
-      const isToday = isoDateKey(d) === isoDateKey(today);
-      const isSelected = isoDateKey(d) === isoDateKey(selectedDayStart);
-      const adherence = adherenceMap[key];
-      const isFuture = d.getTime() > today.getTime();
-
       return {
         date: d,
         key,
         dayName: WEEKDAY_NAMES[i],
         dayNumber: d.getDate().toString(),
-        isToday,
-        isSelected,
-        isFuture,
-        adherence,
+        isToday: key === isoDateKey(today),
+        isSelected: key === selectedKey,
+        adherence: adherenceMap[key],
       };
     });
-  }, [adherenceMap, selectedDate, selectedDayStart, today]);
+  }, [adherenceMap, selectedDate, selectedKey, today]);
 
-  const monthYearLabel = useMemo(() => {
-    return selectedDate.toLocaleDateString(undefined, {
-      month: 'long',
-      year: 'numeric',
-    });
-  }, [selectedDate]);
+  // Selected pill slides between measured cell positions instead of re-rendering per cell.
+  const layouts = useRef<Record<string, { x: number; width: number }>>({});
+  const pillX = useSharedValue(0);
+  const pillW = useSharedValue(0);
 
-  const isCurrentDayToday = isoDateKey(selectedDate) === isoDateKey(today);
+  const moveTo = (key: string, animate: boolean) => {
+    const l = layouts.current[key];
+    if (!l) return;
+    if (!animate || pillW.value === 0) {
+      pillX.value = l.x;
+      pillW.value = l.width;
+      return;
+    }
+    pillX.value = withSpring(l.x, spring.gentle);
+    pillW.value = withSpring(l.width, spring.gentle);
+  };
+
+  useEffect(() => {
+    moveTo(selectedKey, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKey]);
+
+  const onCellLayout = (key: string) => (e: LayoutChangeEvent) => {
+    const { x, width } = e.nativeEvent.layout;
+    layouts.current[key] = { x, width };
+    if (key === selectedKey) moveTo(key, false);
+  };
+
+  const pillStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: pillX.value }],
+    width: pillW.value,
+    opacity: pillW.value > 0 ? 1 : 0,
+  }));
+
+  const monthYearLabel = useMemo(
+    () => selectedDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
+    [selectedDate],
+  );
+  const isCurrentDayToday = selectedKey === isoDateKey(today);
 
   return (
-    <View style={[styles.container, { backgroundColor: c.surface, borderColor: c.cardBorder }]}>
+    <View style={styles.container}>
       <View style={styles.headerRow}>
-        <Text style={[typography.headline, { color: c.textPrimary }]}>{monthYearLabel}</Text>
+        <Text style={[typography.subhead, { color: c.textSecondary, fontWeight: '600' }]}>{monthYearLabel}</Text>
 
         {!isCurrentDayToday ? (
           <AnimatedPressable
             onPress={() => onSelectDate(new Date())}
+            accessibilityRole="button"
+            accessibilityLabel={todayLabel}
             style={[styles.todayButton, { backgroundColor: `${c.accent}1A`, borderColor: `${c.accent}33` }]}
           >
             <Ionicons name="calendar-outline" size={13} color={c.accent} />
@@ -90,6 +120,7 @@ export function WeekStripPicker({
       </View>
 
       <View style={styles.stripRow}>
+        <Animated.View pointerEvents="none" style={[styles.pill, { backgroundColor: c.accent }, pillStyle]} />
         {weekDays.map((item) => {
           let dotColor: string | null = null;
           if (item.adherence && item.adherence.total > 0) {
@@ -101,18 +132,23 @@ export function WeekStripPicker({
               dotColor = c.warning;
             }
           }
+          const dayLabel = item.date.toLocaleDateString(undefined, {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+          });
 
           return (
             <AnimatedPressable
               key={item.key}
+              onLayout={onCellLayout(item.key)}
               onPress={() => onSelectDate(item.date)}
+              accessibilityRole="button"
+              accessibilityLabel={item.isToday ? `${todayLabel}, ${dayLabel}` : dayLabel}
+              accessibilityState={{ selected: item.isSelected }}
               style={[
                 styles.dayCell,
-                item.isSelected
-                  ? [styles.selectedCell, { backgroundColor: c.accent }]
-                  : item.isToday
-                    ? [styles.todayCell, { borderColor: `${c.accent}66`, backgroundColor: `${c.accent}0D` }]
-                    : null,
+                item.isToday && !item.isSelected && { borderColor: `${c.accent}66` },
               ]}
             >
               <Text
@@ -120,7 +156,7 @@ export function WeekStripPicker({
                   typography.caption,
                   styles.dayLabel,
                   {
-                    color: item.isSelected ? '#FFFFFF' : item.isToday ? c.accent : c.textSecondary,
+                    color: item.isSelected ? c.surface : item.isToday ? c.accent : c.textSecondary,
                     fontWeight: item.isSelected || item.isToday ? '700' : '500',
                   },
                 ]}
@@ -133,7 +169,7 @@ export function WeekStripPicker({
                   typography.subhead,
                   styles.numberLabel,
                   {
-                    color: item.isSelected ? '#FFFFFF' : c.textPrimary,
+                    color: item.isSelected ? c.surface : c.textPrimary,
                     fontWeight: item.isSelected ? '800' : '600',
                   },
                 ]}
@@ -146,9 +182,7 @@ export function WeekStripPicker({
                   <View style={[styles.statusDot, { backgroundColor: dotColor }]} />
                 ) : item.isToday && !item.isSelected ? (
                   <View style={[styles.todayIndicator, { backgroundColor: c.accent }]} />
-                ) : (
-                  <View style={styles.emptyDot} />
-                )}
+                ) : null}
               </View>
             </AnimatedPressable>
           );
@@ -160,16 +194,14 @@ export function WeekStripPicker({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: radius.xl,
-    padding: spacing(3.5),
-    borderWidth: 1,
-    gap: spacing(3),
+    gap: spacing(2),
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing(1),
+    minHeight: 28,
   },
   todayButton: {
     flexDirection: 'row',
@@ -186,25 +218,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing(1),
   },
+  pill: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: radius.md,
+  },
   dayCell: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing(2),
-    borderRadius: radius.lg,
+    paddingVertical: spacing(1.5),
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: 'transparent',
-    gap: 3,
-  },
-  selectedCell: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  todayCell: {
-    borderWidth: 1,
+    gap: 2,
   },
   dayLabel: {
     fontSize: 11,
@@ -213,6 +242,7 @@ const styles = StyleSheet.create({
   },
   numberLabel: {
     fontSize: 16,
+    fontVariant: ['tabular-nums'],
   },
   dotContainer: {
     height: 6,
@@ -228,9 +258,5 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-  },
-  emptyDot: {
-    width: 5,
-    height: 5,
   },
 });

@@ -1,25 +1,26 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
   AnimatedProgressBar,
-  Badge,
   Button,
   Card,
   EmptyState,
   ErrorState,
   ListGroup,
   ListRow,
-  LoadingState,
   PageHeader,
   PageShell,
   SectionHeader,
+  SkeletonCard,
   Stack,
   radius,
   spacing,
   typography,
+  useMotion,
   useTokens,
 } from '@/components/ui';
 import { useDoseEvents } from '@/lib/hooks/use-dose-events';
@@ -41,14 +42,30 @@ const REPORT_MEDICATION_LIMIT = 10;
 const REPORT_MISSED_LIMIT = 6;
 const FOCUS_MEDICATION_LIMIT = 3;
 
-export default function ReportScreen() {
+type Note = { tone: 'success' | 'error'; text: string };
+
+/** Compact two-column line inside the paper sheet; hairline above all but the first. */
+const PaperRow = ({ label, value, isFirst }: { label: string; value: string; isFirst: boolean }) => {
   const { c } = useTokens();
+  return (
+    <View style={[styles.paperRow, !isFirst && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator }]}>
+      <Text numberOfLines={1} style={[typography.subhead, styles.paperRowLabel, { color: c.textPrimary }]}>
+        {label}
+      </Text>
+      <Text style={[typography.subhead, { color: c.textSecondary, fontVariant: ['tabular-nums'] }]}>{value}</Text>
+    </View>
+  );
+};
+
+export default function ReportScreen() {
+  const { c, isDark } = useTokens();
   const { t, formatDate, formatDateTime } = useLocale();
+  const { enter } = useMotion();
   const patient = usePrimaryPatient();
   const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
   const plans = useMedicationPlans(patientRef);
   const events = useDoseEvents(patientRef);
-  const [exportError, setExportError] = useState<string | null>(null);
+  const [note, setNote] = useState<Note | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const history = useMemo(
@@ -128,23 +145,23 @@ export default function ReportScreen() {
     return notes;
   }, [formatDateTime, medsNeedingReview, needsReviewCount, recentMissed, summary.denominator, summary.pct, summary.taken, t]);
 
+  const patientName = `${patient.data?.name?.[0]?.given?.join(' ') ?? ''} ${
+    patient.data?.name?.[0]?.family ?? ''
+  }`.trim();
+  const reportDate = formatDate(new Date(), { year: 'numeric', month: 'short', day: 'numeric' });
+  const visibleMeds = summary.byMedication.slice(0, REPORT_MEDICATION_LIMIT);
+  const hiddenMeds = Math.max(0, summary.byMedication.length - visibleMeds.length);
+  const visibleMissed = summary.missedRows.slice(0, REPORT_MISSED_LIMIT);
+  const hiddenMissed = Math.max(0, summary.missedRows.length - visibleMissed.length);
+  const pctColor = summary.pct >= 80 ? c.success : summary.pct >= 60 ? c.warning : c.destructive;
+
   const exportPdf = async () => {
     if (!patient.data) return;
 
-    setExportError(null);
+    setNote(null);
     setExporting(true);
 
     try {
-      const patientName = `${patient.data.name?.[0]?.given?.join(' ') ?? ''} ${
-        patient.data.name?.[0]?.family ?? ''
-      }`.trim();
-
-      const visibleMeds = summary.byMedication.slice(0, REPORT_MEDICATION_LIMIT);
-      const hiddenMeds = Math.max(0, summary.byMedication.length - visibleMeds.length);
-
-      const visibleMissed = summary.missedRows.slice(0, REPORT_MISSED_LIMIT);
-      const hiddenMissed = Math.max(0, summary.missedRows.length - visibleMissed.length);
-
       const medicationRows = visibleMeds
         .map((row) => `<tr><td>${esc(row.label)}</td><td style=\"text-align:right\">${row.pct}%</td></tr>`)
         .join('');
@@ -180,7 +197,7 @@ export default function ReportScreen() {
   <body>
     <h1>${esc(t('reportPdfHeading'))}</h1>
     <div class="meta">${esc(t('patientLabel'))}: ${esc(patientName || 'N/A')}<br/>${esc(t('dateLabel'))}: ${esc(
-        formatDate(new Date(), { year: 'numeric', month: 'short', day: 'numeric' }),
+        reportDate,
       )}<br/>${esc(t('windowLabel'))}: ${esc(t('adherenceWindow'))}</div>
     <div class="score">${summary.pct}% ${esc(t('takenOnSchedule'))}</div>
 
@@ -211,14 +228,17 @@ export default function ReportScreen() {
   </body>
 </html>`;
 
-      const file = await Print.printToFileAsync({ html });
       if (await Sharing.isAvailableAsync()) {
+        const file = await Print.printToFileAsync({ html });
         await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf' });
+        setNote({ tone: 'success', text: t('pdfExportDone') });
       } else {
-        setExportError(t('sharingUnavailable'));
+        // Browser: no share sheet, so the print dialog (Save as PDF) stands in for it.
+        setNote({ tone: 'success', text: t('pdfWebPrintNote') });
+        await Print.printAsync({ html });
       }
     } catch {
-      setExportError(t('pdfError'));
+      setNote({ tone: 'error', text: t('pdfError') });
     } finally {
       setExporting(false);
     }
@@ -227,7 +247,8 @@ export default function ReportScreen() {
   if (patient.isLoading || plans.isLoading || events.isLoading) {
     return (
       <PageShell>
-        <LoadingState label={t('preparingPdf')} />
+        <PageHeader title={t('reportTitle')} subtitle={t('reportWindow')} />
+        <SkeletonCard rows={4} />
       </PageShell>
     );
   }
@@ -256,109 +277,117 @@ export default function ReportScreen() {
     );
   }
 
+  const paperStyle: ViewStyle = isDark ? styles.paper : { ...styles.paper, ...styles.paperShadow };
+
   return (
     <PageShell>
       <PageHeader title={t('reportTitle')} subtitle={t('reportWindow')} />
       <Stack>
-        <Card>
-          <View style={{ padding: spacing(4), gap: spacing(3.5) }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
-              <View
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: radius.lg,
-                  backgroundColor: `${c.accent}1A`,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderWidth: 1,
-                  borderColor: `${c.accent}33`,
-                }}
-              >
-                <Ionicons name="document-text" size={24} color={c.accent} />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[typography.headline, { color: c.textPrimary }]}>
-                  {patient.data.name?.[0]?.given?.join(' ') ?? ''} {patient.data.name?.[0]?.family ?? ''}
-                </Text>
-                <Text style={[typography.footnote, { color: c.textSecondary, marginTop: 2 }]}>
-                  {t('dateLabel')}: {formatDate(new Date(), { year: 'numeric', month: 'short', day: 'numeric' })}
-                </Text>
-              </View>
-            </View>
-
-            <View style={{ gap: spacing(1.5) }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <Text
-                  style={[
-                    typography.metricSm,
-                    {
-                      color:
-                        summary.pct >= 80
-                          ? c.success
-                          : summary.pct >= 60
-                            ? c.warning
-                            : c.destructive,
-                      fontVariant: ['tabular-nums'],
-                    },
-                  ]}
-                >
-                  {summary.pct}%
-                </Text>
-                <Text style={[typography.subhead, { color: c.textSecondary }]}>
-                  {t('takenOnSchedule')}
-                </Text>
-              </View>
-
-              <AnimatedProgressBar
-                progress={Math.min(1, Math.max(0, summary.pct / 100))}
-                color={summary.pct >= 80 ? c.success : summary.pct >= 60 ? c.warning : c.destructive}
-                height={8}
-              />
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' }}>
-              <Badge label={`${summary.byMedication.length.toString()} ${t('medications')}`} tone="accent" />
-              <Badge label={`${summary.missedRows.length.toString()} ${t('statusMissed')}`} tone="destructive" />
-            </View>
-
-            <Button
-              label={exporting ? t('preparingPdf') : t('exportPdf')}
-              onPress={() => void exportPdf()}
-              disabled={exporting}
-            />
-            {exportError ? <Text style={[typography.footnote, { color: c.destructive }]}>{exportError}</Text> : null}
-          </View>
-        </Card>
-
-        <View>
-          <SectionHeader title={t('reportVisitFocusTitle')} />
-          <ListGroup>
-            {focusNotes.map((note, index) => (
-              <ListRow
-                key={note}
-                isFirst={index === 0}
-                title={note}
-                leading={
-                  <View
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: radius.md,
-                      backgroundColor: `${c.accent}14`,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Ionicons name="information-circle-outline" size={16} color={c.accent} />
-                  </View>
-                }
-              />
-            ))}
-          </ListGroup>
+        <View style={{ gap: spacing(2) }}>
+          <Button
+            label={t('exportPdf')}
+            icon={<Ionicons name="document-text-outline" size={18} color={c.surface} />}
+            onPress={() => void exportPdf()}
+            loading={exporting}
+          />
+          {exporting ? (
+            <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('preparingPdf')}</Text>
+          ) : note ? (
+            <Text
+              accessibilityRole={note.tone === 'error' ? 'alert' : undefined}
+              style={[typography.footnote, { color: note.tone === 'error' ? c.destructive : c.textSecondary }]}
+            >
+              {note.text}
+            </Text>
+          ) : null}
         </View>
 
-        <View>
+        <Animated.View entering={enter(0)}>
+          <Card style={paperStyle}>
+            <View style={styles.paperInner}>
+              <View style={{ gap: spacing(1) }}>
+                <Text style={[typography.title2, { color: c.textPrimary }]}>{t('reportPdfHeading')}</Text>
+                <Text style={[typography.footnote, { color: c.textSecondary }]}>
+                  {t('patientLabel')}: {patientName}
+                </Text>
+                <Text style={[typography.footnote, { color: c.textSecondary }]}>
+                  {t('dateLabel')}: {reportDate}
+                </Text>
+                <Text style={[typography.footnote, { color: c.textSecondary }]}>
+                  {t('windowLabel')}: {t('adherenceWindow')}
+                </Text>
+              </View>
+
+              <View style={{ gap: spacing(2) }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <Text
+                    accessibilityLabel={`${summary.pct.toString()}% ${t('takenOnSchedule')}`}
+                    style={[typography.metric, { color: pctColor, fontVariant: ['tabular-nums'] }]}
+                  >
+                    {summary.pct}%
+                  </Text>
+                  <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('takenOnSchedule')}</Text>
+                </View>
+                <AnimatedProgressBar progress={Math.min(1, Math.max(0, summary.pct / 100))} color={pctColor} height={8} />
+              </View>
+
+              <View style={[styles.paperSection, { borderTopColor: c.separator }]}>
+                <Text style={[typography.headline, { color: c.textPrimary }]}>{t('reportVisitFocusTitle')}</Text>
+                {focusNotes.map((focusNote) => (
+                  <View key={focusNote} style={styles.bullet}>
+                    <Text style={[typography.subhead, { color: c.accent }]}>•</Text>
+                    <Text style={[typography.subhead, styles.bulletText, { color: c.textPrimary }]}>{focusNote}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <View style={[styles.paperSection, { borderTopColor: c.separator }]}>
+                <Text style={[typography.headline, { color: c.textPrimary }]}>{t('reportPerMedication')}</Text>
+                {visibleMeds.length === 0 ? (
+                  <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('reportNoDataInWindow')}</Text>
+                ) : (
+                  <View>
+                    {visibleMeds.map((row, index) => (
+                      <PaperRow key={row.id} isFirst={index === 0} label={row.label} value={`${row.pct.toString()}%`} />
+                    ))}
+                  </View>
+                )}
+                {hiddenMeds > 0 ? (
+                  <Text style={[typography.footnote, { color: c.textTertiary }]}>
+                    {t('reportExtraMedications').replace('{count}', hiddenMeds.toString())}
+                  </Text>
+                ) : null}
+              </View>
+
+              <View style={[styles.paperSection, { borderTopColor: c.separator }]}>
+                <Text style={[typography.headline, { color: c.textPrimary }]}>{t('reportMissedDetailsTitle')}</Text>
+                {visibleMissed.length === 0 ? (
+                  <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('reportNoMissedInPeriod')}</Text>
+                ) : (
+                  <View>
+                    {visibleMissed.map((row, index) => (
+                      <PaperRow
+                        key={`${row.requestId}-${row.scheduledAt.toISOString()}`}
+                        isFirst={index === 0}
+                        label={row.label}
+                        value={row.dateLabel}
+                      />
+                    ))}
+                  </View>
+                )}
+                {hiddenMissed > 0 ? (
+                  <Text style={[typography.footnote, { color: c.textTertiary }]}>
+                    {t('reportExtraMissedRows').replace('{count}', hiddenMissed.toString())}
+                  </Text>
+                ) : null}
+              </View>
+
+              <Text style={[typography.caption, { color: c.textTertiary }]}>{t('reportPdfDisclaimer')}</Text>
+            </View>
+          </Card>
+        </Animated.View>
+
+        <Animated.View entering={enter(1)}>
           <SectionHeader title={t('reportClinicianSummaryTitle')} />
           <ListGroup>
             <ListRow
@@ -366,16 +395,7 @@ export default function ReportScreen() {
               title={t('reportFactTotalLogged').replace('{count}', summary.denominator.toString())}
               subtitle={t('reportFactTotalLoggedHint')}
               leading={
-                <View
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: radius.md,
-                    backgroundColor: `${c.accent}14`,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
+                <View style={[styles.factIcon, { backgroundColor: `${c.accent}14` }]}>
                   <Ionicons name="stats-chart-outline" size={15} color={c.accent} />
                 </View>
               }
@@ -384,16 +404,7 @@ export default function ReportScreen() {
               title={t('reportFactMissed').replace('{count}', summary.missedRows.length.toString())}
               subtitle={t('reportFactMissedHint')}
               leading={
-                <View
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: radius.md,
-                    backgroundColor: `${c.destructive}1A`,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
+                <View style={[styles.factIcon, { backgroundColor: `${c.destructive}1A` }]}>
                   <Ionicons name="alert-circle-outline" size={16} color={c.destructive} />
                 </View>
               }
@@ -402,88 +413,47 @@ export default function ReportScreen() {
               title={t('reportFactNeedsReview').replace('{count}', needsReviewCount.toString())}
               subtitle={t('reportFactNeedsReviewHint')}
               leading={
-                <View
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: radius.md,
-                    backgroundColor: `${c.warning}1A`,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
+                <View style={[styles.factIcon, { backgroundColor: `${c.warning}1A` }]}>
                   <Ionicons name="time-outline" size={16} color={c.warning} />
                 </View>
               }
             />
           </ListGroup>
-        </View>
-
-        <View>
-          <SectionHeader title={t('reportPerMedication')} />
-          {summary.byMedication.length === 0 ? (
-            <EmptyState title={t('noAdherenceHistory')} description={t('historyNeedsSchedule')} />
-          ) : (
-            <ListGroup>
-              {summary.byMedication.map((row, index) => (
-                <ListRow
-                  key={row.id}
-                  isFirst={index === 0}
-                  title={row.label}
-                  subtitle={t('reportDoseCount').replace('{taken}', row.taken.toString()).replace('{total}', row.denominator.toString())}
-                  value={`${row.pct.toString()}%`}
-                  leading={
-                    <View
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: radius.md,
-                        backgroundColor: `${c.accent}14`,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Ionicons name="medkit-outline" size={15} color={c.accent} />
-                    </View>
-                  }
-                />
-              ))}
-            </ListGroup>
-          )}
-        </View>
-
-        <View>
-          <SectionHeader title={t('reportMissedDetailsTitle')} />
-          {summary.missedRows.length === 0 ? (
-            <EmptyState title={t('reportNoMissedInPeriod')} description={t('greatRhythm')} />
-          ) : (
-            <ListGroup>
-              {summary.missedRows.slice(0, 8).map((row, index) => (
-                <ListRow
-                  key={`${row.requestId}-${row.scheduledAt.toISOString()}`}
-                  isFirst={index === 0}
-                  title={row.label}
-                  subtitle={row.dateLabel}
-                  leading={
-                    <View
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: radius.md,
-                        backgroundColor: `${c.destructive}1A`,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Ionicons name="alert" size={15} color={c.destructive} />
-                    </View>
-                  }
-                />
-              ))}
-            </ListGroup>
-          )}
-        </View>
+        </Animated.View>
       </Stack>
     </PageShell>
   );
 }
+
+const styles = StyleSheet.create({
+  paper: { borderRadius: radius.lg },
+  paperShadow: {
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  paperInner: { padding: spacing(5), gap: spacing(4) },
+  paperSection: {
+    gap: spacing(2),
+    paddingTop: spacing(4),
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  paperRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing(3),
+    paddingVertical: spacing(2),
+  },
+  paperRowLabel: { flex: 1, minWidth: 0 },
+  bullet: { flexDirection: 'row', gap: spacing(2) },
+  bulletText: { flex: 1, minWidth: 0 },
+  factIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

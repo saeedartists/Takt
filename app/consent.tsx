@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Badge,
@@ -9,11 +10,11 @@ import {
   Card,
   PageHeader,
   PageShell,
-  SectionHeader,
   Stack,
   radius,
   spacing,
   typography,
+  useMotion,
 } from '@/components/ui';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useEnsurePatient, useRecordConsent } from '@/lib/hooks/use-takt-mutations';
@@ -26,6 +27,7 @@ export default function ConsentScreen() {
   const router = useRouter();
   const { t } = useLocale();
   const { c } = useTokens();
+  const { enter } = useMotion();
   const patient = usePrimaryPatient();
   const ensurePatient = useEnsurePatient();
   const consent = useRecordConsent();
@@ -54,18 +56,18 @@ export default function ConsentScreen() {
   const trustPoints = [
     {
       icon: 'lock-closed-outline' as const,
-      title: 'FHIR R4 Health Standard',
-      description: t('consentPermissionsHint'),
+      title: t('consentPillarStandardTitle'),
+      description: t('consentPillarStandardDescription'),
     },
     {
       icon: 'notifications-outline' as const,
-      title: 'Calm Dignified Reminders',
-      description: 'Scheduled reminders with generous grace windows so you never feel rushed or stressed.',
+      title: t('consentPillarRemindersTitle'),
+      description: t('consentPillarRemindersDescription'),
     },
     {
       icon: 'document-text-outline' as const,
-      title: 'Doctor Consultation Ready',
-      description: 'Generate standardized, print-ready medication adherence reports for your healthcare team.',
+      title: t('consentPillarReportTitle'),
+      description: t('consentPillarReportDescription'),
     },
   ];
 
@@ -110,8 +112,9 @@ export default function ConsentScreen() {
 
         {/* 3 Pillars of Trust */}
         <View style={{ gap: spacing(3) }}>
-          {trustPoints.map((point) => (
-            <Card key={point.title}>
+          {trustPoints.map((point, index) => (
+            <Animated.View key={point.icon} entering={enter(index)}>
+              <Card>
               <View style={{ padding: spacing(4), flexDirection: 'row', gap: spacing(3.5), alignItems: 'flex-start' }}>
                 <View
                   style={{
@@ -134,31 +137,29 @@ export default function ConsentScreen() {
                   </Text>
                 </View>
               </View>
-            </Card>
+              </Card>
+            </Animated.View>
           ))}
         </View>
 
-        {/* Safety Note */}
+        {/* Safety Note + permission disclosure */}
         <Card>
-          <View style={{ padding: spacing(4), flexDirection: 'row', gap: spacing(3), alignItems: 'center' }}>
+          <View style={{ padding: spacing(4), flexDirection: 'row', gap: spacing(3), alignItems: 'flex-start' }}>
             <Ionicons name="information-circle-outline" size={20} color={c.textSecondary} />
-            <Text style={[typography.footnote, { color: c.textSecondary, flex: 1 }]}>
-              {t('safetyNote')}
-            </Text>
+            <View style={{ flex: 1, gap: spacing(1.5) }}>
+              <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('safetyNote')}</Text>
+              <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('consentPermissionsHint')}</Text>
+            </View>
           </View>
         </Card>
 
         {submitError ? (
-          <Text style={[typography.footnote, { color: c.destructive, textAlign: 'center' }]}>
+          <Text accessibilityRole="alert" style={[typography.footnote, { color: c.destructive, textAlign: 'center' }]}>
             {submitError}
           </Text>
         ) : null}
 
-        <Button
-          label={busy ? t('savingMedication') : t('acceptConsent')}
-          onPress={() => void submit()}
-          disabled={busy}
-        />
+        <Button label={t('acceptConsent')} onPress={() => void submit()} loading={busy} />
       </Stack>
     </PageShell>
   );

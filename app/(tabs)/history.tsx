@@ -1,8 +1,8 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Platform, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   AnimatedProgressBar,
@@ -12,18 +12,19 @@ import {
   Card,
   EmptyState,
   ErrorState,
-  LoadingState,
   PageHeader,
   PageShell,
   SectionHeader,
-  Sparkline,
+  SkeletonCard,
+  SkeletonRow,
   Stack,
-  categoryColors,
   radius,
   spacing,
   typography,
+  useMotion,
   useTokens,
 } from '@/components/ui';
+import { AdherenceBars, type AdherenceBarDay } from '@/components/ui/sparkline';
 import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
@@ -31,10 +32,12 @@ import { useRecordDose, useUndoDose } from '@/lib/hooks/use-takt-mutations';
 import { buildHistoryCsv } from '@/lib/takt/history-csv';
 import { useLocale } from '@/lib/takt/l10n';
 import { buildHistory } from '@/lib/takt/schedule';
+import { isoDateKey } from '@/lib/takt/time';
 import type { DoseOccurrence } from '@/lib/takt/types';
 
 type CorrectionAction = 'taken' | 'skipped' | 'missed';
 type DoseWithDay = DoseOccurrence & { dayLabel: string };
+type Note = { tone: 'success' | 'error'; text: string };
 
 const toStateBadgeTone = (state: CorrectionAction): 'success' | 'warning' | 'destructive' => {
   if (state === 'taken') return 'success';
@@ -42,9 +45,38 @@ const toStateBadgeTone = (state: CorrectionAction): 'success' | 'warning' | 'des
   return 'destructive';
 };
 
+/** Eases the displayed integer toward `target`; snaps when duration is 0 (reduce motion). */
+const useCountUp = (target: number, duration: number): number => {
+  const [value, setValue] = useState(target);
+  const current = useRef(target);
+
+  useEffect(() => {
+    const from = current.current;
+    if (duration === 0 || from === target) {
+      current.current = target;
+      setValue(target);
+      return;
+    }
+    const start = Date.now();
+    let frame = 0;
+    const tick = () => {
+      const p = Math.min(1, (Date.now() - start) / duration);
+      const eased = 1 - (1 - p) ** 3;
+      current.current = Math.round(from + (target - from) * eased);
+      setValue(current.current);
+      if (p < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [duration, target]);
+
+  return value;
+};
+
 export default function HistoryScreen() {
   const { c } = useTokens();
   const { t, formatDate, formatTime, locale } = useLocale();
+  const { duration } = useMotion();
   const router = useRouter();
 
   const patient = usePrimaryPatient();
@@ -54,6 +86,7 @@ export default function HistoryScreen() {
   const recordDose = useRecordDose();
   const undoDose = useUndoDose();
   const [actionError, setActionError] = useState<string | null>(null);
+  const [exportNote, setExportNote] = useState<Note | null>(null);
   const [windowDays, setWindowDays] = useState<7 | 14 | 30>(14);
   const [pendingDoseId, setPendingDoseId] = useState<string | null>(null);
   const [exportingCsv, setExportingCsv] = useState(false);
@@ -81,7 +114,30 @@ export default function HistoryScreen() {
     };
   }, [history]);
 
-  const trend = useMemo(() => history.map((day) => day.adherencePct), [history]);
+  const shownPct = useCountUp(totals.adherencePct, duration.slow);
+  const pctColor = totals.adherencePct >= 80 ? c.success : totals.adherencePct >= 60 ? c.warning : c.destructive;
+
+  const barDays = useMemo<AdherenceBarDay[]>(() => {
+    const todayKey = isoDateKey(new Date());
+    const n = history.length;
+    return history.map((day, i) => {
+      const isToday = day.key === todayKey;
+      // ≤14 days: weekday initial on every bar; 30 days: day-of-month every 5th bar (counted from today).
+      const showLabel = n <= 14 || (n - 1 - i) % 5 === 0;
+      const label = !showLabel
+        ? ''
+        : n <= 14
+          ? formatDate(day.date, { weekday: 'narrow' })
+          : formatDate(day.date, { day: 'numeric' });
+      return {
+        key: day.key,
+        label,
+        pct: day.adherencePct,
+        logged: day.taken + day.skipped + day.missed > 0,
+        isToday,
+      };
+    });
+  }, [formatDate, history]);
 
   const missed = useMemo(
     () =>
@@ -116,7 +172,7 @@ export default function HistoryScreen() {
             )
             .map((dose) => ({
               ...dose,
-              dayLabel: formatDate(day.date, { month: 'short', day: 'numeric' }),
+              dayLabel: formatDate(day.date, { weekday: 'short', month: 'short', day: 'numeric' }),
             })),
         )
         .sort((a, b) => b.scheduledAt.getTime() - a.scheduledAt.getTime())
@@ -124,8 +180,20 @@ export default function HistoryScreen() {
     [formatDate, history],
   );
 
+  // Rows are newest-first, so same-day rows are adjacent: one pass groups them.
+  const correctionGroups = useMemo(() => {
+    const groups: { dayLabel: string; rows: DoseWithDay[] }[] = [];
+    for (const row of correctionRows) {
+      const last = groups[groups.length - 1];
+      if (last && last.dayLabel === row.dayLabel) last.rows.push(row);
+      else groups.push({ dayLabel: row.dayLabel, rows: [row] });
+    }
+    return groups;
+  }, [correctionRows]);
+
   const exportCsv = async () => {
     setActionError(null);
+    setExportNote(null);
     setExportingCsv(true);
 
     try {
@@ -149,14 +217,26 @@ export default function HistoryScreen() {
         summaryLabel: t('csvSummaryAdherence'),
       });
 
+      if (Platform.OS === 'web') {
+        // No share sheet or file system in the browser: hand the file to the download manager.
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = fileName;
+        anchor.click();
+        URL.revokeObjectURL(url);
+        setExportNote({ tone: 'success', text: t('csvWebDownloaded') });
+        return;
+      }
+
       if (!(await Sharing.isAvailableAsync())) {
-        setActionError(t('sharingUnavailable'));
+        setExportNote({ tone: 'error', text: t('sharingUnavailable') });
         return;
       }
 
       const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
       if (!baseDir) {
-        setActionError(t('csvExportError'));
+        setExportNote({ tone: 'error', text: t('csvExportError') });
         return;
       }
 
@@ -167,8 +247,9 @@ export default function HistoryScreen() {
         dialogTitle: t('exportCsv'),
         UTI: 'public.comma-separated-values-text',
       });
+      setExportNote({ tone: 'success', text: t('csvExportDone') });
     } catch {
-      setActionError(t('csvExportError'));
+      setExportNote({ tone: 'error', text: t('csvExportError') });
     } finally {
       setExportingCsv(false);
     }
@@ -240,6 +321,8 @@ export default function HistoryScreen() {
     }
   };
 
+  const isLoading = patient.isLoading || plans.isLoading || events.isLoading;
+
   return (
     <PageShell>
       <PageHeader
@@ -248,23 +331,33 @@ export default function HistoryScreen() {
       />
 
       <Stack>
-        {/* Responsive action buttons */}
-        <View style={{ flexDirection: 'row', gap: spacing(2.5) }}>
-          <View style={{ flex: 1 }}>
-            <Button
-              kind="secondary"
-              label={t('openReport')}
-              onPress={() => router.push('/report')}
-            />
+        <View style={{ gap: spacing(2) }}>
+          <View style={{ flexDirection: 'row', gap: spacing(2.5) }}>
+            <View style={{ flex: 1 }}>
+              <Button
+                kind="secondary"
+                label={t('openReport')}
+                onPress={() => router.push('/report')}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                kind="secondary"
+                label={t('exportCsv')}
+                onPress={() => void exportCsv()}
+                loading={exportingCsv}
+                disabled={isLoading}
+              />
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Button
-              kind="secondary"
-              label={exportingCsv ? t('exportingCsv') : t('exportCsv')}
-              onPress={() => void exportCsv()}
-              disabled={exportingCsv || patient.isLoading || plans.isLoading || events.isLoading}
-            />
-          </View>
+          {exportNote ? (
+            <Text
+              accessibilityRole={exportNote.tone === 'error' ? 'alert' : undefined}
+              style={[typography.footnote, { color: exportNote.tone === 'error' ? c.destructive : c.textSecondary }]}
+            >
+              {exportNote.text}
+            </Text>
+          ) : null}
         </View>
 
         <Card>
@@ -282,8 +375,15 @@ export default function HistoryScreen() {
           </View>
         </Card>
 
-        {patient.isLoading || plans.isLoading || events.isLoading ? (
-          <LoadingState label={t('loadingHistory')} />
+        {isLoading ? (
+          <>
+            <SkeletonCard rows={2} />
+            <Card>
+              {[0, 1, 2].map((i) => (
+                <SkeletonRow key={i} isFirst={i === 0} />
+              ))}
+            </Card>
+          </>
         ) : patient.error || plans.error || events.error ? (
           <ErrorState
             description={t('loadHistoryError')}
@@ -303,37 +403,25 @@ export default function HistoryScreen() {
                 <Text style={[typography.headline, { color: c.textSecondary }]}>{t('adherenceTrend')}</Text>
                 <View style={styles.metricRow}>
                   <Text
-                    style={[
-                      typography.metricSm,
-                      {
-                        color:
-                          totals.adherencePct >= 80
-                            ? c.success
-                            : totals.adherencePct >= 60
-                              ? c.warning
-                              : c.destructive,
-                        fontVariant: ['tabular-nums'],
-                      },
-                    ]}
+                    accessibilityLabel={`${totals.adherencePct.toString()}% ${t('takenOnSchedule')}`}
+                    style={[typography.metricSm, { color: pctColor, fontVariant: ['tabular-nums'] }]}
                   >
-                    {`${totals.adherencePct.toString()}%`}
+                    {`${shownPct.toString()}%`}
                   </Text>
                   <Badge label={t('takenOnSchedule')} tone="accent" />
                 </View>
 
                 <AnimatedProgressBar
                   progress={Math.min(1, Math.max(0, totals.adherencePct / 100))}
-                  color={
-                    totals.adherencePct >= 80
-                      ? c.success
-                      : totals.adherencePct >= 60
-                        ? c.warning
-                        : c.destructive
-                  }
+                  color={pctColor}
                   height={8}
                 />
 
-                <Sparkline values={trend} category="medication" height={72} />
+                <AdherenceBars
+                  days={barDays}
+                  height={72}
+                  accessibilityLabel={`${t('adherenceTrend')} · ${t('adherenceWindowDays').replace('{days}', windowDays.toString())}`}
+                />
                 <View style={{ flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' }}>
                   <Badge label={`${totals.taken.toString()} ${t('statusTaken')}`} tone="success" />
                   <Badge label={`${totals.skipped.toString()} ${t('statusSkipped')}`} tone="warning" />
@@ -344,94 +432,99 @@ export default function HistoryScreen() {
 
             <View>
               <SectionHeader title={t('historyFixLogSectionTitle')} />
-              {correctionRows.length === 0 ? (
+              {correctionGroups.length === 0 ? (
                 <EmptyState title={t('historyFixLogEmptyTitle')} description={t('historyFixLogEmptyHint')} />
               ) : (
                 <Stack>
-                  {correctionRows.map((dose) => {
-                    const state = dose.state as CorrectionAction;
-                    const disabled = pendingDoseId === dose.id || recordDose.isPending || undoDose.isPending;
-                    const dateTimeLabel = `${dose.dayLabel} · ${formatTime(dose.scheduledAt)}`;
+                  {correctionGroups.map((group) => (
+                    <View key={group.dayLabel} style={{ gap: spacing(2.5) }}>
+                      <Text
+                        accessibilityRole="header"
+                        style={[typography.footnote, styles.dayLabel, { color: c.textSecondary }]}
+                      >
+                        {group.dayLabel}
+                      </Text>
+                      {group.rows.map((dose) => {
+                        const state = dose.state as CorrectionAction;
+                        const pending = pendingDoseId === dose.id;
+                        const disabled = pending || recordDose.isPending || undoDose.isPending;
 
-                    const stateIcon =
-                      state === 'taken'
-                        ? 'checkmark'
-                        : state === 'skipped'
-                          ? 'pause'
-                          : 'alert';
-                    const stateColor =
-                      state === 'taken'
-                        ? c.success
-                        : state === 'skipped'
-                          ? c.warning
-                          : c.destructive;
-                    const stateBg =
-                      state === 'taken'
-                        ? `${c.success}1A`
-                        : state === 'skipped'
-                          ? `${c.warning}1A`
-                          : `${c.destructive}1A`;
+                        const stateIcon = state === 'taken' ? 'checkmark' : state === 'skipped' ? 'pause' : 'alert';
+                        const stateColor = state === 'taken' ? c.success : state === 'skipped' ? c.warning : c.destructive;
 
-                    return (
-                      <Card key={dose.id}>
-                        <View style={{ padding: spacing(4), gap: spacing(3) }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
-                            <View
-                              style={{
-                                width: 34,
-                                height: 34,
-                                borderRadius: radius.md,
-                                backgroundColor: stateBg,
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                              }}
-                            >
-                              <Ionicons name={stateIcon} size={16} color={stateColor} />
+                        return (
+                          <Card key={dose.id}>
+                            <View style={{ padding: spacing(4), gap: spacing(3) }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
+                                <View
+                                  style={{
+                                    width: 34,
+                                    height: 34,
+                                    borderRadius: radius.md,
+                                    backgroundColor: `${stateColor}1A`,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}
+                                >
+                                  <Ionicons name={stateIcon} size={16} color={stateColor} />
+                                </View>
+
+                                <View style={{ flex: 1, minWidth: 0 }}>
+                                  <Text style={[typography.headline, { color: c.textPrimary }]} numberOfLines={1}>
+                                    {dose.label}
+                                  </Text>
+                                  <Text style={[typography.footnote, { color: c.textSecondary, marginTop: 1 }]}>
+                                    {formatTime(dose.scheduledAt)}
+                                  </Text>
+                                </View>
+
+                                {pending ? (
+                                  <ActivityIndicator size="small" color={c.textSecondary} accessibilityLabel={t('historyUpdating')} />
+                                ) : (
+                                  <Badge
+                                    label={
+                                      state === 'taken'
+                                        ? t('statusTaken')
+                                        : state === 'skipped'
+                                          ? t('statusSkipped')
+                                          : t('statusMissed')
+                                    }
+                                    tone={toStateBadgeTone(state)}
+                                  />
+                                )}
+                              </View>
+
+                              <View
+                                pointerEvents={disabled ? 'none' : 'auto'}
+                                accessibilityState={{ disabled, busy: pending }}
+                                style={{ opacity: disabled ? 0.5 : 1 }}
+                              >
+                                <AnimatedSegmentedControl
+                                  value={state}
+                                  onChange={(next) => void rewriteDoseState(dose, next as CorrectionAction)}
+                                  options={[
+                                    { value: 'taken', label: t('statusTaken') },
+                                    { value: 'skipped', label: t('statusSkipped') },
+                                    { value: 'missed', label: t('statusMissed') },
+                                  ]}
+                                />
+                              </View>
+
+                              {dose.eventId ? (
+                                <Button
+                                  kind="secondary"
+                                  size="sm"
+                                  label={t('historyClearDoseLogCta')}
+                                  onPress={() => void clearDoseLog(dose)}
+                                  disabled={disabled}
+                                />
+                              ) : null}
                             </View>
-
-                            <View style={{ flex: 1, minWidth: 0 }}>
-                              <Text style={[typography.headline, { color: c.textPrimary }]} numberOfLines={1}>
-                                {dose.label}
-                              </Text>
-                              <Text style={[typography.footnote, { color: c.textSecondary, marginTop: 1 }]}>
-                                {dateTimeLabel}
-                              </Text>
-                            </View>
-
-                            <Badge
-                              label={
-                                state === 'taken'
-                                  ? t('statusTaken')
-                                  : state === 'skipped'
-                                    ? t('statusSkipped')
-                                    : t('statusMissed')
-                              }
-                              tone={toStateBadgeTone(state)}
-                            />
-                          </View>
-
-                          <AnimatedSegmentedControl
-                            value={state}
-                            onChange={(next) => void rewriteDoseState(dose, next as CorrectionAction)}
-                            options={[
-                              { value: 'taken', label: t('statusTaken') },
-                              { value: 'skipped', label: t('statusSkipped') },
-                              { value: 'missed', label: t('statusMissed') },
-                            ]}
-                          />
-
-                          {dose.eventId ? (
-                            <Button
-                              kind="secondary"
-                              label={t('historyClearDoseLogCta')}
-                              onPress={() => void clearDoseLog(dose)}
-                              disabled={disabled}
-                            />
-                          ) : null}
-                        </View>
-                      </Card>
-                    );
-                  })}
+                          </Card>
+                        );
+                      })}
+                    </View>
+                  ))}
                 </Stack>
               )}
             </View>
@@ -477,7 +570,11 @@ export default function HistoryScreen() {
               )}
             </View>
 
-            {actionError ? <Text style={[typography.footnote, { color: c.destructive }]}>{actionError}</Text> : null}
+            {actionError ? (
+              <Text accessibilityRole="alert" style={[typography.footnote, { color: c.destructive }]}>
+                {actionError}
+              </Text>
+            ) : null}
           </>
         )}
       </Stack>
@@ -491,5 +588,11 @@ const styles = {
     alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
     gap: spacing(2),
+  },
+  dayLabel: {
+    paddingHorizontal: spacing(1),
+    fontWeight: '600' as const,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase' as const,
   },
 };

@@ -1,30 +1,35 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
-import { Button, Card, Field, Input, PageHeader, PageShell, SegmentedControl, Stack, spacing, typography, useTokens } from '@/components/ui';
+import { View } from 'react-native';
+import { Button, Card, Field, Input, PageShell, SegmentedControl, Stack, spacing } from '@/components/ui';
 import { env } from '@/lib/env';
 import { ovokClient } from '@/lib/ovok-client';
 import { mapAuthError } from '@/lib/takt/auth-errors';
 import { useLocale } from '@/lib/takt/l10n';
+import { AuthBanner, AuthHero, AuthLinkRow } from './auth-shared';
 
 type ResetType = 'Patient' | 'Practitioner';
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
-  const { c } = useTokens();
   const { t } = useLocale();
 
   const [email, setEmail] = useState('');
   const [resetType, setResetType] = useState<ResetType>('Patient');
   const [busy, setBusy] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
 
+  const emailError = submitted && !email.trim() ? t('authEmailRequired') : null;
+
   const submit = async () => {
-    setBusy(true);
+    setSubmitted(true);
     setErrorText(null);
     setSent(false);
+    if (!email.trim()) return;
 
+    setBusy(true);
     try {
       const clientId =
         resetType === 'Patient'
@@ -47,8 +52,9 @@ export default function ResetPasswordScreen() {
 
   return (
     <PageShell>
-      <PageHeader title={t('authResetHeaderTitle')} subtitle={t('authResetDescription')} />
       <Stack>
+        <AuthHero icon="key" title={t('authResetHeaderTitle')} description={t('authResetDescription')} />
+
         <Card>
           <View style={{ padding: spacing(4), gap: spacing(3) }}>
             <Field label={t('authResetTypeLabel')}>
@@ -61,29 +67,27 @@ export default function ResetPasswordScreen() {
                 ]}
               />
             </Field>
-            <Field label={t('authEmailLabel')}>
+            <Field label={t('authEmailLabel')} error={emailError}>
               <Input
                 value={email}
                 onChangeText={setEmail}
+                invalid={Boolean(emailError)}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
                 textContentType="emailAddress"
                 autoComplete="email"
                 placeholder={t('authEmailPlaceholder')}
+                onSubmitEditing={() => void submit()}
               />
             </Field>
-            {sent ? <Text style={[typography.footnote, { color: c.success }]}>{t('authResetEmailSentBody')}</Text> : null}
-            {errorText ? <Text style={[typography.footnote, { color: c.destructive }]}>{errorText}</Text> : null}
-            <Button label={busy ? t('authSendingReset') : t('authResetPasswordTitle')} disabled={busy} onPress={() => void submit()} />
+            {sent ? <AuthBanner tone="success" message={t('authResetEmailSentBody')} /> : null}
+            {errorText ? <AuthBanner tone="destructive" message={errorText} /> : null}
+            <Button label={t('authResetPasswordTitle')} loading={busy} onPress={() => void submit()} />
           </View>
         </Card>
 
-        <Card>
-          <View style={{ padding: spacing(4), gap: spacing(3) }}>
-            <Button kind="secondary" label={t('authBackToSignIn')} onPress={() => router.push('/auth/sign-in' as never)} />
-          </View>
-        </Card>
+        <AuthLinkRow label={t('authBackToSignIn')} onPress={() => router.push('/auth/sign-in' as never)} />
       </Stack>
     </PageShell>
   );

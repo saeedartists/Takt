@@ -1,30 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import {
-  Button,
-  Card,
-  Field,
-  Input,
-  PageHeader,
-  PageShell,
-  Stack,
-  radius,
-  spacing,
-  typography,
-  useTokens,
-} from '@/components/ui';
+import { View } from 'react-native';
+import { Button, Card, Field, Input, PageShell, Stack, spacing } from '@/components/ui';
 import { env } from '@/lib/env';
 import { ovokClient } from '@/lib/ovok-client';
 import { mapAuthError } from '@/lib/takt/auth-errors';
 import { CONSENT_STORAGE_KEY } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
+import { AuthBanner, AuthHero, AuthLinkRow, PasswordInput } from './auth-shared';
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { c } = useTokens();
   const { t } = useLocale();
 
   const [name, setName] = useState('');
@@ -33,10 +20,27 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [busy, setBusy] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
+
+  // Derived so errors clear as the user types; shown only after a submit attempt.
+  const errors = {
+    name: submitted && !name.trim() ? t('authFieldRequired') : null,
+    surname: submitted && !surname.trim() ? t('authFieldRequired') : null,
+    email: submitted && !email.trim() ? t('authEmailRequired') : null,
+    password: submitted && !password ? t('authPasswordRequired') : null,
+    passwordConfirm:
+      submitted && !passwordConfirm
+        ? t('authPasswordRequired')
+        : submitted && password !== passwordConfirm
+          ? t('authPasswordMismatch')
+          : null,
+  };
 
   const submit = async () => {
     setErrorText(null);
+    setSubmitted(true);
+    if (!name.trim() || !surname.trim() || !email.trim() || !password || !passwordConfirm) return;
 
     if (!env.ovokTenantCode) {
       setErrorText(t('authTenantMissing'));
@@ -45,8 +49,7 @@ export default function RegisterScreen() {
     }
 
     if (password !== passwordConfirm) {
-      setErrorText(t('authPasswordMismatch'));
-      return;
+      return; // shown inline on the confirm field
     }
 
     setBusy(true);
@@ -82,53 +85,37 @@ export default function RegisterScreen() {
   return (
     <PageShell>
       <Stack>
-        {/* Brand Icon Header */}
-        <View style={styles.brandHero}>
-          <View
-            style={[
-              styles.logoCircle,
-              {
-                backgroundColor: `${c.accent}1A`,
-                borderColor: `${c.accent}33`,
-              },
-            ]}
-          >
-            <Ionicons name="person-add" size={32} color={c.accent} />
-          </View>
-          <Text style={[typography.title1, { color: c.textPrimary, letterSpacing: -0.5 }]}>
-            {t('authRegisterHeaderTitle')}
-          </Text>
-          <Text style={[typography.subhead, { color: c.textSecondary, textAlign: 'center' }]}>
-            {t('authRegisterDescription')}
-          </Text>
-        </View>
+        <AuthHero icon="person-add" title={t('authRegisterHeaderTitle')} description={t('authRegisterDescription')} />
 
         <Card>
           <View style={{ padding: spacing(4), gap: spacing(3) }}>
-            <Field label={t('authGivenNameLabel')}>
+            <Field label={t('authGivenNameLabel')} error={errors.name}>
               <Input
                 value={name}
                 onChangeText={setName}
+                invalid={Boolean(errors.name)}
                 textContentType="givenName"
                 autoComplete="name-given"
                 placeholder={t('authGivenNamePlaceholder')}
               />
             </Field>
 
-            <Field label={t('authFamilyNameLabel')}>
+            <Field label={t('authFamilyNameLabel')} error={errors.surname}>
               <Input
                 value={surname}
                 onChangeText={setSurname}
+                invalid={Boolean(errors.surname)}
                 textContentType="familyName"
                 autoComplete="name-family"
                 placeholder={t('authFamilyNamePlaceholder')}
               />
             </Field>
 
-            <Field label={t('authEmailLabel')}>
+            <Field label={t('authEmailLabel')} error={errors.email}>
               <Input
                 value={email}
                 onChangeText={setEmail}
+                invalid={Boolean(errors.email)}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
@@ -138,65 +125,41 @@ export default function RegisterScreen() {
               />
             </Field>
 
-            <Field label={t('authPasswordLabel')}>
-              <Input
+            <Field label={t('authPasswordLabel')} error={errors.password}>
+              <PasswordInput
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry
+                invalid={Boolean(errors.password)}
                 textContentType="newPassword"
                 autoComplete="password-new"
                 placeholder={t('authPasswordPlaceholder')}
               />
             </Field>
 
-            <Field label={t('authPasswordConfirmLabel')}>
-              <Input
+            <Field label={t('authPasswordConfirmLabel')} error={errors.passwordConfirm}>
+              <PasswordInput
                 value={passwordConfirm}
                 onChangeText={setPasswordConfirm}
-                secureTextEntry
+                invalid={Boolean(errors.passwordConfirm)}
                 textContentType="newPassword"
                 autoComplete="password-new"
                 placeholder={t('authPasswordConfirmPlaceholder')}
+                onSubmitEditing={() => void submit()}
               />
             </Field>
 
-            {errorText ? <Text style={[typography.footnote, { color: c.destructive }]}>{errorText}</Text> : null}
+            {errorText ? <AuthBanner tone="destructive" message={errorText} /> : null}
 
-            <Button
-              label={busy ? t('authRegistering') : t('authRegisterTitle')}
-              disabled={busy}
-              onPress={() => void submit()}
-            />
+            <Button label={t('authRegisterTitle')} loading={busy} onPress={() => void submit()} />
           </View>
         </Card>
 
-        <Card>
-          <View style={{ padding: spacing(4), gap: spacing(3) }}>
-            <Button
-              kind="secondary"
-              label={t('authBackToSignIn')}
-              onPress={() => router.push('/auth/sign-in' as never)}
-            />
-          </View>
-        </Card>
+        <AuthLinkRow
+          prompt={t('authHaveAccount')}
+          label={t('authSignInTitle')}
+          onPress={() => router.push('/auth/sign-in' as never)}
+        />
       </Stack>
     </PageShell>
   );
 }
-
-const styles = StyleSheet.create({
-  brandHero: {
-    alignItems: 'center',
-    paddingVertical: spacing(3),
-    gap: spacing(1.5),
-  },
-  logoCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: radius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    marginBottom: spacing(1),
-  },
-});
