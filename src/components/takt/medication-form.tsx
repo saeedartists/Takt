@@ -183,10 +183,6 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
   return (
     <View style={[styles.screen, { backgroundColor: c.background }]}>
       <PageShell>
-        <Text style={[typography.subhead, styles.intro, { color: c.textSecondary }]}>
-          {mode === 'create' ? t('medicationSetupSubtitle') : t('medicationEditSubtitle')}
-        </Text>
-
         <Stack>
           {/* Identity */}
           <Animated.View entering={enter(0)} layout={expand}>

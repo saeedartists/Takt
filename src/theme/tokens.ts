@@ -216,7 +216,7 @@ export const radius = {
  * neutral on body text, a wide track for the uppercase overline.
  */
 export const typography = {
-  largeTitle: { fontSize: 30, lineHeight: 36, fontWeight: '700', letterSpacing: -0.35 },
+  largeTitle: { fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.35 },
   title1: { fontSize: 25, lineHeight: 30, fontWeight: '700', letterSpacing: -0.3 },
   title2: { fontSize: 21, lineHeight: 26, fontWeight: '700', letterSpacing: -0.22 },
   title3: { fontSize: 18, lineHeight: 23, fontWeight: '600', letterSpacing: -0.15 },

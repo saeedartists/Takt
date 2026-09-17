@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -21,7 +21,6 @@ import {
   Stack,
   radius,
   spacing,
-  typography,
   useMotion,
   useTokens,
 } from '@/components/ui';
@@ -193,64 +192,57 @@ export default function MedicationsScreen() {
     <PageShell>
       <PageHeader
         title={t('medications')}
-        action={<Button label={t('addMedication')} onPress={() => router.push('/medications/new')} />}
+        action={
+          <Button
+            size="sm"
+            label={t('addMedication')}
+            icon={<Ionicons name="add" size={16} color={c.surface} />}
+            onPress={() => router.push('/medications/new')}
+          />
+        }
       />
 
       <Stack>
-        <Card>
-          <View style={{ padding: spacing(4), gap: spacing(3) }}>
-            <Text style={[typography.headline, { color: c.textSecondary }]}>{t('regimen')}</Text>
-            <View style={{ flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' }}>
-              <Badge label={`${activePlans.length.toString()} ${t('activeMeds')}`} tone="success" />
-              <Badge label={`${pausedPlans.length.toString()} ${t('pausedMeds')}`} tone="warning" />
-              <Badge label={`${archivedPlans.length.toString()} ${t('archivedMeds')}`} tone="destructive" />
-            </View>
-            <Button kind="secondary" label={t('openReport')} onPress={() => router.push('/report')} />
-          </View>
-        </Card>
-
-        <Card>
-          <View style={{ padding: spacing(4), gap: spacing(3) }}>
-            <View>
-              <Input
-                value={searchTerm}
-                onChangeText={setSearchTerm}
-                placeholder={t('medsSearchPlaceholder')}
-                returnKeyType="search"
-                accessibilityLabel={t('medsSearchPlaceholder')}
-                style={{ paddingRight: CLEAR_HIT }}
-              />
-              {searchTerm ? (
-                <AnimatedPressable
-                  onPress={() => setSearchTerm('')}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('medsSearchClear')}
-                  style={{
-                    position: 'absolute',
-                    right: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: CLEAR_HIT,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Ionicons name="close-circle" size={18} color={c.textTertiary} />
-                </AnimatedPressable>
-              ) : null}
-            </View>
-            <AnimatedSegmentedControl
-              value={statusFilter}
-              onChange={(next) => setStatusFilter(next as StatusFilter)}
-              options={[
-                { value: 'all', label: t('medsFilterAll') },
-                { value: 'active', label: t('medsFilterActive') },
-                { value: 'paused', label: t('medsFilterPaused') },
-                { value: 'archived', label: t('medsFilterArchived') },
-              ]}
+        <View style={{ gap: spacing(3) }}>
+          <View>
+            <Input
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+              placeholder={t('medsSearchPlaceholder')}
+              returnKeyType="search"
+              accessibilityLabel={t('medsSearchPlaceholder')}
+              style={{ paddingRight: CLEAR_HIT }}
             />
+            {searchTerm ? (
+              <AnimatedPressable
+                onPress={() => setSearchTerm('')}
+                accessibilityRole="button"
+                accessibilityLabel={t('medsSearchClear')}
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: CLEAR_HIT,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="close-circle" size={18} color={c.textTertiary} />
+              </AnimatedPressable>
+            ) : null}
           </View>
-        </Card>
+          <AnimatedSegmentedControl
+            value={statusFilter}
+            onChange={(next) => setStatusFilter(next as StatusFilter)}
+            options={[
+              { value: 'all', label: t('medsFilterAll') },
+              { value: 'active', label: t('medsFilterActive') },
+              { value: 'paused', label: t('medsFilterPaused') },
+              { value: 'archived', label: t('medsFilterArchived') },
+            ]}
+          />
+        </View>
 
         <View>
           {isLoading ? (
@@ -281,21 +273,21 @@ export default function MedicationsScreen() {
             <Stack>
               {activePlans.length > 0 ? (
                 <View>
-                  <SectionHeader title={t('activeMeds')} />
+                  <SectionHeader title={t('statusActive')} />
                   {renderList(activePlans, 0)}
                 </View>
               ) : null}
 
               {pausedPlans.length > 0 ? (
                 <View>
-                  <SectionHeader title={t('pausedMeds')} />
+                  <SectionHeader title={t('statusPaused')} />
                   {renderList(pausedPlans, activePlans.length)}
                 </View>
               ) : null}
 
               {archivedPlans.length > 0 ? (
                 <View>
-                  <SectionHeader title={t('archivedMeds')} />
+                  <SectionHeader title={t('statusArchived')} />
                   {renderList(archivedPlans, activePlans.length + pausedPlans.length)}
                 </View>
               ) : null}

@@ -203,7 +203,7 @@ export const en = {
     todayFilterAll: 'All',
     todayFilterDue: 'Due now',
     todayFilterPending: 'Pending',
-    todayFilterCompleted: 'Completed',
+    todayFilterCompleted: 'Done',
     noDosesForFilter: 'No doses match this filter',
     medsSearchPlaceholder: 'Search medications',
     medsFilterAll: 'All',

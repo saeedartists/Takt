@@ -12,7 +12,6 @@ import {
   ErrorState,
   ListGroup,
   ListRow,
-  PageHeader,
   PageShell,
   SectionHeader,
   SkeletonCard,
@@ -247,8 +246,7 @@ export default function ReportScreen() {
   if (patient.isLoading || plans.isLoading || events.isLoading) {
     return (
       <PageShell>
-        <PageHeader title={t('reportTitle')} subtitle={t('reportWindow')} />
-        <SkeletonCard rows={4} />
+          <SkeletonCard rows={4} />
       </PageShell>
     );
   }
@@ -281,7 +279,6 @@ export default function ReportScreen() {
 
   return (
     <PageShell>
-      <PageHeader title={t('reportTitle')} subtitle={t('reportWindow')} />
       <Stack>
         <View style={{ gap: spacing(2) }}>
           <Button

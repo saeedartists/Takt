@@ -133,7 +133,7 @@ export function NextDoseCard({
           </Text>
         )}
 
-        {showFirstDoseHint ? (
+        {showFirstDoseHint && due ? (
           <Text style={[typography.footnote, { color: c.textTertiary }]}>{t('journeyCardNeedDose')}</Text>
         ) : null}
       </Animated.View>

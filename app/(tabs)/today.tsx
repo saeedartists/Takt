@@ -75,7 +75,7 @@ export default function TodayScreen() {
   const [autoMissedCount, setAutoMissedCount] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   const [nextPending, setNextPending] = useState<NextDosePending>(null);
-  const [timelineFilter, setTimelineFilter] = useState<'all' | 'due' | 'pending' | 'completed'>('all');
+  const [timelineFilter, setTimelineFilter] = useState<'all' | 'pending' | 'completed'>('all');
   const [undoToast, setUndoToast] = useState<{
     visible: boolean;
     message: string;
@@ -131,7 +131,6 @@ export default function TodayScreen() {
 
   const filteredTimelineDoses = useMemo(() => {
     if (timelineFilter === 'all') return selectedDoses;
-    if (timelineFilter === 'due') return selectedDoses.filter((dose) => dose.state === 'due');
     if (timelineFilter === 'pending')
       return selectedDoses.filter((dose) => dose.state === 'scheduled' || dose.state === 'due');
     return selectedDoses.filter(
@@ -375,38 +374,28 @@ export default function TodayScreen() {
               ) : null}
 
               <View>
-                <SectionHeader
-                  title={t('timeline')}
-                  action={
-                    <Button
-                      kind="secondary"
-                      size="sm"
-                      label={t('addMedication')}
-                      icon={<Ionicons name="add" size={16} color={c.textPrimary} />}
-                      onPress={() => router.push('/medications/new')}
-                    />
-                  }
-                />
-                <Card style={{ marginBottom: spacing(3) }}>
-                  <View style={{ padding: spacing(2.5) }}>
-                    <AnimatedSegmentedControl
-                      value={timelineFilter}
-                      onChange={(next) => setTimelineFilter(next as 'all' | 'due' | 'pending' | 'completed')}
-                      options={[
-                        { value: 'all', label: t('todayFilterAll') },
-                        { value: 'due', label: t('todayFilterDue') },
-                        { value: 'pending', label: t('todayFilterPending') },
-                        { value: 'completed', label: t('todayFilterCompleted') },
-                      ]}
-                    />
-                  </View>
-                </Card>
+                <SectionHeader title={t('timeline')} />
+                <View style={{ marginBottom: spacing(3) }}>
+                  <AnimatedSegmentedControl
+                    value={timelineFilter}
+                    onChange={(next) => setTimelineFilter(next as 'all' | 'pending' | 'completed')}
+                    options={[
+                      { value: 'all', label: t('todayFilterAll') },
+                      { value: 'pending', label: t('todayFilterPending') },
+                      { value: 'completed', label: t('todayFilterCompleted') },
+                    ]}
+                  />
+                </View>
 
                 {grouped.length === 0 ? (
                   <EmptyState
                     title={timelineFilter === 'all' ? t('noDosesToday') : t('noDosesForFilter')}
-                    description={t('addMedicationHint')}
-                    action={<Button label={t('addMedication')} onPress={() => router.push('/medications/new')} />}
+                    description={needsFirstMedication ? t('addMedicationHint') : undefined}
+                    action={
+                      needsFirstMedication ? (
+                        <Button label={t('addMedication')} onPress={() => router.push('/medications/new')} />
+                      ) : undefined
+                    }
                   />
                 ) : (
                   // Filter change: crossfade the whole group container; rows only stagger on first load.
@@ -423,20 +412,14 @@ export default function TodayScreen() {
                             <View style={{ overflow: 'hidden', borderRadius: radius.xl }}>
                               <View style={styles.timeHeader}>
                                 <View style={styles.timeHeaderLeft}>
-                                  <View style={[styles.timeIconBadge, { backgroundColor: `${timeIcon.color}18` }]}>
-                                    <Ionicons name={timeIcon.name} size={15} color={timeIcon.color} />
-                                  </View>
+                                  <Ionicons name={timeIcon.name} size={15} color={timeIcon.color} />
                                   <Text
                                     style={[typography.headline, { color: c.textPrimary, fontVariant: ['tabular-nums'] }]}
                                   >
                                     {bucket.time}
                                   </Text>
                                 </View>
-                                <View style={[styles.doseCountPill, { backgroundColor: c.surfaceSubtle }]}>
-                                  <Text style={[typography.caption, { color: c.textSecondary, fontWeight: '600' }]}>
-                                    {doseCountText}
-                                  </Text>
-                                </View>
+                                <Text style={[typography.footnote, { color: c.textTertiary }]}>{doseCountText}</Text>
                               </View>
                               {bucket.doses.map((dose, index) => {
                                 const isFocused =
@@ -523,18 +506,6 @@ const styles = StyleSheet.create({
   timeHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing(2.5),
-  },
-  timeIconBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  doseCountPill: {
-    paddingHorizontal: spacing(2.5),
-    paddingVertical: 3,
-    borderRadius: radius.full,
+    gap: spacing(2),
   },
 });

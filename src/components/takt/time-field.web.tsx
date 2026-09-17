@@ -44,12 +44,15 @@ export const TimeField = ({
       borderRadius: radius.md,
       paddingHorizontal: spacing(3),
       ...typography.body,
-      fontFamily: 'inherit',
+      // Raw DOM input: no RNW font inheritance, so name the system stack explicitly.
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
       color: c.textPrimary,
       backgroundColor: c.surface,
       outlineWidth: 0,
       colorScheme: isDark ? 'dark' : 'light',
       width: '100%',
+      minWidth: 0,
+      boxSizing: 'border-box',
     },
   });
 };

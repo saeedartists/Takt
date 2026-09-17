@@ -2,7 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   AnimatedProgressBar,
@@ -115,7 +115,15 @@ export default function HistoryScreen() {
   }, [history]);
 
   const shownPct = useCountUp(totals.adherencePct, duration.slow);
-  const pctColor = totals.adherencePct >= 80 ? c.success : totals.adherencePct >= 60 ? c.warning : c.destructive;
+  // No logged doses yet: a neutral 0%, not a red one.
+  const pctColor =
+    totals.denominator === 0
+      ? c.textTertiary
+      : totals.adherencePct >= 80
+        ? c.success
+        : totals.adherencePct >= 60
+          ? c.warning
+          : c.destructive;
 
   const barDays = useMemo<AdherenceBarDay[]>(() => {
     const todayKey = isoDateKey(new Date());
@@ -328,52 +336,28 @@ export default function HistoryScreen() {
       <PageHeader
         title={t('history')}
         subtitle={t('adherenceWindowDays').replace('{days}', windowDays.toString())}
+        action={
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel={t('openReport')}
+            onPress={() => router.push('/report')}
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, minHeight: 44, justifyContent: 'center' })}
+          >
+            <Text style={[typography.subhead, { color: c.accent, fontWeight: '600' }]}>{t('report')}</Text>
+          </Pressable>
+        }
       />
 
       <Stack>
-        <View style={{ gap: spacing(2) }}>
-          <View style={{ flexDirection: 'row', gap: spacing(2.5) }}>
-            <View style={{ flex: 1 }}>
-              <Button
-                kind="secondary"
-                label={t('openReport')}
-                onPress={() => router.push('/report')}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Button
-                kind="secondary"
-                label={t('exportCsv')}
-                onPress={() => void exportCsv()}
-                loading={exportingCsv}
-                disabled={isLoading}
-              />
-            </View>
-          </View>
-          {exportNote ? (
-            <Text
-              accessibilityRole={exportNote.tone === 'error' ? 'alert' : undefined}
-              style={[typography.footnote, { color: exportNote.tone === 'error' ? c.destructive : c.textSecondary }]}
-            >
-              {exportNote.text}
-            </Text>
-          ) : null}
-        </View>
-
-        <Card>
-          <View style={{ padding: spacing(3), gap: spacing(2) }}>
-            <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('historyWindowLabel')}</Text>
-            <AnimatedSegmentedControl
-              value={windowDays.toString()}
-              onChange={(next) => setWindowDays(Number.parseInt(next, 10) as 7 | 14 | 30)}
-              options={[
-                { value: '7', label: t('historyWindow7') },
-                { value: '14', label: t('historyWindow14') },
-                { value: '30', label: t('historyWindow30') },
-              ]}
-            />
-          </View>
-        </Card>
+        <AnimatedSegmentedControl
+          value={windowDays.toString()}
+          onChange={(next) => setWindowDays(Number.parseInt(next, 10) as 7 | 14 | 30)}
+          options={[
+            { value: '7', label: t('historyWindow7') },
+            { value: '14', label: t('historyWindow14') },
+            { value: '30', label: t('historyWindow30') },
+          ]}
+        />
 
         {isLoading ? (
           <>
@@ -398,9 +382,22 @@ export default function HistoryScreen() {
           <EmptyState title={t('noAdherenceHistory')} description={t('historyNeedsSchedule')} />
         ) : (
           <>
+            <View>
+              <SectionHeader
+                title={t('adherenceTrend')}
+                action={
+                  <Button
+                    kind="secondary"
+                    size="sm"
+                    label={t('exportCsv')}
+                    onPress={() => void exportCsv()}
+                    loading={exportingCsv}
+                    disabled={isLoading}
+                  />
+                }
+              />
             <Card>
               <View style={{ padding: spacing(4), gap: spacing(3) }}>
-                <Text style={[typography.headline, { color: c.textSecondary }]}>{t('adherenceTrend')}</Text>
                 <View style={styles.metricRow}>
                   <Text
                     accessibilityLabel={`${totals.adherencePct.toString()}% ${t('takenOnSchedule')}`}
@@ -408,7 +405,7 @@ export default function HistoryScreen() {
                   >
                     {`${shownPct.toString()}%`}
                   </Text>
-                  <Badge label={t('takenOnSchedule')} tone="accent" />
+                  <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('takenOnSchedule')}</Text>
                 </View>
 
                 <AnimatedProgressBar
@@ -422,13 +419,34 @@ export default function HistoryScreen() {
                   height={72}
                   accessibilityLabel={`${t('adherenceTrend')} · ${t('adherenceWindowDays').replace('{days}', windowDays.toString())}`}
                 />
-                <View style={{ flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' }}>
-                  <Badge label={`${totals.taken.toString()} ${t('statusTaken')}`} tone="success" />
-                  <Badge label={`${totals.skipped.toString()} ${t('statusSkipped')}`} tone="warning" />
-                  <Badge label={`${totals.missed.toString()} ${t('statusMissed')}`} tone="destructive" />
-                </View>
+                {totals.denominator > 0 ? (
+                  <View style={{ flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' }}>
+                    <Badge label={`${totals.taken.toString()} ${t('statusTaken')}`} tone="success" />
+                    {totals.skipped > 0 ? (
+                      <Badge label={`${totals.skipped.toString()} ${t('statusSkipped')}`} tone="warning" />
+                    ) : null}
+                    {totals.missed > 0 ? (
+                      <Badge label={`${totals.missed.toString()} ${t('statusMissed')}`} tone="destructive" />
+                    ) : null}
+                  </View>
+                ) : (
+                  <Text style={[typography.footnote, { color: c.textTertiary }]}>{t('reportNoDataInWindow')}</Text>
+                )}
               </View>
             </Card>
+            {exportNote ? (
+              <Text
+                accessibilityRole={exportNote.tone === 'error' ? 'alert' : undefined}
+                style={[
+                  typography.footnote,
+                  styles.dayLabel,
+                  { marginTop: spacing(2), color: exportNote.tone === 'error' ? c.destructive : c.textSecondary },
+                ]}
+              >
+                {exportNote.text}
+              </Text>
+            ) : null}
+            </View>
 
             <View>
               <SectionHeader title={t('historyFixLogSectionTitle')} />
@@ -511,13 +529,16 @@ export default function HistoryScreen() {
                               </View>
 
                               {dose.eventId ? (
-                                <Button
-                                  kind="secondary"
-                                  size="sm"
-                                  label={t('historyClearDoseLogCta')}
-                                  onPress={() => void clearDoseLog(dose)}
-                                  disabled={disabled}
-                                />
+                                <View style={{ flexDirection: 'row' }}>
+                                  <Button
+                                    kind="secondary"
+                                    size="sm"
+                                    icon={<Ionicons name="trash-outline" size={15} color={c.textSecondary} />}
+                                    label={t('historyClearDoseLogCta')}
+                                    onPress={() => void clearDoseLog(dose)}
+                                    disabled={disabled}
+                                  />
+                                </View>
                               ) : null}
                             </View>
                           </Card>
@@ -529,6 +550,7 @@ export default function HistoryScreen() {
               )}
             </View>
 
+            {totals.denominator === 0 ? null : (
             <View>
               <SectionHeader title={t('missedDoses')} />
               {missed.length === 0 ? (
@@ -569,6 +591,7 @@ export default function HistoryScreen() {
                 </Stack>
               )}
             </View>
+            )}
 
             {actionError ? (
               <Text accessibilityRole="alert" style={[typography.footnote, { color: c.destructive }]}>

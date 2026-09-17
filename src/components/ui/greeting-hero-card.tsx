@@ -102,10 +102,12 @@ export function GreetingHeroCard({
             </Text>
             <Text style={[typography.footnote, { color: c.textSecondary }]}>{labels.takenToday}</Text>
           </View>
-          <View style={styles.badges}>
-            <Badge label={`${dueNowCount} ${labels.dueNow}`} tone={dueNowCount > 0 ? 'warning' : 'neutral'} />
-            <Badge label={`${upcomingCount} ${labels.toCome}`} tone="neutral" />
-          </View>
+          {totalCount > 0 ? (
+            <View style={styles.badges}>
+              {dueNowCount > 0 ? <Badge label={`${dueNowCount} ${labels.dueNow}`} tone="warning" /> : null}
+              {upcomingCount > 0 ? <Badge label={`${upcomingCount} ${labels.toCome}`} tone="neutral" /> : null}
+            </View>
+          ) : null}
         </View>
         <ProgressRing pct={completionPct} />
       </View>

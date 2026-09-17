@@ -19,6 +19,7 @@ import {
   SectionHeader,
   Stack,
   paletteConfigs,
+  MIN_TOUCH_TARGET,
   radius,
   spacing,
   typography,
@@ -215,7 +216,7 @@ export default function SettingsTabScreen() {
 
               <View style={{ gap: spacing(2.5) }}>
                 <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('themePalette')}</Text>
-                <View style={{ gap: spacing(2) }} accessibilityRole="radiogroup">
+                <View style={styles.swatchRow} accessibilityRole="radiogroup">
                   {PALETTES.map((pKey) => {
                     const config = paletteConfigs[pKey];
                     const isSelected = palette === pKey;
@@ -227,32 +228,27 @@ export default function SettingsTabScreen() {
                         accessibilityRole="radio"
                         accessibilityLabel={name}
                         accessibilityState={{ selected: isSelected, checked: isSelected }}
-                        style={[
-                          styles.paletteChip,
-                          {
-                            backgroundColor: isSelected ? c.surfaceRaised : c.surface,
-                            borderColor: isSelected ? c.accent : c.separator,
-                            borderWidth: isSelected ? 2 : StyleSheet.hairlineWidth,
-                          },
-                        ]}
+                        style={styles.swatchItem}
                       >
-                        {/* Key change remounts the swatch, so it pops exactly once per selection. */}
-                        <Animated.View
-                          key={isSelected ? 'selected' : 'idle'}
-                          entering={isSelected ? checkmarkEnter : undefined}
-                          style={[styles.paletteCircle, { backgroundColor: config.previewColor }]}
-                        />
-                        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                          <Text style={[typography.subhead, { color: c.textPrimary, fontWeight: '600' }]}>{name}</Text>
-                          <Text style={[typography.caption, { color: c.textSecondary }]}>
-                            {t(config.descriptionKey)}
-                          </Text>
+                        <View style={[styles.swatchRing, { borderColor: isSelected ? c.accent : 'transparent' }]}>
+                          <View style={[styles.swatch, { backgroundColor: config.previewColor }]}>
+                            {isSelected ? (
+                              <Animated.View entering={checkmarkEnter}>
+                                {/* White reads on every accent, in both schemes. */}
+                                <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                              </Animated.View>
+                            ) : null}
+                          </View>
                         </View>
-                        {isSelected ? (
-                          <Animated.View entering={checkmarkEnter}>
-                            <Ionicons name="checkmark-circle" size={22} color={c.accent} />
-                          </Animated.View>
-                        ) : null}
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            typography.caption,
+                            { color: isSelected ? c.textPrimary : c.textSecondary, fontWeight: isSelected ? '600' : '400' },
+                          ]}
+                        >
+                          {name}
+                        </Text>
                       </AnimatedPressable>
                     );
                   })}
@@ -273,7 +269,6 @@ export default function SettingsTabScreen() {
                   { value: 'de', label: 'Deutsch' },
                 ]}
               />
-              <Badge label={locale === 'de' ? t('languageActiveDe') : t('languageActiveEn')} tone="accent" />
             </View>
           </Card>
         </Section>
@@ -289,10 +284,6 @@ export default function SettingsTabScreen() {
                   value: minutes.toString(),
                   label: `${minutes.toString()}m`,
                 }))}
-              />
-              <Badge
-                label={t('snoozeActive').replace('{minutes}', (reminderPrefs.data?.snoozeMinutes ?? 15).toString())}
-                tone="neutral"
               />
             </View>
           </Card>
@@ -430,17 +421,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  paletteChip: {
+  swatchRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(3),
-    padding: spacing(3),
-    borderRadius: radius.md,
+    justifyContent: 'space-between',
+    gap: spacing(2),
   },
-  paletteCircle: {
-    width: 32,
-    height: 32,
+  swatchItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: spacing(1.5),
+    minHeight: MIN_TOUCH_TARGET,
+  },
+  swatchRing: {
+    padding: 3,
     borderRadius: radius.full,
+    borderWidth: 2,
+  },
+  swatch: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   permissionRow: {
     flexDirection: 'row',
