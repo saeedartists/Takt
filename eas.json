@@ -19,6 +19,14 @@
         "EXPO_PUBLIC_OVOK_MOCK": "1"
       }
     },
+    "testflight": {
+      "distribution": "store",
+      "channel": "preview",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_OVOK_MOCK": "1"
+      }
+    },
     "production": {
       "channel": "production",
       "ios": {
@@ -35,6 +43,9 @@
     }
   },
   "submit": {
+    "testflight": {
+      "ios": {}
+    },
     "production": {
       "ios": {}
     }

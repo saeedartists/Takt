@@ -17,7 +17,7 @@ Everything below assumes the EAS path. Local Xcode is only needed if you want to
 
 1. **Apple Developer Program** membership on the Apple ID that will own the app ($99/year). EAS cannot create this for you.
 2. **App Store Connect app record**: App Store Connect → My Apps → + → iOS app, bundle ID `com.actimi.takt`, name "Takt", primary language, SKU. `eas submit` can also create it on the first run if the Apple ID has the Account Holder or Admin role.
-3. **Backend**: a production build runs with `EXPO_PUBLIC_OVOK_MOCK=0`. Fill `EXPO_PUBLIC_OVOK_TENANT_CODE` and `EXPO_PUBLIC_OVOK_CLIENT_ID` in `eas.json` → `build.production.env` (or store them as EAS secrets with `eas env:create`). Until the Ovok tenant's patient login is unblocked (see `docs/TAKT_Auth_Blocker_Investigation.md`), a production build cannot sign users in. Ship TestFlight builds from the `preview` profile (mock mode on) in the meantime, but do not submit a mock-data build for App Review: Apple rejects demo-only apps under guideline 2.1 and 4.2.
+3. **Backend**: a production build runs with `EXPO_PUBLIC_OVOK_MOCK=0`. Fill `EXPO_PUBLIC_OVOK_TENANT_CODE` and `EXPO_PUBLIC_OVOK_CLIENT_ID` in `eas.json` → `build.production.env` (or store them as EAS secrets with `eas env:create`). Until the Ovok tenant's patient login is unblocked (see `docs/TAKT_Auth_Blocker_Investigation.md`), a production build cannot sign users in: `hasLiveBackendConfig()` in `src/lib/env.ts` returns false without a tenant code, so the app boots to the `setup` screen instead of the real UI. Ship TestFlight builds from the `testflight` profile (mock mode on) in the meantime, but do not submit a mock-data build for App Review: Apple rejects demo-only apps under guideline 2.1 and 4.2. `eas env:list --environment production` currently returns no variables, so the production env is still unset.
 4. **Legal copy**: `app/settings/imprint.tsx` and `app/settings/privacy.tsx` still hold placeholder legal-entity details. App Review reads them.
 
 ## Build and submit
@@ -27,8 +27,9 @@ Everything below assumes the EAS path. Local Xcode is only needed if you want to
 npx expo-doctor
 npx tsc --noEmit
 
-# 1. internal test build (mock mode on, installable via link / TestFlight)
-eas build --platform ios --profile preview
+# 1. TestFlight build (mock mode on) — requires "distribution": "store"
+eas build --platform ios --profile testflight
+eas submit --platform ios --profile testflight --latest
 
 # 2. production build (real backend env from eas.json; build number auto-increments)
 eas build --platform ios --profile production
@@ -36,6 +37,13 @@ eas build --platform ios --profile production
 # 3. upload the latest production build to App Store Connect / TestFlight
 eas submit --platform ios --profile production --latest
 ```
+
+> **Internal distribution is not TestFlight.** The `preview` profile sets
+> `"distribution": "internal"`, which produces an ad-hoc IPA limited to devices whose
+> UDIDs are registered with the provisioning profile. Apple rejects ad-hoc builds
+> uploaded to App Store Connect, so `preview` cannot reach TestFlight at all. TestFlight
+> only accepts `"distribution": "store"`, which is what the `testflight` and `production`
+> profiles use. Use `preview` only for installable-link testing on registered devices.
 
 `eas build` will ask, on the first run, to log in with the Apple ID and to generate the distribution certificate and provisioning profile. Say yes; they are stored in EAS. Re-use later with `eas credentials`.
 
