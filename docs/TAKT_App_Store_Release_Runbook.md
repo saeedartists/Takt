@@ -2,6 +2,23 @@
 
 Date: 2026-09-17. State of this machine: no Xcode installed (Command Line Tools only), no CocoaPods, EAS CLI 23 logged in as `saeedartists1`. `npx expo-doctor` passes 21/21. `npx expo prebuild --platform ios --no-install` generates a valid Xcode project from `app.json`.
 
+## Compatibility audit (2026-09-17)
+
+Verified without a local Xcode, using the same steps EAS runs in the cloud:
+
+| Check | Result |
+|---|---|
+| `npx expo-doctor` | 21/21 |
+| `npx tsc --noEmit` | clean |
+| `expo prebuild --platform ios` (generates the Xcode project from `app.json`) | OK; deployment target 16.4, Hermes, New Architecture, `ITSAppUsesNonExemptEncryption=false`, `aps-environment` entitlement from expo-notifications, iPad supports all four orientations so `UIRequiresFullScreen` can stay false |
+| `expo prebuild --platform android` | OK; permissions INTERNET, SCHEDULE_EXACT_ALARM, VIBRATE, storage |
+| `expo export --platform ios --platform android` (Metro + Hermes bytecode) | both bundles build (~6.3 MB each); no `react-dom` / `react-native-web` in the native graph |
+| Native modules (autolinked) | expo-* modules, react-native-screens, safe-area-context, gesture-handler, reanimated 4 + worklets, svg, keyboard-controller, async-storage, datetimepicker. None link HealthKit, Bluetooth, Camera, Photos or Location, so no extra `NS*UsageDescription` is needed |
+| Privacy manifests (required-reason APIs, ITMS-91053) | Expo aggregates `PrivacyInfo.xcprivacy` from all pods at `pod install`. react-native, async-storage and the expo modules ship manifests; the remaining community modules use none of the required-reason APIs (grepped their iOS sources) |
+| Removed on this pass | `@ovok/native` and its ~30 unused native peers (BLE, HealthKit, PDF, Lottie, Sentry, Paper…), two unused React Query persisters, `expo-web-browser`, `date-fns`, the dead `web-native-stub.js` |
+
+What this does not cover: a real `xcodebuild`/`pod install` run (happens on EAS), signing, and App Review itself.
+
 ## Two ways to ship
 
 | | EAS cloud build (recommended) | Local Xcode |

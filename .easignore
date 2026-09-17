@@ -18,7 +18,6 @@ ios/
 .env
 .env.local
 .env.*.local
-!src/lib/web-native-stub.js
 
 # local build artifacts (large APKs / generated QRs) - never needed on EAS
 build-artifacts/
