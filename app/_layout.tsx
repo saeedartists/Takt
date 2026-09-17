@@ -7,7 +7,7 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { SampleDataBanner } from '@/components/sample-data-banner';
+
 import { installOvokMocks } from '@/lib/mock-server';
 import { ovokClient } from '@/lib/ovok-client';
 import { queryClient } from '@/lib/query-client';
@@ -71,7 +71,6 @@ function ThemedAppContainer() {
   return (
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <SampleDataBanner />
       <Animated.View style={[{ flex: 1 }, crossfade]}>
         <AppStack />
       </Animated.View>
