@@ -9,9 +9,7 @@
  * fixtures make the first render show something real.
  *
  * Everything here is synthetic. Names are invented, MRNs are in the
- * documentation-reserved range, and the app shows a persistent
- * "Sample data" indicator whenever the mock is active so this can never be
- * mistaken for real PHI.
+ * documentation-reserved range. Do not treat this as real PHI.
  *
  * Shapes are real FHIR R4 — real LOINC codes, real ValueSet bindings,
  * real reference formats ("Patient/pat-001"). An app written against

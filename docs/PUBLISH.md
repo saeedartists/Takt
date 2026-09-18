@@ -17,7 +17,7 @@ Do **not** use `Takt-source`. That folder was a temporary Expo Go workspace. All
 | EAS project ID | `d4b1c55c-cddf-4e3e-a188-25ebbe9388ba` |
 | Apple team ID | `TR4973K4Q2` |
 | GitHub remote | `saeedartists/Takt` |
-| Current version | `0.1.1` (build `2`) — bump before each new upload |
+| Current version | `0.1.2` (build `3`) — bump before each new upload |
 
 ---
 
@@ -78,7 +78,7 @@ Dashboard: https://expo.dev/accounts/saeedartists1s-team/projects/saeed/updates
 1. Install **Expo Go** (SDK 57): [iPhone](https://apps.apple.com/app/expo-go/id982107779) · [Android](https://play.google.com/store/apps/details?id=host.exp.exponent)
 2. Log into Expo Go (team member or shared account)
 3. Scan the QR or open the link above
-4. Accept consent → app loads with **"Sample data — not real patient records"** banner
+4. Accept consent → app loads with mock demo data (not real patients)
 
 ### Demo data behavior
 
@@ -107,7 +107,7 @@ Sample data only — not real patients. Force-close Expo Go if you see an old sc
 
 ## 2. TestFlight via Xcode (manual, proven path)
 
-Use when EAS credentials are not set up. This is the method that successfully uploaded v0.1.1 build 2.
+Use when EAS credentials are not set up. This is the method that successfully uploaded v0.1.2 build 3.
 
 ### Prerequisites
 
@@ -352,7 +352,6 @@ Logic lives in `src/lib/env.ts`. Mock install in `src/lib/mock-server.ts`.
 | `metro.config.js` | Stubs native modules for Expo Go compatibility |
 | `src/lib/env.ts` | Mock vs live backend decision |
 | `src/lib/mock-server.ts` | In-memory FHIR demo data |
-| `src/components/sample-data-banner.tsx` | "Sample data" safety banner |
 | `src/components/ui/page.tsx` | Safe-area top inset for tab screens |
 | `docs/TAKT_App_Store_Release_Runbook.md` | Detailed App Store checklist |
 

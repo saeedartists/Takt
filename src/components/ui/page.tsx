@@ -1,6 +1,6 @@
-import { usePathname } from 'expo-router';
+import { useSegments } from 'expo-router';
 import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CONTENT_MAX_WIDTH, spacing, typography } from '../../theme/tokens';
@@ -12,24 +12,34 @@ import { useTokens } from '../../theme/use-tokens';
  * space over a grouped background.
  */
 
+const fallbackStatusBarTop = (): number =>
+  Platform.OS === 'ios' ? 59 : StatusBar.currentHeight ?? 24;
+
 export const PageShell = ({ children }: { children: ReactNode }) => {
   const { c } = useTokens();
   const insets = useSafeAreaInsets();
-  const pathname = usePathname();
-  // Tab screens and the boot index hide the stack header — respect the status bar.
-  const hasNativeStackHeader =
-    pathname !== '/' &&
-    pathname !== '/index' &&
-    !pathname.startsWith('/(tabs)');
-  const topPadding = hasNativeStackHeader ? spacing(4) : insets.top + spacing(4);
+  const segments = useSegments();
+  /*
+   * usePathname() strips route groups, so `/today` never starts with
+   * `/(tabs)`. v0.1.1 used that check and skipped the inset on every
+   * tab screen — titles sat under the status bar. useSegments() keeps
+   * `(tabs)`.
+   */
+  const isHeaderless = segments[0] === '(tabs)';
+  const statusBarTop = insets.top > 0 ? insets.top : fallbackStatusBarTop();
+  const topInset = isHeaderless ? statusBarTop : 0;
 
   return (
-    <ScrollView
-      style={{ backgroundColor: c.background }}
-      contentContainerStyle={[styles.content, { paddingTop: topPadding }]}
-    >
-      {children}
-    </ScrollView>
+    <View style={{ flex: 1, backgroundColor: c.background, paddingTop: topInset }}>
+      <ScrollView
+        style={{ backgroundColor: c.background }}
+        contentContainerStyle={styles.content}
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustContentInsets={false}
+      >
+        {children}
+      </ScrollView>
+    </View>
   );
 };
 
@@ -64,6 +74,7 @@ export const Stack = ({ children }: { children: ReactNode }) => (
 
 const styles = StyleSheet.create({
   content: {
+    paddingTop: spacing(4),
     paddingHorizontal: spacing(4),
     paddingBottom: spacing(12),
     // Reading column on wide viewports; a no-op on phones.
