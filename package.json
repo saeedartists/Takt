@@ -8,7 +8,10 @@
     "ios": "expo run:ios",
     "prebuild": "expo prebuild",
     "typecheck": "tsc --noEmit",
-    "build": "expo export --platform web"
+    "build": "expo export --platform web",
+    "update:preview": "eas update --channel preview --platform all --environment preview --non-interactive",
+    "build:testflight": "eas build --platform ios --profile testflight --non-interactive",
+    "submit:testflight": "eas submit --platform ios --profile testflight --latest --non-interactive"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.15",

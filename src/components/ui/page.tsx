@@ -1,5 +1,7 @@
+import { usePathname } from 'expo-router';
 import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CONTENT_MAX_WIDTH, spacing, typography } from '../../theme/tokens';
 import { useTokens } from '../../theme/use-tokens';
@@ -12,10 +14,19 @@ import { useTokens } from '../../theme/use-tokens';
 
 export const PageShell = ({ children }: { children: ReactNode }) => {
   const { c } = useTokens();
+  const insets = useSafeAreaInsets();
+  const pathname = usePathname();
+  // Tab screens and the boot index hide the stack header — respect the status bar.
+  const hasNativeStackHeader =
+    pathname !== '/' &&
+    pathname !== '/index' &&
+    !pathname.startsWith('/(tabs)');
+  const topPadding = hasNativeStackHeader ? spacing(4) : insets.top + spacing(4);
+
   return (
     <ScrollView
       style={{ backgroundColor: c.background }}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingTop: topPadding }]}
     >
       {children}
     </ScrollView>
@@ -54,7 +65,6 @@ export const Stack = ({ children }: { children: ReactNode }) => (
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing(4),
-    paddingTop: spacing(4),
     paddingBottom: spacing(12),
     // Reading column on wide viewports; a no-op on phones.
     width: '100%',

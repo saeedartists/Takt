@@ -16,6 +16,7 @@
  * apps/api/src/sandbox/sandbox-fs.service.ts).
  */
 
+import { env } from './env';
 import { SEED, type FhirResource } from './seed/fixtures';
 
 type MockRoute = {
@@ -336,9 +337,7 @@ const routes: MockRoute[] = [
   },
 ];
 
-const isMockEnabled = (): boolean =>
-  process.env.EXPO_PUBLIC_OVOK_MOCK === '1' ||
-  process.env.EXPO_PUBLIC_OVOK_MOCK === 'true';
+const isMockEnabled = (): boolean => env.ovokMockEnabled;
 
 /** True when the in-memory demo data is serving this app's API calls. */
 export const isOvokMockActive = (): boolean => isMockEnabled();
