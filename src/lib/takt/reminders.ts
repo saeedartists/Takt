@@ -99,13 +99,39 @@ type ReminderSeed = {
   body: string;
   doseKey: string;
   requestRef: string;
+  medicationRef?: string;
+  label: string;
 };
 
-type ReminderNotificationData = {
+export type ReminderNotificationData = {
   route: '/(tabs)/today';
   doseKey: string;
   requestRef: string;
   scheduledAt: string;
+  medicationRef?: string;
+  label?: string;
+};
+
+export type ReminderCopy = {
+  title: string;
+  body: string;
+  /** Body used when the user hides medication names on the lock screen. */
+  bodyPrivate?: string;
+  actionTaken?: string;
+  actionSnooze?: string;
+};
+
+const CATEGORY_ID = 'takt-dose';
+export const REMINDER_ACTION_TAKEN = 'taken';
+export const REMINDER_ACTION_SNOOZE = 'snooze';
+
+/** Lock-screen buttons: confirm or snooze without opening the app. */
+const ensureCategory = async (copy: ReminderCopy): Promise<void> => {
+  if (Platform.OS === 'web' || !copy.actionTaken || !copy.actionSnooze) return;
+  await Notifications.setNotificationCategoryAsync(CATEGORY_ID, [
+    { identifier: REMINDER_ACTION_TAKEN, buttonTitle: copy.actionTaken, options: { opensAppToForeground: false } },
+    { identifier: REMINDER_ACTION_SNOOZE, buttonTitle: copy.actionSnooze, options: { opensAppToForeground: false } },
+  ]);
 };
 
 const formatTemplate = (template: string, vars: Record<string, string>): string =>
@@ -121,7 +147,8 @@ const canScheduleOnDay = (plan: MedicationPlan, date: Date): boolean => {
 
 const buildReminderSeeds = (
   plans: MedicationPlan[],
-  copy: { title: string; body: string },
+  copy: ReminderCopy,
+  hideNames = false,
   horizonDays = 21,
 ): ReminderSeed[] => {
   const now = new Date();
@@ -137,15 +164,17 @@ const buildReminderSeeds = (
         if (triggerAt <= floor) continue;
         const suffix = plan.strength ? ` (${plan.strength})` : '';
         const requestId = plan.request.id;
+        const body =
+          hideNames && copy.bodyPrivate
+            ? formatTemplate(copy.bodyPrivate, { time })
+            : formatTemplate(copy.body, { label: plan.label, suffix, time });
         rows.push({
           triggerAt,
           title: copy.title,
-          body: formatTemplate(copy.body, {
-            label: plan.label,
-            suffix,
-            time,
-          }),
+          body,
           requestRef: `MedicationRequest/${requestId}`,
+          medicationRef: plan.request.medicationReference?.reference,
+          label: plan.label,
           doseKey: buildDoseKey(requestId, triggerAt),
         });
       }
@@ -406,10 +435,7 @@ const writeScheduledIds = async (ids: string[]): Promise<void> => {
   await writeJson(STORAGE_KEY, ids);
 };
 
-const reconcileSchedule = async (
-  plans: MedicationPlan[],
-  copy: { title: string; body: string },
-): Promise<void> => {
+const reconcileSchedule = async (plans: MedicationPlan[], copy: ReminderCopy): Promise<void> => {
   await appendDiagnosticEvent('schedule.reconcile.start', `plans:${plans.length.toString()}`);
 
   const canSchedule = await canScheduleWithoutPrompt();
@@ -426,12 +452,13 @@ const reconcileSchedule = async (
   }
 
   await ensureChannel();
+  await ensureCategory(copy);
   const prefs = await readReminderPreferences();
   const previousIds = await readScheduledIds();
   await Promise.all(previousIds.map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => undefined)));
   await appendDiagnosticEvent('schedule.cancelled', `count:${previousIds.length.toString()}`);
 
-  const seeds = buildReminderSeeds(plans, copy);
+  const seeds = buildReminderSeeds(plans, copy, prefs.hideNamesInReminders);
   const nextIds: string[] = [];
 
   for (const seed of seeds) {
@@ -440,6 +467,8 @@ const reconcileSchedule = async (
       doseKey: seed.doseKey,
       requestRef: seed.requestRef,
       scheduledAt: seed.triggerAt.toISOString(),
+      medicationRef: seed.medicationRef,
+      label: seed.label,
     };
 
     const id = await Notifications.scheduleNotificationAsync({
@@ -447,6 +476,7 @@ const reconcileSchedule = async (
         title: seed.title,
         body: seed.body,
         sound: prefs.sound ? DEFAULT_SOUND : false,
+        categoryIdentifier: CATEGORY_ID,
         data,
       },
       trigger: {
@@ -483,7 +513,7 @@ const cleanupSnoozeGuards = (map: Record<string, string>): Record<string, string
 
 export const scheduleSnoozeReminder = async (
   input: { label: string; delayMinutes?: number; doseKey: string },
-  copy?: { title: string; body: string },
+  copy?: ReminderCopy,
 ): Promise<{ scheduled: boolean }> => {
   await ensureChannel();
   const prefs = await readReminderPreferences();
@@ -500,9 +530,12 @@ export const scheduleSnoozeReminder = async (
   await Notifications.scheduleNotificationAsync({
     content: {
       title: copy?.title ?? 'Dose snoozed',
-      body: copy?.body
-        ? formatTemplate(copy.body, { label: input.label, minutes: delayMinutes.toString() })
-        : `${input.label} reminder in ${delayMinutes.toString()} minutes`,
+      body:
+        prefs.hideNamesInReminders && copy?.bodyPrivate
+          ? formatTemplate(copy.bodyPrivate, { minutes: delayMinutes.toString() })
+          : copy?.body
+            ? formatTemplate(copy.body, { label: input.label, minutes: delayMinutes.toString() })
+            : `${input.label} reminder in ${delayMinutes.toString()} minutes`,
       sound: prefs.sound ? DEFAULT_SOUND : false,
       data: {
         route: '/(tabs)/today',
@@ -564,8 +597,11 @@ export const useReminderSync = (plans: MedicationPlan[], enabled: boolean): void
     await reconcileSchedule(plans, {
       title: t('reminderNotificationTitle'),
       body: t('reminderNotificationBody'),
+      bodyPrivate: t('reminderNotificationBodyPrivate'),
+      actionTaken: t('reminderActionTaken'),
+      actionSnooze: t('reminderActionSnooze'),
     });
-  }, [enabled, plans, t, prefs.data?.sound]);
+  }, [enabled, plans, t, prefs.data?.sound, prefs.data?.hideNamesInReminders]);
 
   useEffect(() => {
     void sync();
@@ -594,13 +630,18 @@ export const useReminderSync = (plans: MedicationPlan[], enabled: boolean): void
   }, [enabled, sync]);
 };
 
-const parseReminderNavigation = (
-  response: Notifications.NotificationResponse | Notifications.Notification,
-): {
+export type ReminderTarget = {
   route: '/(tabs)/today';
   doseKey?: string;
   requestRef?: string;
-} | null => {
+  scheduledAt?: string;
+  medicationRef?: string;
+  label?: string;
+};
+
+const parseReminderNavigation = (
+  response: Notifications.NotificationResponse | Notifications.Notification,
+): ReminderTarget | null => {
   const data =
     'notification' in response
       ? (response.notification.request.content.data as Record<string, unknown> | undefined)
@@ -609,10 +650,14 @@ const parseReminderNavigation = (
   if (!data) return null;
   if (data.route !== '/(tabs)/today') return null;
 
+  const str = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
   return {
     route: '/(tabs)/today',
-    doseKey: typeof data.doseKey === 'string' ? data.doseKey : undefined,
-    requestRef: typeof data.requestRef === 'string' ? data.requestRef : undefined,
+    doseKey: str(data.doseKey),
+    requestRef: str(data.requestRef),
+    scheduledAt: str(data.scheduledAt),
+    medicationRef: str(data.medicationRef),
+    label: str(data.label),
   };
 };
 
@@ -621,7 +666,49 @@ type ReminderRouter = {
   replace: (href: any) => void;
 };
 
-export const useReminderResponseRouting = (router: ReminderRouter): void => {
+export type ReminderActionHandlers = {
+  /** "Taken" pressed on the notification itself, without opening the app. */
+  onTaken?: (target: ReminderTarget) => void;
+  /** "Snooze" pressed on the notification itself. */
+  onSnooze?: (target: ReminderTarget) => void;
+};
+
+/**
+ * Routes reminder taps to Today and dispatches lock-screen actions.
+ * Handlers are read through a ref so callers may pass fresh closures.
+ */
+export const useReminderResponseRouting = (router: ReminderRouter, handlers?: ReminderActionHandlers): void => {
+  const handlersRef = useRef(handlers);
+  handlersRef.current = handlers;
+  // A response is handled once; the focus-time "last response" check must not replay an action.
+  const handled = useRef<Set<string>>(new Set());
+
+  const handle = useCallback(
+    (response: Notifications.NotificationResponse, navigate: 'push' | 'replace') => {
+      const target = parseReminderNavigation(response);
+      if (!target) return;
+      const id = `${response.notification.request.identifier}|${response.actionIdentifier}`;
+      if (handled.current.has(id)) return;
+      handled.current.add(id);
+
+      if (response.actionIdentifier === REMINDER_ACTION_TAKEN) {
+        void appendDiagnosticEvent('notification.opened', `taken:${target.doseKey ?? ''}`);
+        handlersRef.current?.onTaken?.(target);
+        return;
+      }
+      if (response.actionIdentifier === REMINDER_ACTION_SNOOZE) {
+        void appendDiagnosticEvent('notification.opened', `snooze:${target.doseKey ?? ''}`);
+        handlersRef.current?.onSnooze?.(target);
+        return;
+      }
+
+      void appendDiagnosticEvent('notification.opened', target.doseKey ?? target.requestRef);
+      const query = target.doseKey ? `?focus=${encodeURIComponent(target.doseKey)}` : '';
+      router[navigate](`/(tabs)/today${query}` as never);
+    },
+    [router],
+  );
+
   useEffect(() => {
     if (Platform.OS === 'web') return;
     const receivedSub = Notifications.addNotificationReceivedListener((notification) => {
@@ -631,34 +718,21 @@ export const useReminderResponseRouting = (router: ReminderRouter): void => {
       void trackReminderDelivered();
     });
 
-    const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const target = parseReminderNavigation(response);
-      if (!target) return;
-
-      void appendDiagnosticEvent('notification.opened', target.doseKey ?? target.requestRef);
-      const query = target.doseKey ? `?focus=${encodeURIComponent(target.doseKey)}` : '';
-      router.push(`/(tabs)/today${query}` as never);
-    });
+    const responseSub = Notifications.addNotificationResponseReceivedListener((response) => handle(response, 'push'));
 
     return () => {
       receivedSub.remove();
       responseSub.remove();
     };
-  }, [router]);
+  }, [handle]);
 
   useFocusEffect(
     useCallback(() => {
       if (Platform.OS === 'web') return;
       void Notifications.getLastNotificationResponseAsync().then((response) => {
-        if (!response) return;
-        const target = parseReminderNavigation(response);
-        if (!target) return;
-
-        void appendDiagnosticEvent('notification.opened', target.doseKey ?? target.requestRef);
-        const query = target.doseKey ? `?focus=${encodeURIComponent(target.doseKey)}` : '';
-        router.replace(`/(tabs)/today${query}` as never);
+        if (response) handle(response, 'replace');
       });
-    }, [router]),
+    }, [handle]),
   );
 };
 

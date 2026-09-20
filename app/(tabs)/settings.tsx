@@ -31,7 +31,7 @@ import { ovokClient } from '@/lib/ovok-client';
 import { useWithdrawConsent } from '@/lib/hooks/use-takt-mutations';
 import { CONSENT_STORAGE_KEY } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
-import { useReminderPreferences } from '@/lib/takt/preferences';
+import { GRACE_OPTIONS, useReminderPreferences, type GraceHours } from '@/lib/takt/preferences';
 import { readReminderPermissionStatus } from '@/lib/takt/reminders';
 import { env } from '@/lib/env';
 
@@ -247,6 +247,24 @@ export default function SettingsTabScreen() {
                   { value: 'on', label: t('reminderSoundOn') },
                   { value: 'off', label: t('reminderSoundOff') },
                 ]}
+              />
+              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('reminderPrivacyLabel')}</Text>
+              <AnimatedSegmentedControl
+                value={reminderPrefs.data?.hideNamesInReminders ? 'hide' : 'show'}
+                onChange={(next) => void reminderPrefs.setHideNames(next === 'hide')}
+                options={[
+                  { value: 'show', label: t('reminderPrivacyShow') },
+                  { value: 'hide', label: t('reminderPrivacyHide') },
+                ]}
+              />
+              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('graceWindowLabel')}</Text>
+              <AnimatedSegmentedControl
+                value={(reminderPrefs.data?.graceHours ?? 4).toString()}
+                onChange={(next) => void reminderPrefs.setGraceHours(Number.parseInt(next, 10) as GraceHours)}
+                options={GRACE_OPTIONS.map((hours) => ({
+                  value: hours.toString(),
+                  label: t('graceWindowHours').replace('{hours}', hours.toString()),
+                }))}
               />
             </View>
           </Card>

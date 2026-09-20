@@ -15,6 +15,7 @@ import type {
   MedicationRequestResource,
   MedicationResource,
   PausePeriod,
+  SkipReason,
   WeekdayCode,
 } from '@/lib/takt/types';
 
@@ -34,6 +35,8 @@ type UpdatePlanInput = PlanInput & {
   request: MedicationRequestResource;
   medication: MedicationResource;
   status: 'active' | 'on-hold' | 'stopped';
+  /** ISO end of a pause; doses and reminders resume by themselves after it. */
+  pauseUntil?: string;
 };
 
 const persistPrimaryPatientId = async (patientRef: string): Promise<void> => {
@@ -124,6 +127,7 @@ const readPauseHistory = (extensions: FhirExtension[] | undefined): PausePeriod[
 const applyStatusMetadata = (
   request: MedicationRequestResource,
   nextStatus: 'active' | 'on-hold' | 'stopped',
+  pauseUntil?: string,
 ): FhirExtension[] => {
   const nowIso = new Date().toISOString();
   let extensions = [...(request.extension ?? [])];
@@ -139,7 +143,8 @@ const applyStatusMetadata = (
   const previousStatus = request.status;
 
   if (previousStatus !== 'on-hold' && nextStatus === 'on-hold') {
-    pauseHistory.push({ start: nowIso });
+    // A pause with an end date resumes by itself: the schedule engine treats an ended period as active again.
+    pauseHistory.push(pauseUntil ? { start: nowIso, end: pauseUntil } : { start: nowIso });
   }
 
   if (previousStatus === 'on-hold' && nextStatus !== 'on-hold') {
@@ -268,7 +273,7 @@ export const useUpdateMedicationPlan = () => {
         }),
       });
 
-      const extensions = applyStatusMetadata(input.request, input.status);
+      const extensions = applyStatusMetadata(input.request, input.status, input.pauseUntil);
 
       const medicationRequest = await ovokFetch<MedicationRequestResource>(
         `/fhir/R4/MedicationRequest/${input.request.id}`,
@@ -328,7 +333,7 @@ export const useUpdateMedicationPlan = () => {
 
 const DOSE_EVENTS_KEY = ['takt', 'MedicationAdministration'] as const;
 
-const notGivenReason = (action: 'skipped' | 'missed') => ({
+const notGivenReason = (action: 'skipped' | 'missed', reason?: SkipReason) => ({
   statusReason: [
     {
       coding: [
@@ -337,6 +342,8 @@ const notGivenReason = (action: 'skipped' | 'missed') => ({
           code: action === 'missed' ? 'not-available' : 'patient-refusal',
           display: action,
         },
+        // The user's own reason for skipping, when given; a second coding on the same concept.
+        ...(reason ? [{ system: TAKT_EXT.skipReason, code: reason, display: reason }] : []),
       ],
     },
   ],
@@ -351,6 +358,10 @@ export const useRecordDose = () => {
       requestRef: string;
       scheduledAt: Date;
       action: 'taken' | 'skipped' | 'missed';
+      /** Why the user skipped; recorded as a second coding on the FHIR status reason. */
+      reason?: SkipReason;
+      /** When the dose was actually taken, for late confirmations from History. Defaults to now. */
+      effectiveAt?: Date;
     }) => {
       const body: Omit<MedicationAdministrationResource, 'id'> = {
         resourceType: 'MedicationAdministration',
@@ -358,14 +369,14 @@ export const useRecordDose = () => {
         subject: { reference: input.patientRef },
         request: { reference: input.requestRef },
         medicationReference: input.medicationRef ? { reference: input.medicationRef } : undefined,
-        effectiveDateTime: new Date().toISOString(),
+        effectiveDateTime: (input.effectiveAt ?? new Date()).toISOString(),
         extension: [
           {
             url: TAKT_EXT.scheduledTime,
             valueDateTime: input.scheduledAt.toISOString(),
           },
         ],
-        ...(input.action !== 'taken' ? notGivenReason(input.action) : {}),
+        ...(input.action !== 'taken' ? notGivenReason(input.action, input.reason) : {}),
       };
 
       const created = await ovokFetch<MedicationAdministrationResource>('/fhir/R4/MedicationAdministration', {
@@ -394,9 +405,9 @@ export const useRecordDose = () => {
         subject: { reference: input.patientRef },
         request: { reference: input.requestRef },
         medicationReference: input.medicationRef ? { reference: input.medicationRef } : undefined,
-        effectiveDateTime: new Date().toISOString(),
+        effectiveDateTime: (input.effectiveAt ?? new Date()).toISOString(),
         extension: [{ url: TAKT_EXT.scheduledTime, valueDateTime: input.scheduledAt.toISOString() }],
-        ...(input.action !== 'taken' ? notGivenReason(input.action) : {}),
+        ...(input.action !== 'taken' ? notGivenReason(input.action, input.reason) : {}),
       };
       qc.setQueryData<FhirBundle<MedicationAdministrationResource>>(key, (old) => ({
         total: (old?.total ?? 0) + 1,

@@ -141,6 +141,9 @@ export type FamilySharingGrant = {
 
 export type DoseState = 'scheduled' | 'due' | 'taken' | 'skipped' | 'missed';
 
+/** What the user said when skipping; a record, not an interpretation. */
+export type SkipReason = 'forgot' | 'side-effects' | 'ran-out' | 'not-needed' | 'other';
+
 export type MedicationCadence = 'daily' | 'weekdays' | 'custom';
 
 export type PausePeriod = {
@@ -173,4 +176,6 @@ export type DoseOccurrence = {
   state: DoseState;
   eventId?: string;
   eventTimestamp?: string;
+  /** User-reported reason on a skipped dose, when one was given. */
+  reasonCode?: SkipReason;
 };

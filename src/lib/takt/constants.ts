@@ -13,6 +13,8 @@ export const TAKT_EXT = {
   /** On the RelatedPerson: the relative's own Patient account once they accept the invitation. */
   familyShareLinkedAccount: 'https://actimi.com/fhir/takt/family-share/linked-account',
   familyShareAcceptedAt: 'https://actimi.com/fhir/takt/family-share/accepted-at',
+  /** Coding system for the user-reported reason on a skipped dose. */
+  skipReason: 'https://actimi.com/fhir/takt/skip-reason',
 } as const;
 
 export const TAKT_CONSENT_VERSION = 'takt-consent-v1';

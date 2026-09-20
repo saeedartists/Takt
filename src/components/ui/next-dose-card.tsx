@@ -1,10 +1,14 @@
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { useLocale } from '../../lib/takt/l10n';
-import type { DoseOccurrence, DoseState } from '../../lib/takt/types';
-import { spacing, typography } from '../../theme/tokens';
+import type { DoseOccurrence, DoseState, SkipReason } from '../../lib/takt/types';
+import { radius, spacing, typography } from '../../theme/tokens';
+import { useMotion } from '../../theme/use-motion';
 import { useTokens } from '../../theme/use-tokens';
+import { AnimatedPressable } from './animated-pressable';
+import type { SkipReasonOption } from './animated-dose-row';
 import { Badge } from './badge';
 import { Card } from './card';
 import { CelebrationCard } from './celebration-card';
@@ -21,8 +25,10 @@ type NextDoseCardProps = {
   pending: NextDosePending;
   snoozeMinutes: number;
   stateLabel: (state: DoseState) => string;
+  /** Reasons offered when skipping; empty list skips without asking. */
+  skipReasons?: SkipReasonOption[];
   onTake: (dose: DoseOccurrence) => void;
-  onSkip: (dose: DoseOccurrence) => void;
+  onSkip: (dose: DoseOccurrence, reason?: SkipReason) => void;
   onSnooze: (dose: DoseOccurrence) => void;
   onAddMedication: () => void;
 };
@@ -39,6 +45,7 @@ export function NextDoseCard({
   pending,
   snoozeMinutes,
   stateLabel,
+  skipReasons = [],
   onTake,
   onSkip,
   onSnooze,
@@ -46,6 +53,8 @@ export function NextDoseCard({
 }: NextDoseCardProps) {
   const { c } = useTokens();
   const { t, formatTime } = useLocale();
+  const { duration } = useMotion();
+  const [skipOpen, setSkipOpen] = useState(false);
 
   if (!hasPlans) {
     return (
@@ -77,6 +86,15 @@ export function NextDoseCard({
 
   const dose = due ?? next;
   const time = dose ? formatTime(dose.scheduledAt) : '';
+
+  const handleSkip = () => {
+    if (!due) return;
+    if (skipReasons.length === 0) {
+      onSkip(due);
+      return;
+    }
+    setSkipOpen((open) => !open);
+  };
 
   return (
     <Card>
@@ -112,7 +130,7 @@ export function NextDoseCard({
                 disabled={pending !== null}
                 haptic="warning"
                 accessibilityLabel={`${t('markSkipped')}, ${due.label}, ${time}`}
-                onPress={() => onSkip(due)}
+                onPress={handleSkip}
               />
               <Button
                 kind="secondary"
@@ -124,6 +142,29 @@ export function NextDoseCard({
                 onPress={() => onSnooze(due)}
               />
             </View>
+
+            {skipOpen ? (
+              <Animated.View entering={FadeIn.duration(duration.fast)} style={styles.reasonPanel}>
+                <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('skipReasonPrompt')}</Text>
+                <View style={styles.secondaryRow}>
+                  {skipReasons.map((reason) => (
+                    <AnimatedPressable
+                      key={reason.code}
+                      disabled={pending !== null}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${t('markSkipped')}: ${reason.label}, ${due.label}, ${time}`}
+                      onPress={() => {
+                        setSkipOpen(false);
+                        onSkip(due, reason.code);
+                      }}
+                      style={[styles.chip, { backgroundColor: c.surfaceRaised, borderColor: c.separator }]}
+                    >
+                      <Text style={[typography.subhead, { color: c.textPrimary, fontWeight: '600' }]}>{reason.label}</Text>
+                    </AnimatedPressable>
+                  ))}
+                </View>
+              </Animated.View>
+            ) : null}
           </>
         ) : (
           <Text style={[typography.headline, { color: c.textPrimary, fontVariant: ['tabular-nums'] }]}>
@@ -145,4 +186,13 @@ const styles = StyleSheet.create({
   body: { padding: spacing(4), gap: spacing(3) },
   labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing(2) },
   secondaryRow: { flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' },
+  reasonPanel: { gap: spacing(2) },
+  chip: {
+    minHeight: 40,
+    paddingHorizontal: spacing(3.5),
+    borderRadius: radius.full,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

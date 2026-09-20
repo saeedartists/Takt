@@ -17,9 +17,12 @@ import { Button } from './controls';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { useMotion } from '../../theme/use-motion';
 import { useTokens } from '../../theme/use-tokens';
-import type { DoseOccurrence, DoseState } from '../../lib/takt/types';
+import type { DoseOccurrence, DoseState, SkipReason } from '../../lib/takt/types';
 
 type Pending = 'take' | 'skip' | 'snooze' | 'undo' | null;
+type Panel = 'skip' | 'snooze' | null;
+
+export type SkipReasonOption = { code: SkipReason; label: string };
 
 type AnimatedDoseRowProps = {
   dose: DoseOccurrence;
@@ -28,12 +31,15 @@ type AnimatedDoseRowProps = {
   canUndo: boolean;
   stateLabel: string;
   onTake: () => Promise<void>;
-  onSkip: () => Promise<void>;
+  /** Skip with the reason the user picked; undefined when no reason list is offered. */
+  onSkip: (reason?: SkipReason) => Promise<void>;
   onSnooze: (minutes: number) => Promise<void>;
   onUndo: () => Promise<void>;
   busy?: boolean;
   snoozeOptions?: number[];
   defaultSnoozeMinutes: number;
+  /** When given, Skip opens a reason picker instead of skipping straight away. */
+  skipReasons?: SkipReasonOption[];
   labels: {
     /** Formatted scheduled time, used in accessibility labels. */
     time: string;
@@ -41,6 +47,7 @@ type AnimatedDoseRowProps = {
     markSkipped: string;
     snooze: string;
     snoozeRemindIn: string;
+    skipReasonPrompt?: string;
     cancel: string;
     undo: string;
     contextBadge?: string;
@@ -68,12 +75,13 @@ export function AnimatedDoseRow({
   busy = false,
   snoozeOptions = [5, 10, 15, 30],
   defaultSnoozeMinutes,
+  skipReasons = [],
   labels,
 }: AnimatedDoseRowProps) {
   const { c } = useTokens();
   const { spring, duration } = useMotion();
   const [pending, setPending] = useState<Pending>(null);
-  const [snoozeOpen, setSnoozeOpen] = useState(false);
+  const [panel, setPanel] = useState<Panel>(null);
   const [snoozeMinutes, setSnoozeMinutes] = useState(defaultSnoozeMinutes);
 
   useEffect(() => setSnoozeMinutes(defaultSnoozeMinutes), [defaultSnoozeMinutes]);
@@ -102,9 +110,22 @@ export function AnimatedDoseRow({
     void run('take', onTake);
   };
 
+  const handleSkipPress = () => {
+    if (skipReasons.length === 0) {
+      void run('skip', () => onSkip());
+      return;
+    }
+    setPanel((current) => (current === 'skip' ? null : 'skip'));
+  };
+
+  const skipWith = async (reason: SkipReason) => {
+    await run('skip', () => onSkip(reason));
+    setPanel(null);
+  };
+
   const confirmSnooze = async () => {
     await run('snooze', () => onSnooze(snoozeMinutes));
-    setSnoozeOpen(false);
+    setPanel(null);
   };
 
   const checkAnimStyle = useAnimatedStyle(() => ({ transform: [{ scale: checkScale.value }] }));
@@ -184,16 +205,16 @@ export function AnimatedDoseRow({
 
             <View style={styles.pillActionsRow}>
               <AnimatedPressable
-                onPress={() => void run('skip', onSkip)}
+                onPress={handleSkipPress}
                 disabled={locked}
                 haptic="warning"
                 hitSlop={4}
                 accessibilityRole="button"
                 accessibilityLabel={`${labels.markSkipped}, ${who}`}
-                accessibilityState={{ disabled: locked, busy: pending === 'skip' }}
+                accessibilityState={{ disabled: locked, busy: pending === 'skip', expanded: panel === 'skip' }}
                 style={[
                   styles.secondaryPill,
-                  { backgroundColor: `${c.warning}1A`, borderColor: `${c.warning}44` },
+                  { backgroundColor: `${c.warning}1A`, borderColor: panel === 'skip' ? c.warning : `${c.warning}44` },
                 ]}
               >
                 {pending === 'skip' ? (
@@ -207,15 +228,15 @@ export function AnimatedDoseRow({
               </AnimatedPressable>
 
               <AnimatedPressable
-                onPress={() => setSnoozeOpen((open) => !open)}
+                onPress={() => setPanel((current) => (current === 'snooze' ? null : 'snooze'))}
                 disabled={locked}
                 hitSlop={4}
                 accessibilityRole="button"
                 accessibilityLabel={`${labels.snooze}, ${who}`}
-                accessibilityState={{ disabled: locked, expanded: snoozeOpen }}
+                accessibilityState={{ disabled: locked, expanded: panel === 'snooze' }}
                 style={[
                   styles.secondaryPill,
-                  { backgroundColor: `${c.accent}1A`, borderColor: snoozeOpen ? c.accent : `${c.accent}44` },
+                  { backgroundColor: `${c.accent}1A`, borderColor: panel === 'snooze' ? c.accent : `${c.accent}44` },
                 ]}
               >
                 <Ionicons name="alarm-outline" size={15} color={c.accent} />
@@ -225,8 +246,42 @@ export function AnimatedDoseRow({
               </AnimatedPressable>
             </View>
 
-            {snoozeOpen ? (
-              <Animated.View entering={FadeIn.duration(duration.fast)} style={styles.snoozePanel}>
+            {panel === 'skip' ? (
+              <Animated.View entering={FadeIn.duration(duration.fast)} style={styles.panel}>
+                {labels.skipReasonPrompt ? (
+                  <Text style={[typography.footnote, { color: c.textSecondary }]}>{labels.skipReasonPrompt}</Text>
+                ) : null}
+                <View style={styles.pillActionsRow}>
+                  {skipReasons.map((reason) => (
+                    <AnimatedPressable
+                      key={reason.code}
+                      onPress={() => void skipWith(reason.code)}
+                      disabled={locked}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${labels.markSkipped}: ${reason.label}, ${who}`}
+                      style={[styles.chip, { backgroundColor: c.surfaceRaised, borderColor: c.separator }]}
+                    >
+                      <Text style={[typography.subhead, { color: c.textPrimary, fontWeight: '600' }]}>
+                        {reason.label}
+                      </Text>
+                    </AnimatedPressable>
+                  ))}
+                </View>
+                <View style={styles.pillActionsRow}>
+                  <Button
+                    size="sm"
+                    kind="secondary"
+                    label={labels.cancel}
+                    disabled={pending === 'skip'}
+                    accessibilityLabel={`${labels.cancel} ${labels.markSkipped}, ${who}`}
+                    onPress={() => setPanel(null)}
+                  />
+                </View>
+              </Animated.View>
+            ) : null}
+
+            {panel === 'snooze' ? (
+              <Animated.View entering={FadeIn.duration(duration.fast)} style={styles.panel}>
                 <Text style={[typography.footnote, { color: c.textSecondary }]}>{labels.snoozeRemindIn}</Text>
                 <View style={styles.pillActionsRow}>
                   {snoozeOptions.map((minutes) => {
@@ -272,7 +327,7 @@ export function AnimatedDoseRow({
                     label={labels.cancel}
                     disabled={pending === 'snooze'}
                     accessibilityLabel={`${labels.cancel} ${labels.snooze}, ${who}`}
-                    onPress={() => setSnoozeOpen(false)}
+                    onPress={() => setPanel(null)}
                   />
                 </View>
               </Animated.View>
@@ -370,7 +425,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  snoozePanel: {
+  panel: {
     gap: spacing(2),
     paddingTop: spacing(1),
   },

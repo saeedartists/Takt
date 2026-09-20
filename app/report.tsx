@@ -6,6 +6,7 @@ import Animated from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
   AnimatedProgressBar,
+  AnimatedSegmentedControl,
   Button,
   Card,
   EmptyState,
@@ -26,6 +27,7 @@ import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useLocale } from '@/lib/takt/l10n';
+import { useReminderPreferences } from '@/lib/takt/preferences';
 import { buildReportSummary } from '@/lib/takt/report-summary';
 import { buildHistory } from '@/lib/takt/schedule';
 
@@ -66,10 +68,14 @@ export default function ReportScreen() {
   const events = useDoseEvents(patientRef);
   const [note, setNote] = useState<Note | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [windowDays, setWindowDays] = useState<7 | 14 | 30>(14);
+  const prefs = useReminderPreferences();
+  const graceHours = prefs.data?.graceHours;
+  const windowText = t('adherenceWindowDays').replace('{days}', windowDays.toString());
 
   const history = useMemo(
-    () => buildHistory(plans.plans, (events.data?.entry ?? []).map((x) => x.resource), 14),
-    [events.data?.entry, plans.plans],
+    () => buildHistory(plans.plans, (events.data?.entry ?? []).map((x) => x.resource), windowDays, { graceHours }),
+    [events.data?.entry, graceHours, plans.plans, windowDays],
   );
 
   const summary = useMemo(
@@ -131,6 +137,71 @@ export default function ReportScreen() {
   // No traffic-light grading on the report (brief §7, §12).
   const pctColor = c.textPrimary;
 
+  /** Share sheet on device; the browser's print dialog (Save as PDF) on web. */
+  const deliverHtml = async (html: string) => {
+    if (await Sharing.isAvailableAsync()) {
+      const file = await Print.printToFileAsync({ html });
+      await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf' });
+      setNote({ tone: 'success', text: t('pdfExportDone') });
+    } else {
+      setNote({ tone: 'success', text: t('pdfWebPrintNote') });
+      await Print.printAsync({ html });
+    }
+  };
+
+  /** One-page list of the current regimen for a pharmacy or a new doctor. The user's own plan, no drug data. */
+  const exportMedicationList = async () => {
+    if (!patient.data) return;
+    setNote(null);
+    setExporting(true);
+    try {
+      const cadenceLabel = (cadence: 'daily' | 'weekdays' | 'custom') =>
+        cadence === 'weekdays' ? t('cadenceWeekdays') : cadence === 'custom' ? t('cadenceSpecificDays') : t('cadenceDaily');
+      const active = plans.plans.filter((plan) => plan.request.status === 'active');
+      const rows = active
+        .map(
+          (plan) =>
+            `<tr><td>${esc(plan.label)}</td><td>${esc([plan.form, plan.strength].filter(Boolean).join(' · '))}</td><td>${esc(
+              cadenceLabel(plan.cadence),
+            )}</td><td style="text-align:right">${esc(plan.times.join(', '))}</td></tr>`,
+        )
+        .join('');
+      const html = `
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @page { size: A4; margin: 16px; }
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #0E1218; }
+      h1 { margin: 0 0 4px 0; font-size: 20px; }
+      .meta { color: #5C646F; margin-bottom: 10px; font-size: 10px; line-height: 1.3; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border-bottom: 1px solid #E8E6E3; padding: 4px 0; font-size: 11px; line-height: 1.3; text-align: left; }
+      th { color: #5C646F; font-weight: 600; }
+      .small { color: #5C646F; font-size: 9px; margin-top: 10px; line-height: 1.3; }
+    </style>
+  </head>
+  <body>
+    <h1>${esc(t('medicationListPdfHeading'))}</h1>
+    <div class="meta">${esc(t('patientLabel'))}: ${esc(patientName || 'N/A')}<br/>${esc(t('dateLabel'))}: ${esc(reportDate)}</div>
+    <table>
+      <thead><tr><th>${esc(t('medicationName'))}</th><th>${esc(t('medicationForm'))} · ${esc(t('medicationStrength'))}</th><th>${esc(
+        t('medicationCadence'),
+      )}</th><th style="text-align:right">${esc(t('medicationTimes'))}</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="4">${esc(t('medicationListEmpty'))}</td></tr>`}</tbody>
+    </table>
+    <div class="small">${esc(t('reportPdfDisclaimer'))}</div>
+  </body>
+</html>`;
+      await deliverHtml(html);
+    } catch {
+      setNote({ tone: 'error', text: t('pdfError') });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const exportPdf = async () => {
     if (!patient.data) return;
 
@@ -174,7 +245,7 @@ export default function ReportScreen() {
     <h1>${esc(t('reportPdfHeading'))}</h1>
     <div class="meta">${esc(t('patientLabel'))}: ${esc(patientName || 'N/A')}<br/>${esc(t('dateLabel'))}: ${esc(
         reportDate,
-      )}<br/>${esc(t('windowLabel'))}: ${esc(t('adherenceWindow'))}</div>
+      )}<br/>${esc(t('windowLabel'))}: ${esc(windowText)}</div>
     <div class="score">${summary.pct}% ${esc(t('takenOnSchedule'))}</div>
 
     <div class="compact">
@@ -204,15 +275,7 @@ export default function ReportScreen() {
   </body>
 </html>`;
 
-      if (await Sharing.isAvailableAsync()) {
-        const file = await Print.printToFileAsync({ html });
-        await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf' });
-        setNote({ tone: 'success', text: t('pdfExportDone') });
-      } else {
-        // Browser: no share sheet, so the print dialog (Save as PDF) stands in for it.
-        setNote({ tone: 'success', text: t('pdfWebPrintNote') });
-        await Print.printAsync({ html });
-      }
+      await deliverHtml(html);
     } catch {
       setNote({ tone: 'error', text: t('pdfError') });
     } finally {
@@ -258,11 +321,28 @@ export default function ReportScreen() {
     <PageShell>
       <Stack>
         <View style={{ gap: spacing(2) }}>
+          <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('reportWindowLabel')}</Text>
+          <AnimatedSegmentedControl
+            value={windowDays.toString()}
+            onChange={(next) => setWindowDays(Number.parseInt(next, 10) as 7 | 14 | 30)}
+            options={[
+              { value: '7', label: t('historyWindow7') },
+              { value: '14', label: t('historyWindow14') },
+              { value: '30', label: t('historyWindow30') },
+            ]}
+          />
           <Button
             label={t('exportPdf')}
             icon={<Ionicons name="document-text-outline" size={18} color={c.surface} />}
             onPress={() => void exportPdf()}
             loading={exporting}
+          />
+          <Button
+            kind="secondary"
+            label={t('exportMedicationListCta')}
+            icon={<Ionicons name="list-outline" size={18} color={c.textPrimary} />}
+            onPress={() => void exportMedicationList()}
+            disabled={exporting}
           />
           {exporting ? (
             <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('preparingPdf')}</Text>
@@ -288,7 +368,7 @@ export default function ReportScreen() {
                   {t('dateLabel')}: {reportDate}
                 </Text>
                 <Text style={[typography.footnote, { color: c.textSecondary }]}>
-                  {t('windowLabel')}: {t('adherenceWindow')}
+                  {t('windowLabel')}: {windowText}
                 </Text>
               </View>
 

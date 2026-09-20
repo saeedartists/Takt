@@ -24,7 +24,10 @@ const LocaleContext = createContext<LocaleContextValue | null>(null);
 const localeTag = (locale: Locale): string => (locale === 'de' ? 'de-DE' : 'en-US');
 
 export const LocaleProvider = ({ children }: { children: ReactNode }) => {
-  const [locale, setLocaleState] = useState<Locale>('en');
+  // First launch follows the device language; a saved choice (below) overrides it.
+  const [locale, setLocaleState] = useState<Locale>(() =>
+    Intl.DateTimeFormat().resolvedOptions().locale.toLowerCase().startsWith('de') ? 'de' : 'en',
+  );
 
   useEffect(() => {
     void AsyncStorage.getItem(STORAGE_KEY).then((value) => {

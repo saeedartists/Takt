@@ -6,6 +6,7 @@ import type {
   MedicationAdministrationResource,
   MedicationPlan,
   PausePeriod,
+  SkipReason,
 } from './types';
 
 export const localScheduledKey = (value: Date): string => {
@@ -21,6 +22,11 @@ const eventState = (event: MedicationAdministrationResource): DoseState => {
   const reason = event.statusReason?.[0]?.coding?.[0]?.code;
   return reason === 'not-available' ? 'missed' : 'skipped';
 };
+
+const skipReasonOf = (event?: MedicationAdministrationResource): SkipReason | undefined =>
+  event?.statusReason?.[0]?.coding?.find((coding) => coding.system === TAKT_EXT.skipReason)?.code as
+    | SkipReason
+    | undefined;
 
 const eventTimestamp = (event: MedicationAdministrationResource): number =>
   event.effectiveDateTime ? new Date(event.effectiveDateTime).getTime() : 0;
@@ -106,12 +112,13 @@ export const resolveDoseState = (
   scheduledAt: Date,
   now: Date,
   event?: MedicationAdministrationResource,
+  graceHours = DEFAULT_GRACE_HOURS,
 ): DoseState => {
   if (event) {
     return eventState(event);
   }
 
-  const graceLimit = graceWindowCloseAt(scheduledAt);
+  const graceLimit = graceWindowCloseAt(scheduledAt, graceHours);
   if (now < scheduledAt) return 'scheduled';
   if (now <= graceLimit) return 'due';
   return 'missed';
@@ -122,6 +129,7 @@ export const buildDoseOccurrencesForDay = (
   events: MedicationAdministrationResource[],
   day: Date,
   now = new Date(),
+  graceHours = DEFAULT_GRACE_HOURS,
 ): DoseOccurrence[] => {
   const indexed = indexEvents(events);
   const doses: DoseOccurrence[] = [];
@@ -136,7 +144,7 @@ export const buildDoseOccurrencesForDay = (
       const requestRef = `MedicationRequest/${plan.request.id}`;
       const lookup = indexed.get(eventKey(requestRef, localScheduledKey(scheduledAt)));
 
-      const state = resolveDoseState(scheduledAt, now, lookup);
+      const state = resolveDoseState(scheduledAt, now, lookup, graceHours);
 
       doses.push({
         id: `${plan.request.id}-${scheduledAt.toISOString()}`,
@@ -148,6 +156,7 @@ export const buildDoseOccurrencesForDay = (
         state,
         eventId: lookup?.id,
         eventTimestamp: lookup?.effectiveDateTime,
+        reasonCode: skipReasonOf(lookup),
       });
     }
   }
@@ -175,6 +184,8 @@ export type HistoryDay = {
 export type BuildHistoryOptions = {
   now?: Date;
   today?: Date;
+  /** Hours after the scheduled time before an unlogged dose counts as missed. */
+  graceHours?: number;
 };
 
 export const buildHistory = (
@@ -189,7 +200,7 @@ export const buildHistory = (
 
   for (let i = days - 1; i >= 0; i -= 1) {
     const day = addDays(today, -i);
-    const doses = buildDoseOccurrencesForDay(plans, events, day, now);
+    const doses = buildDoseOccurrencesForDay(plans, events, day, now, options?.graceHours);
     const taken = doses.filter((d) => d.state === 'taken').length;
     const skipped = doses.filter((d) => d.state === 'skipped').length;
     const missed = doses.filter((d) => d.state === 'missed').length;

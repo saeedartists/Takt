@@ -1,6 +1,6 @@
-import { Link, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Link, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -36,7 +36,7 @@ import { adherenceSummary, buildDoseOccurrencesForDay, upcomingCount } from '@/l
 import { useLocale } from '@/lib/takt/l10n';
 import { reminderDoseKey, scheduleSnoozeReminder } from '@/lib/takt/reminders';
 import { addDays, isoDateKey, startOfDay } from '@/lib/takt/time';
-import type { DoseOccurrence, DoseState } from '@/lib/takt/types';
+import type { DoseOccurrence, DoseState, SkipReason } from '@/lib/takt/types';
 
 const SNOOZE_OPTIONS = [5, 10, 15, 30];
 
@@ -71,11 +71,13 @@ export default function TodayScreen() {
   const undoDose = useUndoDose();
   const reminderPrefs = useReminderPreferences();
   const defaultSnoozeMinutes = reminderPrefs.data?.snoozeMinutes ?? 15;
+  const graceHours = reminderPrefs.data?.graceHours;
   const autoMarkedMissed = useRef<Set<string>>(new Set());
   const firstLoadDone = useRef(false);
   const [autoMissedCount, setAutoMissedCount] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   const [nextPending, setNextPending] = useState<NextDosePending>(null);
+  const [bulkPending, setBulkPending] = useState(false);
   const [timelineFilter, setTimelineFilter] = useState<'all' | 'pending' | 'completed'>('all');
   const [undoToast, setUndoToast] = useState<{
     visible: boolean;
@@ -92,8 +94,8 @@ export default function TodayScreen() {
   );
 
   const selectedDoses = useMemo(
-    () => buildDoseOccurrencesForDay(plans.plans, eventResources, startOfDay(selectedDate), new Date()),
-    [eventResources, plans.plans, selectedDate],
+    () => buildDoseOccurrencesForDay(plans.plans, eventResources, startOfDay(selectedDate), new Date(), graceHours),
+    [eventResources, graceHours, plans.plans, selectedDate],
   );
 
   // The next-dose card is always about today, whichever day the strip shows.
@@ -101,8 +103,8 @@ export default function TodayScreen() {
     () =>
       isSelectedToday
         ? selectedDoses
-        : buildDoseOccurrencesForDay(plans.plans, eventResources, startOfDay(new Date()), new Date()),
-    [eventResources, isSelectedToday, plans.plans, selectedDoses],
+        : buildDoseOccurrencesForDay(plans.plans, eventResources, startOfDay(new Date()), new Date(), graceHours),
+    [eventResources, graceHours, isSelectedToday, plans.plans, selectedDoses],
   );
 
   const adherenceMap = useMemo(() => {
@@ -110,13 +112,13 @@ export default function TodayScreen() {
     const now = new Date();
     for (let offset = -7; offset <= 7; offset++) {
       const d = addDays(selectedDate, offset);
-      const doses = buildDoseOccurrencesForDay(plans.plans, eventResources, startOfDay(d), now);
+      const doses = buildDoseOccurrencesForDay(plans.plans, eventResources, startOfDay(d), now, graceHours);
       const taken = doses.filter((x) => x.state === 'taken').length;
       const missed = doses.filter((x) => x.state === 'missed').length;
       map[isoDateKey(d)] = { total: doses.length, taken, missed };
     }
     return map;
-  }, [eventResources, plans.plans, selectedDate]);
+  }, [eventResources, graceHours, plans.plans, selectedDate]);
 
   const summary = adherenceSummary(selectedDoses);
   const toCome = upcomingCount(selectedDoses);
@@ -157,6 +159,41 @@ export default function TodayScreen() {
     if (!isFirstLoad) firstLoadDone.current = true;
   }, [isFirstLoad]);
 
+  const skipReasons = useMemo(
+    () => [
+      { code: 'forgot' as const, label: t('skipReasonForgot') },
+      { code: 'side-effects' as const, label: t('skipReasonSideEffects') },
+      { code: 'ran-out' as const, label: t('skipReasonRanOut') },
+      { code: 'not-needed' as const, label: t('skipReasonNotNeeded') },
+      { code: 'other' as const, label: t('skipReasonOther') },
+    ],
+    [t],
+  );
+
+  // One tap for a whole time group; each dose still gets its own record (brief §12).
+  const confirmAll = async (doses: DoseOccurrence[]) => {
+    setBulkPending(true);
+    try {
+      for (const dose of doses) await takeAction(dose, 'taken');
+    } finally {
+      setBulkPending(false);
+    }
+  };
+
+  // VoiceOver / TalkBack: answer "what now, and did I already?" the moment Today is shown.
+  const takenToday = todayDoses.filter((dose) => dose.state === 'taken').length;
+  useFocusEffect(
+    useCallback(() => {
+      if (isFirstLoad || loadError) return;
+      const next = todayDoses.find((dose) => dose.state === 'scheduled' || dose.state === 'due');
+      const message = (next ? t('todaySummaryAnnouncement') : t('todaySummaryAnnouncementNoNext'))
+        .replace('{taken}', String(takenToday))
+        .replace('{total}', String(todayDoses.length))
+        .replace('{time}', next ? formatTime(next.scheduledAt) : '');
+      AccessibilityInfo.announceForAccessibility(message);
+    }, [formatTime, isFirstLoad, loadError, t, takenToday, todayDoses]),
+  );
+
   useEffect(() => {
     if (!patientRef || !isSelectedToday) return;
 
@@ -185,7 +222,7 @@ export default function TodayScreen() {
     })();
   }, [isSelectedToday, patientRef, recordDose, selectedDoses]);
 
-  const takeAction = async (dose: DoseOccurrence, action: 'taken' | 'skipped') => {
+  const takeAction = async (dose: DoseOccurrence, action: 'taken' | 'skipped', reason?: SkipReason) => {
     if (!patientRef) return;
     setActionError(null);
 
@@ -196,6 +233,7 @@ export default function TodayScreen() {
         requestRef: `MedicationRequest/${dose.requestId}`,
         scheduledAt: dose.scheduledAt,
         action,
+        reason,
       });
 
       setUndoToast({
@@ -236,6 +274,7 @@ export default function TodayScreen() {
         {
           title: t('doseSnoozedTitle'),
           body: t('doseSnoozedBody'),
+          bodyPrivate: t('doseSnoozedBodyPrivate'),
         },
       );
 
@@ -247,11 +286,11 @@ export default function TodayScreen() {
     }
   };
 
-  const runNextAction = async (kind: Exclude<NextDosePending, null>, dose: DoseOccurrence) => {
+  const runNextAction = async (kind: Exclude<NextDosePending, null>, dose: DoseOccurrence, reason?: SkipReason) => {
     setNextPending(kind);
     try {
       if (kind === 'snooze') await snoozeDose(dose, defaultSnoozeMinutes);
-      else await takeAction(dose, kind === 'take' ? 'taken' : 'skipped');
+      else await takeAction(dose, kind === 'take' ? 'taken' : 'skipped', reason);
     } finally {
       setNextPending(null);
     }
@@ -315,8 +354,9 @@ export default function TodayScreen() {
                 pending={nextPending}
                 snoozeMinutes={defaultSnoozeMinutes}
                 stateLabel={stateLabel}
+                skipReasons={skipReasons}
                 onTake={(dose) => void runNextAction('take', dose)}
-                onSkip={(dose) => void runNextAction('skip', dose)}
+                onSkip={(dose, reason) => void runNextAction('skip', dose, reason)}
                 onSnooze={(dose) => void runNextAction('snooze', dose)}
                 onAddMedication={() => router.push('/medications/new')}
               />
@@ -408,6 +448,7 @@ export default function TodayScreen() {
                       const doseCountText = `${bucket.doses.length} ${
                         bucket.doses.length === 1 ? t('singleDoseLabel') : t('multipleDosesLabel')
                       }`;
+                      const dueInBucket = bucket.doses.filter((dose) => dose.state === 'due');
 
                       return (
                         <Animated.View key={bucket.time} layout={LinearTransition}>
@@ -422,7 +463,20 @@ export default function TodayScreen() {
                                     {bucket.time}
                                   </Text>
                                 </View>
-                                <Text style={[typography.footnote, { color: c.textTertiary }]}>{doseCountText}</Text>
+                                {dueInBucket.length >= 2 ? (
+                                  <Button
+                                    size="sm"
+                                    label={t('confirmAllAt').replace('{count}', String(dueInBucket.length))}
+                                    icon={<Ionicons name="checkmark-done" size={16} color={c.surface} />}
+                                    loading={bulkPending}
+                                    disabled={nextPending !== null}
+                                    haptic="success"
+                                    accessibilityLabel={`${t('confirmAllAt').replace('{count}', String(dueInBucket.length))}, ${bucket.time}`}
+                                    onPress={() => void confirmAll(dueInBucket)}
+                                  />
+                                ) : (
+                                  <Text style={[typography.footnote, { color: c.textTertiary }]}>{doseCountText}</Text>
+                                )}
                               </View>
                               {bucket.doses.map((dose, index) => {
                                 const isFocused =
@@ -439,7 +493,8 @@ export default function TodayScreen() {
                                       canUndo={canUndo(dose)}
                                       stateLabel={stateLabel(dose.state)}
                                       onTake={() => takeAction(dose, 'taken')}
-                                      onSkip={() => takeAction(dose, 'skipped')}
+                                      onSkip={(reason) => takeAction(dose, 'skipped', reason)}
+                                      skipReasons={skipReasons}
                                       onSnooze={(minutes) => snoozeDose(dose, minutes)}
                                       onUndo={async () => {
                                         try {
@@ -457,6 +512,7 @@ export default function TodayScreen() {
                                         markSkipped: t('markSkipped'),
                                         snooze: t('snooze'),
                                         snoozeRemindIn: t('snoozeRemindIn'),
+                                        skipReasonPrompt: t('skipReasonPrompt'),
                                         cancel: t('cancel'),
                                         undo: t('undo'),
                                         contextBadge: t('reminderContextBadge'),

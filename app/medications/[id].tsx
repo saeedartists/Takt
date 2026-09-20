@@ -27,13 +27,14 @@ import {
 } from '@/components/ui';
 import { ConfirmSheet } from '@/components/ui/confirm-sheet';
 import { Chip } from '@/components/takt/medication-form';
+import { TimeField } from '@/components/takt/time-field';
 import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useUpdateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
 import { TAKT_EXT } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
-import { parseSupply } from '@/lib/takt/medication-form';
+import { normalizeDateInput, parseSupply } from '@/lib/takt/medication-form';
 import {
   getDaysUntilRefill,
   getLastRefilledAt,
@@ -100,7 +101,9 @@ export default function MedicationDetailsScreen() {
   const [supplyCount, setSupplyCountState] = useState<number | null>(null);
   const [daysUntilRefill, setDaysUntilRefill] = useState<number | null>(null);
   const [lastRefilledAt, setLastRefilledAtState] = useState<string | null>(null);
-  const [panel, setPanel] = useState<'refill' | 'archive' | null>(null);
+  const [panel, setPanel] = useState<'refill' | 'archive' | 'pause' | null>(null);
+  /** YYYY-MM-DD; the pause ends at the end of that local day. */
+  const [pauseUntil, setPauseUntil] = useState('');
   const [pendingAction, setPendingAction] = useState<'pause' | 'resume' | 'archive' | null>(null);
   const [refillInput, setRefillInput] = useState('30');
   const [refilling, setRefilling] = useState(false);
@@ -150,7 +153,20 @@ export default function MedicationDetailsScreen() {
     return [...groups.entries()].map(([key, group]) => ({ key, ...group }));
   }, [events.data?.entry, plan]);
 
-  const updateStatus = async (nextStatus: PlanStatus, action: 'pause' | 'resume' | 'archive') => {
+  /** A pause ends at the end of the chosen local day. */
+  const endOfDayIso = (date: string): string | null => {
+    if (!normalizeDateInput(date)) return null;
+    const end = new Date(`${date}T00:00:00`);
+    end.setHours(23, 59, 59, 999);
+    return end.toISOString();
+  };
+  const pauseUntilIso = endOfDayIso(pauseUntil);
+
+  const updateStatus = async (
+    nextStatus: PlanStatus,
+    action: 'pause' | 'resume' | 'archive',
+    pauseEnd?: string,
+  ) => {
     if (!plan || !patientRef || !plan.medication) return;
     setStatusError(null);
     setPendingAction(action);
@@ -165,6 +181,7 @@ export default function MedicationDetailsScreen() {
         times: plan.times,
         supplyCount: supplyCount ?? undefined,
         status: nextStatus,
+        pauseUntil: pauseEnd,
         request: plan.request,
         medication: plan.medication,
       });
@@ -348,7 +365,7 @@ export default function MedicationDetailsScreen() {
                       label={t('pauseCta')}
                       accessibilityLabel={t('pauseMedicationCta')}
                       icon={<Ionicons name="pause-circle-outline" size={18} color={c.textPrimary} />}
-                      onPress={() => void updateStatus('on-hold', 'pause')}
+                      onPress={() => setPanel((prev) => (prev === 'pause' ? null : 'pause'))}
                       loading={pendingAction === 'pause'}
                       disabled={busy}
                     />
@@ -387,6 +404,28 @@ export default function MedicationDetailsScreen() {
                     accessibilityLabel={t('openTodayTimelineCta')}
                     icon={<Ionicons name="calendar-outline" size={18} color={c.textPrimary} />}
                     onPress={() => router.push('/(tabs)/today')}
+                  />
+                </View>
+                <View style={styles.gridItem}>
+                  <Button
+                    size="sm"
+                    kind="secondary"
+                    label={t('duplicateCta')}
+                    accessibilityLabel={t('duplicateMedicationCta')}
+                    icon={<Ionicons name="copy-outline" size={18} color={c.textPrimary} />}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/medications/new',
+                        params: {
+                          name: plan.label,
+                          form: plan.form,
+                          strength: plan.strength,
+                          times: plan.times.join(','),
+                          cadence: plan.cadence,
+                          days: plan.dayOfWeek.join(','),
+                        },
+                      } as never)
+                    }
                   />
                 </View>
                 {status !== 'stopped' ? (
@@ -444,6 +483,46 @@ export default function MedicationDetailsScreen() {
                         loading={refilling}
                         disabled={!refillAmount}
                         haptic="success"
+                      />
+                    </View>
+                  </View>
+                </Animated.View>
+              ) : null}
+
+              {panel === 'pause' ? (
+                <Animated.View
+                  entering={FadeIn.duration(duration.fast)}
+                  exiting={FadeOut.duration(duration.fast)}
+                  style={{ gap: spacing(3) }}
+                >
+                  <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('pauseUntilHint')}</Text>
+                  <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('pauseUntilLabel')}</Text>
+                  <TimeField
+                    mode="date"
+                    value={pauseUntil}
+                    onChange={setPauseUntil}
+                    accessibilityLabel={t('pauseUntilLabel')}
+                  />
+                  <View style={styles.actionRow}>
+                    <View style={styles.grow}>
+                      <Button
+                        size="sm"
+                        kind="secondary"
+                        label={t('pauseNowCta')}
+                        onPress={() => void updateStatus('on-hold', 'pause')}
+                        loading={pendingAction === 'pause' && !pauseUntilIso}
+                        disabled={busy}
+                      />
+                    </View>
+                    <View style={styles.grow}>
+                      <Button
+                        size="sm"
+                        label={t('pauseUntilCta')}
+                        onPress={() => {
+                          if (pauseUntilIso) void updateStatus('on-hold', 'pause', pauseUntilIso);
+                        }}
+                        loading={pendingAction === 'pause' && Boolean(pauseUntilIso)}
+                        disabled={busy || !pauseUntilIso}
                       />
                     </View>
                   </View>

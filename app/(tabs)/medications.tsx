@@ -28,6 +28,7 @@ import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useLocale } from '@/lib/takt/l10n';
+import { useReminderPreferences } from '@/lib/takt/preferences';
 import { buildDoseOccurrencesForDay } from '@/lib/takt/schedule';
 import { getSupplyCount } from '@/lib/takt/supply-tracker';
 import { startOfDay } from '@/lib/takt/time';
@@ -87,6 +88,7 @@ export default function MedicationsScreen() {
   );
 
   // First still-open dose today per request, for the "Next today" line.
+  const prefs = useReminderPreferences();
   const nextTodayByRequest = useMemo(() => {
     const now = new Date();
     const doses = buildDoseOccurrencesForDay(
@@ -94,6 +96,7 @@ export default function MedicationsScreen() {
       (events.data?.entry ?? []).map((x) => x.resource),
       startOfDay(now),
       now,
+      prefs.data?.graceHours,
     );
     const next = new Map<string, Date>();
     for (const dose of doses) {
@@ -102,7 +105,7 @@ export default function MedicationsScreen() {
       }
     }
     return next;
-  }, [events.data?.entry, plans.plans]);
+  }, [events.data?.entry, plans.plans, prefs.data?.graceHours]);
 
   const filteredPlans = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();

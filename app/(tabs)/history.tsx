@@ -29,11 +29,29 @@ import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useRecordDose, useUndoDose } from '@/lib/hooks/use-takt-mutations';
+import { TimeField } from '@/components/takt/time-field';
 import { buildHistoryCsv } from '@/lib/takt/history-csv';
 import { useLocale } from '@/lib/takt/l10n';
+import { useReminderPreferences } from '@/lib/takt/preferences';
 import { buildHistory } from '@/lib/takt/schedule';
-import { isoDateKey } from '@/lib/takt/time';
-import type { DoseOccurrence } from '@/lib/takt/types';
+import { atClockTime, isoDateKey } from '@/lib/takt/time';
+import type { DoseOccurrence, SkipReason } from '@/lib/takt/types';
+
+const reasonKey = (code: SkipReason) =>
+  code === 'forgot'
+    ? ('skipReasonForgot' as const)
+    : code === 'side-effects'
+      ? ('skipReasonSideEffects' as const)
+      : code === 'ran-out'
+        ? ('skipReasonRanOut' as const)
+        : code === 'not-needed'
+          ? ('skipReasonNotNeeded' as const)
+          : ('skipReasonOther' as const);
+
+const clockOf = (iso: string): string => {
+  const date = new Date(iso);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+};
 
 type CorrectionAction = 'taken' | 'skipped' | 'missed';
 type DoseWithDay = DoseOccurrence & { dayLabel: string };
@@ -91,10 +109,24 @@ export default function HistoryScreen() {
   const [pendingDoseId, setPendingDoseId] = useState<string | null>(null);
   const [exportingCsv, setExportingCsv] = useState(false);
 
+  const prefs = useReminderPreferences();
+  const graceHours = prefs.data?.graceHours;
+
   const history = useMemo(
-    () => buildHistory(plans.plans, (events.data?.entry ?? []).map((x) => x.resource), windowDays),
-    [events.data?.entry, plans.plans, windowDays],
+    () => buildHistory(plans.plans, (events.data?.entry ?? []).map((x) => x.resource), windowDays, { graceHours }),
+    [events.data?.entry, graceHours, plans.plans, windowDays],
   );
+
+  // Plain counts for this week and last, no grading (brief §7).
+  const weekly = useMemo(() => {
+    const days = buildHistory(plans.plans, (events.data?.entry ?? []).map((x) => x.resource), 14, { graceHours });
+    const sum = (rows: typeof days) =>
+      rows.reduce(
+        (acc, day) => ({ taken: acc.taken + day.taken, total: acc.total + day.taken + day.skipped + day.missed }),
+        { taken: 0, total: 0 },
+      );
+    return { thisWeek: sum(days.slice(7)), lastWeek: sum(days.slice(0, 7)) };
+  }, [events.data?.entry, graceHours, plans.plans]);
 
   const totals = useMemo(() => {
     const all = history.reduce(
@@ -256,10 +288,11 @@ export default function HistoryScreen() {
     }
   };
 
-  const rewriteDoseState = async (dose: DoseWithDay, action: CorrectionAction) => {
+  /** `effectiveAt` lets a taken dose carry the real time it was taken ("taken late"). */
+  const rewriteDoseState = async (dose: DoseWithDay, action: CorrectionAction, effectiveAt?: Date) => {
     if (!patientRef) return;
 
-    if (dose.state === action && dose.eventId) {
+    if (dose.state === action && dose.eventId && !effectiveAt) {
       return;
     }
 
@@ -277,6 +310,7 @@ export default function HistoryScreen() {
         requestRef: `MedicationRequest/${dose.requestId}`,
         scheduledAt: dose.scheduledAt,
         action,
+        effectiveAt,
       });
     } catch {
       setActionError(t('historyCorrectionError'));
@@ -375,6 +409,22 @@ export default function HistoryScreen() {
           <EmptyState title={t('noAdherenceHistory')} description={t('historyNeedsSchedule')} />
         ) : (
           <>
+            <Card>
+              <View style={{ padding: spacing(4), gap: spacing(1) }}>
+                <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('weeklySummaryTitle')}</Text>
+                <Text style={[typography.headline, { color: c.textPrimary, fontVariant: ['tabular-nums'] }]}>
+                  {t('weeklySummaryLine')
+                    .replace('{taken}', String(weekly.thisWeek.taken))
+                    .replace('{total}', String(weekly.thisWeek.total))}
+                </Text>
+                <Text style={[typography.footnote, { color: c.textTertiary, fontVariant: ['tabular-nums'] }]}>
+                  {t('weeklySummaryLastWeek')
+                    .replace('{taken}', String(weekly.lastWeek.taken))
+                    .replace('{total}', String(weekly.lastWeek.total))}
+                </Text>
+              </View>
+            </Card>
+
             <View>
               <SectionHeader
                 title={t('adherenceTrend')}
@@ -485,7 +535,9 @@ export default function HistoryScreen() {
                                     {dose.label}
                                   </Text>
                                   <Text style={[typography.footnote, { color: c.textSecondary, marginTop: 1 }]}>
-                                    {formatTime(dose.scheduledAt)}
+                                    {[formatTime(dose.scheduledAt), dose.reasonCode ? t(reasonKey(dose.reasonCode)) : null]
+                                      .filter(Boolean)
+                                      .join(' · ')}
                                   </Text>
                                 </View>
 
@@ -520,6 +572,22 @@ export default function HistoryScreen() {
                                   ]}
                                 />
                               </View>
+
+                              {state === 'taken' && dose.eventTimestamp ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
+                                  <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('takenAtLabel')}</Text>
+                                  <View style={{ flex: 1 }}>
+                                    <TimeField
+                                      mode="time"
+                                      value={clockOf(dose.eventTimestamp)}
+                                      onChange={(next) =>
+                                        void rewriteDoseState(dose, 'taken', atClockTime(dose.scheduledAt, next))
+                                      }
+                                      accessibilityLabel={`${t('takenAtLabel')}, ${dose.label}`}
+                                    />
+                                  </View>
+                                </View>
+                              ) : null}
 
                               {dose.eventId ? (
                                 <View style={{ flexDirection: 'row' }}>
