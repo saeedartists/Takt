@@ -23,7 +23,7 @@
       "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#B4611C"
+        "backgroundColor": "#0E1218"
       }
     },
     "web": {
@@ -68,9 +68,9 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#F9F8F5",
+          "backgroundColor": "#FAFAF9",
           "dark": {
-            "backgroundColor": "#0B0F15"
+            "backgroundColor": "#0E1218"
           }
         }
       ]

@@ -162,24 +162,25 @@ export const getSemanticColors = (scheme: 'light' | 'dark', palette: ThemePalett
 
   if (scheme === 'light') {
     return {
-      background: '#F9F8F5',
+      // Brand system (product brief §10): Paper, Ground, Slate, Taken green, Missed red, Amber lift.
+      background: '#FAFAF9',
       surface: '#FFFFFF',
       surfaceRaised: '#F1EFEB',
       surfaceSubtle: '#FAF9F6',
       separator: 'rgba(92,100,111,0.18)',
       cardBorder: 'rgba(0,0,0,0.06)',
-      textPrimary: '#12171E',
-      textSecondary: 'rgba(68,76,86,0.88)',
-      textTertiary: 'rgba(92,100,111,0.52)',
+      textPrimary: '#0E1218',
+      textSecondary: '#5C646F',
+      textTertiary: 'rgba(92,100,111,0.62)',
       accent,
-      destructive: '#B83226',
-      success: '#1B7248',
-      warning: '#C97726',
+      destructive: '#A8342A',
+      success: '#1F6F4A',
+      warning: '#D98A3D',
     };
   }
 
   return {
-    background: '#0B0F15',
+    background: '#0E1218',
     surface: '#151A22',
     surfaceRaised: '#1E2530',
     surfaceSubtle: '#12161E',
@@ -220,10 +221,11 @@ export const typography = {
   title1: { fontSize: 25, lineHeight: 30, fontWeight: '700', letterSpacing: -0.3 },
   title2: { fontSize: 21, lineHeight: 26, fontWeight: '700', letterSpacing: -0.22 },
   title3: { fontSize: 18, lineHeight: 23, fontWeight: '600', letterSpacing: -0.15 },
-  headline: { fontSize: 16, lineHeight: 21, fontWeight: '600', letterSpacing: 0 },
-  body: { fontSize: 16, lineHeight: 21, fontWeight: '400', letterSpacing: 0 },
-  callout: { fontSize: 15, lineHeight: 20, fontWeight: '400', letterSpacing: 0 },
-  subhead: { fontSize: 14, lineHeight: 19, fontWeight: '400', letterSpacing: 0 },
+  // Accessibility floor (product brief §10): body text is never below 17pt; the primary user is 65+.
+  headline: { fontSize: 17, lineHeight: 22, fontWeight: '600', letterSpacing: 0 },
+  body: { fontSize: 17, lineHeight: 22, fontWeight: '400', letterSpacing: 0 },
+  callout: { fontSize: 16, lineHeight: 21, fontWeight: '400', letterSpacing: 0 },
+  subhead: { fontSize: 15, lineHeight: 20, fontWeight: '400', letterSpacing: 0 },
   footnote: { fontSize: 13, lineHeight: 18, fontWeight: '400', letterSpacing: 0 },
   caption: { fontSize: 12, lineHeight: 16, fontWeight: '400', letterSpacing: 0 },
   caption2: { fontSize: 11, lineHeight: 13, fontWeight: '400', letterSpacing: 0 },

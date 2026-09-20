@@ -115,15 +115,8 @@ export default function HistoryScreen() {
   }, [history]);
 
   const shownPct = useCountUp(totals.adherencePct, duration.slow);
-  // No logged doses yet: a neutral 0%, not a red one.
-  const pctColor =
-    totals.denominator === 0
-      ? c.textTertiary
-      : totals.adherencePct >= 80
-        ? c.success
-        : totals.adherencePct >= 60
-          ? c.warning
-          : c.destructive;
+  // No thresholds, no traffic-light grading (brief §7, §12): the figure is a record, not a verdict.
+  const pctColor = totals.denominator === 0 ? c.textTertiary : c.textPrimary;
 
   const barDays = useMemo<AdherenceBarDay[]>(() => {
     const todayKey = isoDateKey(new Date());
@@ -410,7 +403,7 @@ export default function HistoryScreen() {
 
                 <AnimatedProgressBar
                   progress={Math.min(1, Math.max(0, totals.adherencePct / 100))}
-                  color={pctColor}
+                  color={c.accent}
                   height={8}
                 />
 

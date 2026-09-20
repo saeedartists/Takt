@@ -11,7 +11,11 @@
     "build": "expo export --platform web",
     "update:preview": "eas update --channel preview --platform all --environment preview --non-interactive",
     "build:testflight": "eas build --platform ios --profile testflight --non-interactive",
-    "submit:testflight": "eas submit --platform ios --profile testflight --latest --non-interactive"
+    "submit:testflight": "eas submit --platform ios --profile testflight --latest --non-interactive",
+    "verify:adherence": "npx -y tsx scripts/verify-adherence-fixtures.ts",
+    "verify:report": "npx -y tsx scripts/verify-report-parity.ts",
+    "verify:fhir": "npx -y tsx scripts/verify-fhir-integrity.ts",
+    "verify": "npm run -s verify:adherence && npm run -s verify:report && npm run -s verify:fhir"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.15",

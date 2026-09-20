@@ -37,9 +37,9 @@ const esc = (value: string): string =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 
-const REPORT_MEDICATION_LIMIT = 10;
+// One A4 page must hold 20 medications (definition of done, brief §13).
+const REPORT_MEDICATION_LIMIT = 20;
 const REPORT_MISSED_LIMIT = 6;
-const FOCUS_MEDICATION_LIMIT = 3;
 
 type Note = { tone: 'success' | 'error'; text: string };
 
@@ -89,20 +89,6 @@ export default function ReportScreen() {
     [formatDateTime, history, plans.plans],
   );
 
-  const medsNeedingReview = useMemo(
-    () =>
-      summary.byMedication
-        .filter((row) => row.denominator > 0 && row.pct < 80)
-        .sort((a, b) => a.pct - b.pct)
-        .slice(0, FOCUS_MEDICATION_LIMIT),
-    [summary.byMedication],
-  );
-
-  const needsReviewCount = useMemo(
-    () => summary.byMedication.filter((row) => row.denominator > 0 && row.pct < 80).length,
-    [summary.byMedication],
-  );
-
   const recentMissed = summary.missedRows[0];
 
   const focusNotes = useMemo(() => {
@@ -113,17 +99,7 @@ export default function ReportScreen() {
         .replace('{total}', summary.denominator.toString()),
     ];
 
-    if (needsReviewCount > 0) {
-      const topNames = medsNeedingReview.map((row) => row.label).join(', ');
-      notes.push(
-        t('reportFocusNeedsReview')
-          .replace('{count}', needsReviewCount.toString())
-          .replace('{names}', topNames),
-      );
-    } else {
-      notes.push(t('reportFocusNoNeedsReview'));
-    }
-
+    // Facts only (brief §7): no thresholds, no "needs review" verdicts on a clinical record.
     if (recentMissed) {
       notes.push(
         t('reportFocusMissedRecent').replace(
@@ -142,7 +118,7 @@ export default function ReportScreen() {
     }
 
     return notes;
-  }, [formatDateTime, medsNeedingReview, needsReviewCount, recentMissed, summary.denominator, summary.pct, summary.taken, t]);
+  }, [formatDateTime, recentMissed, summary.denominator, summary.pct, summary.taken, t]);
 
   const patientName = `${patient.data?.name?.[0]?.given?.join(' ') ?? ''} ${
     patient.data?.name?.[0]?.family ?? ''
@@ -152,7 +128,8 @@ export default function ReportScreen() {
   const hiddenMeds = Math.max(0, summary.byMedication.length - visibleMeds.length);
   const visibleMissed = summary.missedRows.slice(0, REPORT_MISSED_LIMIT);
   const hiddenMissed = Math.max(0, summary.missedRows.length - visibleMissed.length);
-  const pctColor = summary.pct >= 80 ? c.success : summary.pct >= 60 ? c.warning : c.destructive;
+  // No traffic-light grading on the report (brief §7, §12).
+  const pctColor = c.textPrimary;
 
   const exportPdf = async () => {
     if (!patient.data) return;
@@ -325,7 +302,7 @@ export default function ReportScreen() {
                   </Text>
                   <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('takenOnSchedule')}</Text>
                 </View>
-                <AnimatedProgressBar progress={Math.min(1, Math.max(0, summary.pct / 100))} color={pctColor} height={8} />
+                <AnimatedProgressBar progress={Math.min(1, Math.max(0, summary.pct / 100))} color={c.accent} height={8} />
               </View>
 
               <View style={[styles.paperSection, { borderTopColor: c.separator }]}>
@@ -403,15 +380,6 @@ export default function ReportScreen() {
               leading={
                 <View style={[styles.factIcon, { backgroundColor: `${c.destructive}1A` }]}>
                   <Ionicons name="alert-circle-outline" size={16} color={c.destructive} />
-                </View>
-              }
-            />
-            <ListRow
-              title={t('reportFactNeedsReview').replace('{count}', needsReviewCount.toString())}
-              subtitle={t('reportFactNeedsReviewHint')}
-              leading={
-                <View style={[styles.factIcon, { backgroundColor: `${c.warning}1A` }]}>
-                  <Ionicons name="time-outline" size={16} color={c.warning} />
                 </View>
               }
             />

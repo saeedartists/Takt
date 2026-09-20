@@ -5,6 +5,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-na
 import { radius, spacing, typography } from '@/theme/tokens';
 import { useMotion } from '@/theme/use-motion';
 import { useTokens } from '@/theme/use-tokens';
+import { useLocale } from '@/lib/takt/l10n';
 import { addDays, isoDateKey, startOfDay } from '@/lib/takt/time';
 import { AnimatedPressable } from './animated-pressable';
 
@@ -31,8 +32,6 @@ const getStartOfWeek = (date: Date): Date => {
   return start;
 };
 
-const WEEKDAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
 export function WeekStripPicker({
   selectedDate,
   onSelectDate,
@@ -41,6 +40,9 @@ export function WeekStripPicker({
 }: WeekStripPickerProps) {
   const { c } = useTokens();
   const { spring } = useMotion();
+  const { locale } = useLocale();
+  // App locale, not device locale: "both languages complete on every reachable screen".
+  const tag = locale === 'de' ? 'de-DE' : 'en-US';
   const today = useMemo(() => startOfDay(new Date()), []);
   const selectedKey = isoDateKey(selectedDate);
 
@@ -52,14 +54,14 @@ export function WeekStripPicker({
       return {
         date: d,
         key,
-        dayName: WEEKDAY_NAMES[i],
+        dayName: d.toLocaleDateString(tag, { weekday: 'short' }).replace('.', ''),
         dayNumber: d.getDate().toString(),
         isToday: key === isoDateKey(today),
         isSelected: key === selectedKey,
         adherence: adherenceMap[key],
       };
     });
-  }, [adherenceMap, selectedDate, selectedKey, today]);
+  }, [adherenceMap, selectedDate, selectedKey, tag, today]);
 
   // Selected pill slides between measured cell positions instead of re-rendering per cell.
   const layouts = useRef<Record<string, { x: number; width: number }>>({});
@@ -96,8 +98,8 @@ export function WeekStripPicker({
   }));
 
   const monthYearLabel = useMemo(
-    () => selectedDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
-    [selectedDate],
+    () => selectedDate.toLocaleDateString(tag, { month: 'long', year: 'numeric' }),
+    [selectedDate, tag],
   );
   const isCurrentDayToday = selectedKey === isoDateKey(today);
 
@@ -133,7 +135,7 @@ export function WeekStripPicker({
               dotColor = c.warning;
             }
           }
-          const dayLabel = item.date.toLocaleDateString(undefined, {
+          const dayLabel = item.date.toLocaleDateString(tag, {
             weekday: 'long',
             month: 'long',
             day: 'numeric',

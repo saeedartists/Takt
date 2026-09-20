@@ -198,6 +198,35 @@ export const de = {
     imprintCity: 'Berlin, Deutschland',
     imprintEmail: 'E-Mail: support@actimi.example',
     imprintDraftNotice: 'Vor der öffentlichen Store-Einreichung bitte mit finalen Rechtsdaten ersetzen.',
+
+    // Erinnerungston
+    reminderSoundLabel: 'Erinnerungston',
+    reminderSoundOn: 'Mit Ton',
+    reminderSoundOff: 'Lautlos',
+
+    // Datenschutzhinweis, app-spezifisch (Art. 9 DSGVO)
+    privacyWhoTitle: 'Wer verantwortlich ist',
+    privacyWhoBody: 'Die Actimi GmbH betreibt Takt und ist Verantwortliche für Ihre Daten. Die Kontaktdaten stehen im Impressum.',
+    privacyWhatTitle: 'Was Takt speichert',
+    privacyWhatBody: 'Ihren Namen, Ihre Medikationspläne (Name, Form, Stärke, Zeitplan), jede Dosis, die Sie bestätigen, überspringen oder auslassen, sowie Ihre Einwilligung mit Datum und Version. Sonst nichts.',
+    privacyWhereTitle: 'Wo die Daten liegen',
+    privacyWhereBody: 'Auf der Gesundheitsplattform Ovok in der Europäischen Union, pro Organisation getrennt, im FHIR-Format des Gesundheitswesens. Einstellungen wie Sprache, Erinnerungsdauer und Vorratszahlen bleiben nur auf diesem Gerät.',
+    privacyWhyTitle: 'Wozu, und auf welcher Grundlage',
+    privacyWhyBody: 'Medikationsdaten sind Gesundheitsdaten nach Art. 9 DSGVO. Takt verarbeitet sie ausschließlich, um Sie zu erinnern, Ihr Protokoll zu führen und den Bericht zu erstellen, den Sie selbst weitergeben. Grundlage ist Ihre ausdrückliche Einwilligung beim ersten Start (Art. 9 Abs. 2 lit. a DSGVO).',
+    privacyNotTitle: 'Was Takt nicht tut',
+    privacyNotBody: 'Keine Werbung, kein Datenverkauf, keine Analyse- oder Tracking-Dienste auf Gesundheitsbildschirmen, keine Übermittlung außerhalb des EWR, keine Werbe-IDs. Erinnerungen werden auf Ihrem Telefon geplant, nicht von einem Server gesendet.',
+    privacyRightsTitle: 'Ihre Rechte',
+    privacyRightsBody: 'Sie können Ihre Daten jederzeit einsehen, berichtigen und löschen sowie Ihre Einwilligung in den Einstellungen widerrufen. Der Widerruf wirkt sofort und beendet die weitere Verarbeitung. Sie können sich außerdem bei einer Datenschutzaufsichtsbehörde beschweren.',
+    privacyRetentionTitle: 'Wie lange',
+    privacyRetentionBody: 'Bis Sie Ihr Konto löschen oder die Einwilligung widerrufen. Exportierte Berichte sind Ihre eigenen Kopien und werden von Takt nicht aufbewahrt.',
+    privacyVersionLabel: 'Hinweis Version 1 · September 2026',
+
+    // Impressum (vom Rechtsträger zu ergänzen)
+    imprintAddress: 'Straße und Hausnummer, PLZ, Ort: [wird ergänzt]',
+    imprintDirector: 'Geschäftsführung: [wird ergänzt]',
+    imprintRegister: 'Handelsregister und Nummer: [wird ergänzt]',
+    imprintVat: 'USt-IdNr.: [wird ergänzt]',
+    imprintResponsible: 'Verantwortlich für den Inhalt: [wird ergänzt]',
   
     todayFilterAll: 'Alle',
     todayFilterDue: 'Jetzt fällig',

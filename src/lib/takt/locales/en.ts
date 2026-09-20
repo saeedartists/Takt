@@ -199,6 +199,35 @@ export const en = {
     imprintCity: 'Berlin, Germany',
     imprintEmail: 'Email: support@actimi.example',
     imprintDraftNotice: 'Replace with final legal-entity details before public store submission.',
+
+    // Reminder sound
+    reminderSoundLabel: 'Reminder sound',
+    reminderSoundOn: 'Sound',
+    reminderSoundOff: 'Silent',
+
+    // Privacy notice, app-specific (Art. 9 GDPR)
+    privacyWhoTitle: 'Who is responsible',
+    privacyWhoBody: 'Actimi GmbH operates Takt and is the controller for your data. Contact details are in the Imprint.',
+    privacyWhatTitle: 'What Takt stores',
+    privacyWhatBody: 'Your name, your medication plans (name, form, strength, schedule), every dose you confirm, skip or miss, and the consent you gave with its date and version. Nothing else.',
+    privacyWhereTitle: 'Where it is stored',
+    privacyWhereBody: 'On the Ovok health platform in the European Union, isolated per organisation, in the FHIR format used by healthcare systems. Preferences such as language, snooze length and supply counts stay on this device only.',
+    privacyWhyTitle: 'Why, and on what basis',
+    privacyWhyBody: 'Medication data is health data under Article 9 GDPR. Takt processes it only to remind you, to keep your record and to produce the report you choose to share, based on the explicit consent you gave at first launch (Art. 9(2)(a) GDPR).',
+    privacyNotTitle: 'What Takt does not do',
+    privacyNotBody: 'No advertising, no sale of data, no analytics or tracking on health screens, no transfer outside the EEA, no advertising identifiers. Reminders are scheduled on your phone, not sent from a server.',
+    privacyRightsTitle: 'Your rights',
+    privacyRightsBody: 'You can access, correct and delete your data and withdraw consent at any time in Settings. Withdrawal takes effect immediately and stops further processing. You may also lodge a complaint with a data-protection authority.',
+    privacyRetentionTitle: 'How long',
+    privacyRetentionBody: 'Until you delete your account or withdraw consent. Reports you export are your own copies and are not kept by Takt.',
+    privacyVersionLabel: 'Notice version 1 · September 2026',
+
+    // Imprint fields (to be completed by the legal entity)
+    imprintAddress: 'Street and number, postcode, city: [to be completed]',
+    imprintDirector: 'Managing director: [to be completed]',
+    imprintRegister: 'Commercial register and number: [to be completed]',
+    imprintVat: 'VAT ID: [to be completed]',
+    imprintResponsible: 'Responsible for content: [to be completed]',
   
     todayFilterAll: 'All',
     todayFilterDue: 'Due now',

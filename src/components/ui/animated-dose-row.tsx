@@ -143,7 +143,7 @@ export function AnimatedDoseRow({
       <View style={styles.contentCol}>
         <View style={styles.titleRow}>
           <Animated.View style={[{ flex: 1, minWidth: 0, gap: 2 }, titleAnimStyle]}>
-            <Text numberOfLines={1} style={[typography.headline, { color: c.textPrimary }]}>
+            <Text numberOfLines={2} style={[typography.headline, { color: c.textPrimary }]}>
               {dose.label}
             </Text>
             {dose.strength ? (

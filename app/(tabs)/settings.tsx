@@ -3,10 +3,9 @@ import Constants from 'expo-constants';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState, type ReactNode } from 'react';
 import { AppState, Linking, Platform, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, LinearTransition, ZoomIn } from 'react-native-reanimated';
+import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  AnimatedPressable,
   AnimatedSegmentedControl,
   Badge,
   Button,
@@ -18,8 +17,6 @@ import {
   PageShell,
   SectionHeader,
   Stack,
-  paletteConfigs,
-  MIN_TOUCH_TARGET,
   radius,
   spacing,
   typography,
@@ -28,7 +25,6 @@ import {
   useTokens,
   type BadgeTone,
   type ThemeMode,
-  type ThemePalette,
 } from '@/components/ui';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { ovokClient } from '@/lib/ovok-client';
@@ -40,7 +36,6 @@ import { readReminderPermissionStatus } from '@/lib/takt/reminders';
 import { env } from '@/lib/env';
 
 const SNOOZE_OPTIONS = [5, 10, 15, 30] as const;
-const PALETTES = ['amber', 'sage', 'indigo', 'plum'] as const;
 
 type PermissionStatus = Awaited<ReturnType<typeof readReminderPermissionStatus>>;
 type MessageKey = Parameters<ReturnType<typeof useLocale>['t']>[0];
@@ -135,8 +130,8 @@ function ConfirmExpander({
 export default function SettingsTabScreen() {
   const router = useRouter();
   const { c } = useTokens();
-  const { spring, enter } = useMotion();
-  const { themeMode, palette, setThemeMode, setPalette } = useTheme();
+  const { enter } = useMotion();
+  const { themeMode, setThemeMode } = useTheme();
   const { locale, setLocale, t } = useLocale();
   const patient = usePrimaryPatient();
   const withdrawConsent = useWithdrawConsent();
@@ -191,7 +186,6 @@ export default function SettingsTabScreen() {
   const runtimeVersion = Constants.expoConfig?.runtimeVersion;
   const build = typeof runtimeVersion === 'string' ? runtimeVersion : Constants.expoConfig?.ios?.buildNumber;
   const permissionBadge = PERMISSION_BADGE[permission];
-  const checkmarkEnter = ZoomIn.springify().damping(spring.snappy.damping).stiffness(spring.snappy.stiffness);
 
   return (
     <PageShell>
@@ -214,46 +208,6 @@ export default function SettingsTabScreen() {
                 />
               </View>
 
-              <View style={{ gap: spacing(2.5) }}>
-                <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('themePalette')}</Text>
-                <View style={styles.swatchRow} accessibilityRole="radiogroup">
-                  {PALETTES.map((pKey) => {
-                    const config = paletteConfigs[pKey];
-                    const isSelected = palette === pKey;
-                    const name = t(config.nameKey);
-                    return (
-                      <AnimatedPressable
-                        key={pKey}
-                        onPress={() => void setPalette(pKey as ThemePalette)}
-                        accessibilityRole="radio"
-                        accessibilityLabel={name}
-                        accessibilityState={{ selected: isSelected, checked: isSelected }}
-                        style={styles.swatchItem}
-                      >
-                        <View style={[styles.swatchRing, { borderColor: isSelected ? c.accent : 'transparent' }]}>
-                          <View style={[styles.swatch, { backgroundColor: config.previewColor }]}>
-                            {isSelected ? (
-                              <Animated.View entering={checkmarkEnter}>
-                                {/* White reads on every accent, in both schemes. */}
-                                <Ionicons name="checkmark" size={18} color="#FFFFFF" />
-                              </Animated.View>
-                            ) : null}
-                          </View>
-                        </View>
-                        <Text
-                          numberOfLines={1}
-                          style={[
-                            typography.caption,
-                            { color: isSelected ? c.textPrimary : c.textSecondary, fontWeight: isSelected ? '600' : '400' },
-                          ]}
-                        >
-                          {name}
-                        </Text>
-                      </AnimatedPressable>
-                    );
-                  })}
-                </View>
-              </View>
             </View>
           </Card>
         </Section>
@@ -284,6 +238,15 @@ export default function SettingsTabScreen() {
                   value: minutes.toString(),
                   label: `${minutes.toString()}m`,
                 }))}
+              />
+              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('reminderSoundLabel')}</Text>
+              <AnimatedSegmentedControl
+                value={reminderPrefs.data?.sound === false ? 'off' : 'on'}
+                onChange={(next) => void reminderPrefs.setSound(next === 'on')}
+                options={[
+                  { value: 'on', label: t('reminderSoundOn') },
+                  { value: 'off', label: t('reminderSoundOff') },
+                ]}
               />
             </View>
           </Card>
@@ -418,29 +381,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  swatchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing(2),
-  },
-  swatchItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: spacing(1.5),
-    minHeight: MIN_TOUCH_TARGET,
-  },
-  swatchRing: {
-    padding: 3,
-    borderRadius: radius.full,
-    borderWidth: 2,
-  },
-  swatch: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -59,8 +59,9 @@ const reminderCopy = {
 const ensureSupplyChannel = async (): Promise<void> => {
   if (Platform.OS !== 'android') return;
 
+  const locale = await getLocale();
   await Notifications.setNotificationChannelAsync(SUPPLY_CHANNEL_ID, {
-    name: 'Supply alerts',
+    name: locale === 'de' ? 'Vorratshinweise' : 'Supply alerts',
     importance: Notifications.AndroidImportance.HIGH,
     sound: 'default',
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,

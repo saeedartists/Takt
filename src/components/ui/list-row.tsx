@@ -67,7 +67,7 @@ export const ListRow = ({
     <>
       {leading ? <View>{leading}</View> : null}
       <View style={styles.textCol}>
-        <Text numberOfLines={1} style={[typography.body, { color: c.textPrimary }]}>
+        <Text numberOfLines={2} style={[typography.body, { color: c.textPrimary }]}>
           {title}
         </Text>
         {subtitle ? (

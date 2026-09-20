@@ -6,9 +6,40 @@ import * as Notifications from 'expo-notifications';
 import { addDays, atClockTime, dayCodeFromDate, isoDateKey, startOfDay } from './time';
 import { useLocale } from './l10n';
 import type { MedicationPlan } from './types';
+import { readReminderPreferences, useReminderPreferences } from './preferences';
 
 const STORAGE_KEY = 'takt:scheduled-notification-ids:v1';
 const CHANNEL_ID = 'takt-dose-reminders';
+const SILENT_CHANNEL_ID = 'takt-dose-reminders-silent';
+const LOCALE_STORAGE_KEY = 'takt:locale';
+const DEFAULT_SOUND = 'default';
+
+/* Copy that lives outside React: Android channel names and the exact-alarm system dialog. */
+const nativeCopy = {
+  en: {
+    channel: 'Dose reminders',
+    channelSilent: 'Dose reminders (silent)',
+    exactTitle: 'Exact alarm permission',
+    exactMessage: 'Takt needs exact alarms so a reminder arrives at the dose time, not minutes later.',
+    allow: 'Allow',
+    deny: 'Not now',
+  },
+  de: {
+    channel: 'Dosis-Erinnerungen',
+    channelSilent: 'Dosis-Erinnerungen (lautlos)',
+    exactTitle: 'Berechtigung für exakte Alarme',
+    exactMessage: 'Takt braucht exakte Alarme, damit eine Erinnerung genau zur Einnahmezeit kommt und nicht Minuten später.',
+    allow: 'Erlauben',
+    deny: 'Jetzt nicht',
+  },
+} as const;
+
+const readNativeCopy = async () =>
+  (await AsyncStorage.getItem(LOCALE_STORAGE_KEY)) === 'de' ? nativeCopy.de : nativeCopy.en;
+
+/** Android routes sound through the channel, so silent reminders need their own channel. */
+const channelFor = (sound: boolean): string | undefined =>
+  Platform.OS === 'android' ? (sound ? CHANNEL_ID : SILENT_CHANNEL_ID) : undefined;
 const MAX_PENDING_NOTIFICATIONS = 60;
 const REMINDER_PERMISSION_STATE_KEY = 'takt:reminder-permission-state:v1';
 const REMINDER_DIAGNOSTICS_KEY = 'takt:reminder-diagnostics:v1';
@@ -288,13 +319,14 @@ const canScheduleWithoutPrompt = async (): Promise<boolean> => {
 
 const ensureChannel = async (): Promise<void> => {
   if (Platform.OS !== 'android') return;
-  await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-    name: 'Dose reminders',
+  const copy = await readNativeCopy();
+  const base = {
     importance: Notifications.AndroidImportance.MAX,
-    sound: 'default',
     vibrationPattern: [0, 250, 250, 250],
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-  });
+  };
+  await Notifications.setNotificationChannelAsync(CHANNEL_ID, { ...base, name: copy.channel, sound: DEFAULT_SOUND });
+  await Notifications.setNotificationChannelAsync(SILENT_CHANNEL_ID, { ...base, name: copy.channelSilent, sound: null });
 };
 
 const getScheduleExactAlarmPermission = (): string | null => {
@@ -317,12 +349,12 @@ const checkExactAlarmPermission = async (): Promise<boolean> => {
   if (hasPermission) return true;
 
   try {
+    const copy = await readNativeCopy();
     const result = await PermissionsAndroid.request(exactAlarmPermission as any, {
-      title: 'Exact Alarm Permission',
-      message:
-        'Takt needs exact alarm permission to remind you to take your medication at the right time.',
-      buttonPositive: 'Allow',
-      buttonNegative: 'Deny',
+      title: copy.exactTitle,
+      message: copy.exactMessage,
+      buttonPositive: copy.allow,
+      buttonNegative: copy.deny,
     });
 
     return result === PermissionsAndroid.RESULTS.GRANTED;
@@ -394,6 +426,7 @@ const reconcileSchedule = async (
   }
 
   await ensureChannel();
+  const prefs = await readReminderPreferences();
   const previousIds = await readScheduledIds();
   await Promise.all(previousIds.map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => undefined)));
   await appendDiagnosticEvent('schedule.cancelled', `count:${previousIds.length.toString()}`);
@@ -413,13 +446,13 @@ const reconcileSchedule = async (
       content: {
         title: seed.title,
         body: seed.body,
-        sound: 'default',
+        sound: prefs.sound ? DEFAULT_SOUND : false,
         data,
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: seed.triggerAt,
-        channelId: Platform.OS === 'android' ? CHANNEL_ID : undefined,
+        channelId: channelFor(prefs.sound),
       },
     });
 
@@ -453,6 +486,7 @@ export const scheduleSnoozeReminder = async (
   copy?: { title: string; body: string },
 ): Promise<{ scheduled: boolean }> => {
   await ensureChannel();
+  const prefs = await readReminderPreferences();
 
   const guards = cleanupSnoozeGuards(await readSnoozeGuards());
   if (guards[input.doseKey]) {
@@ -469,7 +503,7 @@ export const scheduleSnoozeReminder = async (
       body: copy?.body
         ? formatTemplate(copy.body, { label: input.label, minutes: delayMinutes.toString() })
         : `${input.label} reminder in ${delayMinutes.toString()} minutes`,
-      sound: 'default',
+      sound: prefs.sound ? DEFAULT_SOUND : false,
       data: {
         route: '/(tabs)/today',
         doseKey: input.doseKey,
@@ -479,7 +513,7 @@ export const scheduleSnoozeReminder = async (
       type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
       seconds: delayMinutes * 60,
       repeats: false,
-      channelId: Platform.OS === 'android' ? CHANNEL_ID : undefined,
+      channelId: channelFor(prefs.sound),
     },
   });
 
@@ -497,6 +531,7 @@ export const handleBootComplete = async (): Promise<void> => {
 
 export const useReminderSync = (plans: MedicationPlan[], enabled: boolean): void => {
   const { t } = useLocale();
+  const prefs = useReminderPreferences();
   const signature = useMemo(
     () =>
       JSON.stringify(
@@ -530,7 +565,7 @@ export const useReminderSync = (plans: MedicationPlan[], enabled: boolean): void
       title: t('reminderNotificationTitle'),
       body: t('reminderNotificationBody'),
     });
-  }, [enabled, plans, t]);
+  }, [enabled, plans, t, prefs.data?.sound]);
 
   useEffect(() => {
     void sync();
