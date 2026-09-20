@@ -102,7 +102,8 @@ const matchesSearch = (
     const key = rawKey.split(':')[0]!; // strip modifiers like name:contains
 
     if (key === 'subject' || key === 'patient') {
-      const subject = r.subject as { reference?: string } | undefined;
+      // Consent and RelatedPerson carry `patient`; clinical resources carry `subject`.
+      const subject = (r.subject ?? r.patient) as { reference?: string } | undefined;
       const ref = subject?.reference ?? '';
       // Accept both "Patient/pat-001" and a bare "pat-001".
       if (ref !== value && ref !== `Patient/${value}`) return false;
@@ -135,6 +136,12 @@ const matchesSearch = (
     if (key === 'identifier') {
       const ids = r.identifier as Array<{ value?: string }> | undefined;
       if (!(ids ?? []).some((i) => i.value === value)) return false;
+      continue;
+    }
+    if (key === 'email') {
+      const telecom = r.telecom as Array<{ system?: string; value?: string }> | undefined;
+      const wanted = value.toLowerCase();
+      if (!(telecom ?? []).some((t) => t.system === 'email' && (t.value ?? '').toLowerCase() === wanted)) return false;
       continue;
     }
     // Unknown param — ignore.

@@ -1,5 +1,5 @@
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useMemo } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -10,183 +10,219 @@ import {
   ErrorState,
   ListGroup,
   ListRow,
-  LoadingState,
   PageHeader,
   PageShell,
   SectionHeader,
+  SkeletonRow,
   Stack,
   spacing,
   typography,
   useTokens,
 } from '@/components/ui';
-import { useFamilySharingGrants } from '@/lib/hooks/use-family-sharing-grants';
+import {
+  useAccountEmail,
+  useFamilySharingGrants,
+  useSharedWithMe,
+} from '@/lib/hooks/use-family-sharing-grants';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
-import { familySharingLockedCapabilities } from '@/lib/takt/family-sharing';
-import { doseSubtitle } from '@/lib/takt/schedule';
 import { useTodayScheduleEvents } from '@/lib/hooks/use-today-schedule-events';
+import { familySharingLockedCapabilities, isUnconfirmedForHours } from '@/lib/takt/family-sharing';
 import { useLocale } from '@/lib/takt/l10n';
+import { doseSubtitle } from '@/lib/takt/schedule';
+import type { DoseState } from '@/lib/takt/types';
 
-const statusKey = (
-  state: 'scheduled' | 'due' | 'taken' | 'skipped' | 'missed',
-): 'statusScheduled' | 'statusDue' | 'statusTaken' | 'statusSkipped' | 'statusMissed' => {
-  if (state === 'due') return 'statusDue';
-  if (state === 'taken') return 'statusTaken';
-  if (state === 'skipped') return 'statusSkipped';
-  if (state === 'missed') return 'statusMissed';
-  return 'statusScheduled';
-};
+/*
+ * The one screen a relative gets (brief §11): today's doses for the
+ * patient who invited them, with status — nothing else, no actions.
+ * Opened without a `patientRef` it is the patient's own preview of what
+ * a relative sees.
+ */
+
+const statusKey = (state: DoseState) =>
+  state === 'due'
+    ? ('statusDue' as const)
+    : state === 'taken'
+      ? ('statusTaken' as const)
+      : state === 'skipped'
+        ? ('statusSkipped' as const)
+        : state === 'missed'
+          ? ('statusMissed' as const)
+          : ('statusScheduled' as const);
 
 export default function RelativeViewScreen() {
   const { c } = useTokens();
   const { t } = useLocale();
   const router = useRouter();
-  const params = useLocalSearchParams<{ relatedPersonRef?: string }>();
+  const params = useLocalSearchParams<{ patientRef?: string; relatedPersonRef?: string }>();
 
-  const patient = usePrimaryPatient();
-  const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
-  const today = useTodayScheduleEvents(patientRef);
-  const grants = useFamilySharingGrants(patientRef);
+  const own = usePrimaryPatient();
+  const ownRef = own.data ? `Patient/${own.data.id}` : undefined;
+  const isPreview = !params.patientRef || params.patientRef === ownRef;
 
-  const selectedGrant = useMemo(() => {
-    if (!params.relatedPersonRef) {
-      return grants.grants.find((grant) => grant.status === 'granted') ?? grants.grants[0];
-    }
-    return (
-      grants.grants.find((grant) => grant.relatedPersonRef === params.relatedPersonRef) ??
-      grants.grants[0]
-    );
-  }, [grants.grants, params.relatedPersonRef]);
+  const email = useAccountEmail();
+  const shared = useSharedWithMe(email, ownRef);
+  const share = isPreview ? undefined : shared.data?.find((item) => item.patientRef === params.patientRef);
 
-  const lockedLabel = useMemo(
+  // Revocation must take effect immediately: re-check the grant every time the screen is shown.
+  useFocusEffect(
+    useCallback(() => {
+      if (!isPreview) void shared.refetch();
+    }, [isPreview, shared]),
+  );
+
+  const targetRef = isPreview ? ownRef : share?.status === 'accepted' ? share.patientRef : undefined;
+  const today = useTodayScheduleEvents(targetRef);
+  const ownGrants = useFamilySharingGrants(isPreview ? ownRef : undefined);
+
+  const previewGrant = useMemo(
     () =>
-      familySharingLockedCapabilities.map((capability) => {
-        if (capability === 'edit-regimen') return t('familySharingBlockedLine1');
-        if (capability === 'view-diary') return t('familySharingBlockedLine2');
-        return t('familySharingBlockedLine3');
-      }),
+      ownGrants.grants.find((grant) => grant.relatedPersonRef === params.relatedPersonRef) ??
+      ownGrants.grants.find((grant) => grant.status === 'granted'),
+    [ownGrants.grants, params.relatedPersonRef],
+  );
+
+  const now = new Date();
+  const unconfirmed = today.doses.filter((dose) => isUnconfirmedForHours(dose, now)).length;
+
+  const lockedLines = useMemo(
+    () =>
+      familySharingLockedCapabilities.map((capability) =>
+        capability === 'edit-regimen'
+          ? t('familySharingBlockedLine1')
+          : capability === 'view-diary'
+            ? t('familySharingBlockedLine2')
+            : t('familySharingBlockedLine3'),
+      ),
     [t],
   );
 
-  if (patient.isLoading || today.isLoading || grants.isLoading) {
+  const title = isPreview
+    ? t('familySharingRelativeTitle')
+    : t('relativeViewingPatient').replace('{name}', share?.patientLabel ?? '');
+
+  const isLoading = own.isLoading || (isPreview ? ownGrants.isLoading : shared.isLoading) || today.isLoading;
+  const error = own.error ?? (isPreview ? ownGrants.error : shared.error) ?? today.error;
+
+  if (isLoading) {
     return (
       <PageShell>
-        <LoadingState label={t('familySharingRelativeLoading')} />
+        <PageHeader title={title} subtitle={t('familySharingRelativeSubtitle')} />
+        <Card>
+          <SkeletonRow isFirst />
+          <SkeletonRow />
+          <SkeletonRow />
+        </Card>
       </PageShell>
     );
   }
 
-  if (patient.error || today.error || grants.error) {
+  if (error) {
     return (
       <PageShell>
         <ErrorState
           description={t('familySharingRelativeLoadError')}
           onRetry={() => {
-            void patient.refetch();
+            void own.refetch();
+            void shared.refetch();
             void today.refetch();
-            void grants.refetch();
           }}
         />
       </PageShell>
     );
   }
 
-  const hasViewAccess = selectedGrant?.status === 'granted';
+  const blocked =
+    !isPreview && (!share || share.status !== 'accepted') ? (
+      <EmptyState
+        title={
+          !share
+            ? t('familySharingNoGrants')
+            : share.status === 'revoked'
+              ? t('familySharingAccessRevokedTitle')
+              : t('familySharingStatusInvited')
+        }
+        description={
+          !share
+            ? t('familySharingRelativeNoGrantSelectedHint')
+            : share.status === 'revoked'
+              ? t('familySharingAccessRevokedHint')
+              : t('relativeInviteNotAccepted')
+        }
+        action={<Button kind="secondary" label={t('today')} onPress={() => router.replace('/(tabs)/today')} />}
+      />
+    ) : null;
 
   return (
     <PageShell>
-      <PageHeader title={t('familySharingRelativeTitle')} subtitle={t('familySharingRelativeSubtitle')} />
+      <PageHeader title={title} subtitle={t('familySharingRelativeSubtitle')} />
       <Stack>
-        <Card>
-          <View style={{ gap: spacing(2) }}>
-            <Text style={[typography.subhead, { color: c.textSecondary }]}>
-              {t('familySharingRelativeGuardrail')}
-            </Text>
-            {selectedGrant ? (
-              <Badge
-                label={t('familySharingViewingAs').replace('{name}', selectedGrant.relatedPersonLabel)}
-                tone={hasViewAccess ? 'accent' : 'warning'}
-              />
-            ) : (
-              <Badge label={t('familySharingNoGrants')} tone="warning" />
-            )}
-            {!hasViewAccess && selectedGrant ? (
-              <Text style={[typography.footnote, { color: c.destructive }]}>
-                {t('familySharingAccessRevokedHint')}
-              </Text>
-            ) : null}
-            <Badge label={t('familySharingOptionalQuietReminder')} tone="neutral" />
-          </View>
-        </Card>
+        {isPreview ? (
+          <Card>
+            <View style={{ padding: spacing(4), gap: spacing(2) }}>
+              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('familySharingRelativeGuardrail')}</Text>
+              {previewGrant ? (
+                <Badge label={t('relativePreviewMode').replace('{name}', previewGrant.relatedPersonLabel)} tone="accent" />
+              ) : null}
+            </View>
+          </Card>
+        ) : null}
 
-        {!selectedGrant ? (
-          <EmptyState
-            title={t('familySharingNoGrants')}
-            description={t('familySharingRelativeNoGrantSelectedHint')}
-            action={
-              <Button
-                label={t('familySharingBackToManage')}
-                onPress={() => router.replace('/settings/family-sharing' as never)}
-              />
-            }
-          />
-        ) : !hasViewAccess ? (
-          <EmptyState
-            title={t('familySharingAccessRevokedTitle')}
-            description={t('familySharingAccessRevokedHint')}
-            action={
-              <Button
-                kind="secondary"
-                label={t('familySharingBackToManage')}
-                onPress={() => router.replace('/settings/family-sharing' as never)}
-              />
-            }
-          />
-        ) : (
+        {blocked ?? (
           <View>
-            <SectionHeader title={t('timeline')} />
+            <SectionHeader
+              title={t('timeline')}
+              action={
+                today.doses.length > 0 ? (
+                  <Badge
+                    label={
+                      unconfirmed > 0
+                        ? t('sharedWithMeUnconfirmed').replace('{count}', unconfirmed.toString())
+                        : t('sharedWithMeAllGood')
+                    }
+                    tone={unconfirmed > 0 ? 'warning' : 'success'}
+                  />
+                ) : undefined
+              }
+            />
             {today.doses.length === 0 ? (
-              <EmptyState
-                title={t('noDosesToday')}
-                description={t('familySharingRelativeNoDosesHint')}
-              />
+              <EmptyState title={t('noDosesToday')} description={t('familySharingRelativeNoDosesHint')} />
             ) : (
               <ListGroup>
-                {today.doses.map((dose, index) => (
-                  <ListRow
-                    key={dose.id}
-                    isFirst={index === 0}
-                    title={dose.label}
-                    subtitle={doseSubtitle(dose)}
-                    trailing={
-                      <Badge
-                        label={t(statusKey(dose.state))}
-                        tone={
-                          dose.state === 'taken'
-                            ? 'success'
-                            : dose.state === 'due'
-                              ? 'accent'
-                              : dose.state === 'missed'
-                                ? 'warning'
-                                : 'neutral'
-                        }
-                      />
-                    }
-                  />
-                ))}
+                {today.doses.map((dose, index) => {
+                  const late = isUnconfirmedForHours(dose, now);
+                  return (
+                    <ListRow
+                      key={dose.id}
+                      isFirst={index === 0}
+                      title={dose.label}
+                      subtitle={doseSubtitle(dose)}
+                      meta={late ? <Badge label={t('relativeUnconfirmedBadge')} tone="warning" /> : undefined}
+                      trailing={
+                        <Badge
+                          label={t(statusKey(dose.state))}
+                          tone={dose.state === 'taken' ? 'success' : dose.state === 'due' ? 'accent' : 'neutral'}
+                        />
+                      }
+                    />
+                  );
+                })}
               </ListGroup>
             )}
+            <Text style={[typography.footnote, { color: c.textTertiary, marginTop: spacing(2), paddingHorizontal: spacing(1) }]}>
+              {t('familySharingOptionalQuietReminder')}
+            </Text>
           </View>
         )}
 
         <View>
           <SectionHeader title={t('familySharingRelativeBlockedTitle')} />
           <ListGroup>
-            {lockedLabel.map((line, index) => (
+            {lockedLines.map((line, index) => (
               <ListRow
                 key={line}
                 isFirst={index === 0}
                 title={line}
-                trailing={<Ionicons name="close-circle" size={18} color={c.textTertiary} />}
+                trailing={<Ionicons name="close-circle" size={20} color={c.textTertiary} />}
               />
             ))}
           </ListGroup>

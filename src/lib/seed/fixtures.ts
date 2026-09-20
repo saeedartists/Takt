@@ -110,7 +110,10 @@ export const PATIENTS: FhirResource[] = [
       { system: 'http://hospital.example.org/mrn', value: 'MRN-000211' },
     ],
     name: [{ use: 'official', family: 'Reyes', given: ['Camila'] }],
-    telecom: [{ system: 'phone', value: '+1-555-0188', use: 'mobile' }],
+    telecom: [
+      { system: 'email', value: 'camila.reyes@example.com', use: 'home' },
+      { system: 'phone', value: '+1-555-0188', use: 'mobile' },
+    ],
     gender: 'female',
     birthDate: '1993-07-30',
     address: [
@@ -676,6 +679,69 @@ export const CONSENTS: FhirResource[] = [
  * resourceType. `mock-server.ts` deep-clones this at install time so
  * runtime writes never mutate the fixtures.
  */
+/*
+ * Family sharing (brief §11): Amara Okonkwo has invited Camila Reyes — the
+ * demo account — as her caregiver. Camila sees the invitation on Today,
+ * accepts it, and then reads Amara's doses for the day.
+ */
+export const RELATED_PEOPLE: FhirResource[] = [
+  {
+    resourceType: 'RelatedPerson',
+    id: 'relp-001',
+    meta: meta(1),
+    active: true,
+    patient: { reference: 'Patient/pat-001', display: 'Amara Okonkwo' },
+    relationship: [
+      {
+        coding: [
+          { system: 'http://terminology.hl7.org/CodeSystem/v3-RoleCode', code: 'CGV', display: 'caregiver' },
+        ],
+      },
+    ],
+    name: [{ use: 'official', family: 'Reyes', given: ['Camila'] }],
+    telecom: [{ system: 'email', value: 'camila.reyes@example.com', use: 'home' }],
+  },
+];
+
+export const FAMILY_SHARE_CONSENTS: FhirResource[] = [
+  {
+    resourceType: 'Consent',
+    id: 'consent-family-1',
+    meta: meta(1),
+    status: 'active',
+    patient: { reference: 'Patient/pat-001' },
+    dateTime: isoDaysAgo(1),
+    scope: {
+      coding: [{ system: 'http://terminology.hl7.org/CodeSystem/consentscope', code: 'patient-privacy' }],
+    },
+    category: [{ coding: [{ system: 'http://loinc.org', code: '59284-0', display: 'Patient Consent' }] }],
+    policyRule: { text: 'takt-family-sharing-v1' },
+    provision: {
+      type: 'permit',
+      actor: [
+        {
+          role: {
+            coding: [
+              {
+                system: 'http://terminology.hl7.org/CodeSystem/v3-ParticipationType',
+                code: 'IRCP',
+                display: 'information recipient',
+              },
+            ],
+          },
+          reference: { reference: 'RelatedPerson/relp-001' },
+        },
+      ],
+    },
+    extension: [
+      { url: 'https://actimi.com/fhir/takt/family-share/grant', valueString: 'true' },
+      { url: 'https://actimi.com/fhir/takt/family-share/granted-at', valueDateTime: isoDaysAgo(1) },
+      { url: 'https://actimi.com/fhir/takt/family-share/granted-by', valueString: 'Patient/pat-001' },
+      { url: 'https://actimi.com/fhir/takt/family-share/relationship-code', valueString: 'CGV' },
+    ],
+  },
+];
+
 export const SEED: Record<string, FhirResource[]> = {
   Patient: PATIENTS,
   Practitioner: PRACTITIONERS,
@@ -684,5 +750,6 @@ export const SEED: Record<string, FhirResource[]> = {
   Medication: MEDICATIONS,
   MedicationRequest: MEDICATION_REQUESTS,
   MedicationAdministration: MEDICATION_ADMINS,
-  Consent: CONSENTS,
+  Consent: [...CONSENTS, ...FAMILY_SHARE_CONSENTS],
+  RelatedPerson: RELATED_PEOPLE,
 };

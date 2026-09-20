@@ -21,6 +21,7 @@ export type PatientResource = {
   resourceType: 'Patient';
   id: string;
   name?: Array<{ given?: string[]; family?: string }>;
+  telecom?: Array<{ system?: string; value?: string; use?: string }>;
   birthDate?: string;
   gender?: string;
 };
@@ -116,6 +117,7 @@ export type RelatedPersonResource = {
     value?: string;
     use?: 'home' | 'work' | 'temp' | 'old' | 'mobile' | string;
   }>;
+  extension?: FhirExtension[];
 };
 
 export type FamilyGrantStatus = 'granted' | 'revoked';
@@ -126,6 +128,11 @@ export type FamilySharingGrant = {
   relatedPersonRef: string;
   relatedPersonLabel: string;
   relationshipCode?: string;
+  /** Invitation address; the relative's account is matched on it. */
+  email?: string;
+  /** Set once the relative accepted on their own account. */
+  linkedAccountRef?: string;
+  acceptedAt?: string;
   grantedAt: string;
   revokedAt?: string;
   status: FamilyGrantStatus;

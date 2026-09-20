@@ -10,6 +10,9 @@ export const TAKT_EXT = {
   familyShareRevokedAt: 'https://actimi.com/fhir/takt/family-share/revoked-at',
   familyShareRevokedBy: 'https://actimi.com/fhir/takt/family-share/revoked-by',
   familyShareRelationshipCode: 'https://actimi.com/fhir/takt/family-share/relationship-code',
+  /** On the RelatedPerson: the relative's own Patient account once they accept the invitation. */
+  familyShareLinkedAccount: 'https://actimi.com/fhir/takt/family-share/linked-account',
+  familyShareAcceptedAt: 'https://actimi.com/fhir/takt/family-share/accepted-at',
 } as const;
 
 export const TAKT_CONSENT_VERSION = 'takt-consent-v1';

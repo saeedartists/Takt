@@ -1,8 +1,9 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
+  AnimatedPressable,
   AnimatedSegmentedControl,
   Badge,
   Button,
@@ -13,11 +14,12 @@ import {
   Input,
   ListGroup,
   ListRow,
-  LoadingState,
   PageHeader,
   PageShell,
   SectionHeader,
+  SkeletonCard,
   Stack,
+  radius,
   spacing,
   typography,
   useTokens,
@@ -30,6 +32,12 @@ import {
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useLocale } from '@/lib/takt/l10n';
 
+/*
+ * Patient side of family sharing (brief §11). Inviting a relative is a
+ * separate Article 9 disclosure: its own affirmative consent, its own
+ * Consent resource, revocable in one step with the revocation recorded.
+ */
+
 const RELATIONSHIP_OPTIONS = [
   { value: 'FAMMEMB', labelKey: 'familySharingRelationshipFamily' as const },
   { value: 'SPS', labelKey: 'familySharingRelationshipSpouse' as const },
@@ -37,6 +45,7 @@ const RELATIONSHIP_OPTIONS = [
 ] as const;
 
 const normalize = (value: string): string => value.trim().toLowerCase();
+const isEmail = (value: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
 export default function FamilySharingScreen() {
   const { t, formatDateTime } = useLocale();
@@ -54,50 +63,33 @@ export default function FamilySharingScreen() {
   const [email, setEmail] = useState('');
   const [relationshipCode, setRelationshipCode] =
     useState<(typeof RELATIONSHIP_OPTIONS)[number]['value']>('FAMMEMB');
+  const [consented, setConsented] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [pendingRevokeGrantId, setPendingRevokeGrantId] = useState<string | null>(null);
 
-  const grantedByRef = useMemo(
-    () => ({ reference: patientRef ?? 'Patient/unknown' }),
-    [patientRef],
-  );
+  const grantedByRef = useMemo(() => ({ reference: patientRef ?? 'Patient/unknown' }), [patientRef]);
 
   const hasDuplicate = useMemo(() => {
-    const first = normalize(givenName);
-    const last = normalize(familyName);
     const mail = normalize(email);
+    if (!mail) return false;
+    return grants.grants.some((grant) => grant.status === 'granted' && grant.email === mail);
+  }, [email, grants.grants]);
 
-    if (!first || !last) return false;
-
-    return grants.relatedPeople.some((person) => {
-      const personGiven = normalize(person.name?.[0]?.given?.[0] ?? '');
-      const personFamily = normalize(person.name?.[0]?.family ?? '');
-      const personEmail = normalize(person.telecom?.find((entry) => entry.system === 'email')?.value ?? '');
-      const sameName = personGiven === first && personFamily === last;
-      const sameEmail = Boolean(mail) && personEmail === mail;
-      return sameName || sameEmail;
-    });
-  }, [email, familyName, givenName, grants.relatedPeople]);
+  const relativeName = `${givenName.trim()} ${familyName.trim()}`.trim() || t('familySharingRelationshipFamily');
+  const consentText = t('familySharingConsentCheckbox').replace('{name}', relativeName);
+  const canSubmit =
+    Boolean(givenName.trim()) && Boolean(familyName.trim()) && isEmail(email) && consented && !hasDuplicate;
 
   const submitGrant = async () => {
     setSubmitError(null);
     setSuccessMessage(null);
 
-    if (!patientRef) {
-      setSubmitError(t('familySharingNeedsPatient'));
-      return;
-    }
-
-    if (!givenName.trim() || !familyName.trim()) {
-      setSubmitError(t('familySharingNameRequired'));
-      return;
-    }
-
-    if (hasDuplicate) {
-      setSubmitError(t('familySharingDuplicateError'));
-      return;
-    }
+    if (!patientRef) return setSubmitError(t('familySharingNeedsPatient'));
+    if (!givenName.trim() || !familyName.trim()) return setSubmitError(t('familySharingNameRequired'));
+    if (!isEmail(email)) return setSubmitError(t('familySharingEmailRequired'));
+    if (!consented) return setSubmitError(t('familySharingConsentRequired'));
+    if (hasDuplicate) return setSubmitError(t('familySharingDuplicateError'));
 
     try {
       await grantMutation.mutateAsync({
@@ -105,35 +97,25 @@ export default function FamilySharingScreen() {
         givenName,
         familyName,
         relationshipCode,
-        email: email.trim() ? email : undefined,
+        email,
         grantedByRef,
       });
-
       setSuccessMessage(t('familySharingGrantSuccess'));
       setGivenName('');
       setFamilyName('');
       setEmail('');
       setRelationshipCode('FAMMEMB');
+      setConsented(false);
     } catch {
       setSubmitError(t('familySharingGrantError'));
     }
   };
 
-  const requestRevoke = (grantId: string) => {
-    setSubmitError(null);
-    setSuccessMessage(null);
-    setPendingRevokeGrantId(grantId);
-  };
-
   const revokeGrant = async (grant: (typeof grants.grants)[number]) => {
     setSubmitError(null);
     setSuccessMessage(null);
-
     try {
-      await revokeMutation.mutateAsync({
-        grant,
-        revokedByRef: grantedByRef,
-      });
+      await revokeMutation.mutateAsync({ grant, revokedByRef: grantedByRef });
       setPendingRevokeGrantId(null);
       setSuccessMessage(t('familySharingRevokeSuccess'));
     } catch {
@@ -141,10 +123,18 @@ export default function FamilySharingScreen() {
     }
   };
 
+  const relationLabel = (code?: string) =>
+    code === 'SPS'
+      ? t('familySharingRelationshipSpouse')
+      : code === 'CGV'
+        ? t('familySharingRelationshipCaregiver')
+        : t('familySharingRelationshipFamily');
+
   if (patient.isLoading || grants.isLoading) {
     return (
       <PageShell>
-        <LoadingState label={t('familySharingLoading')} />
+        <PageHeader title={t('familySharingTitle')} subtitle={t('familySharingSubtitle')} />
+        <SkeletonCard rows={3} />
       </PageShell>
     );
   }
@@ -171,41 +161,20 @@ export default function FamilySharingScreen() {
       <PageHeader title={t('familySharingTitle')} subtitle={t('familySharingSubtitle')} />
 
       <Stack>
-        <Card>
-          <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
-            <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('familySharingV10Note')}</Text>
-            <Badge label={t('familySharingV11Gate')} tone="warning" />
-          </View>
-        </Card>
-
-        <View>
-          <SectionHeader title={t('familySharingFlowTitle')} />
-          <ListGroup>
-            <ListRow isFirst title={t('familySharingFlowStep1')} value="1" />
-            <ListRow title={t('familySharingFlowStep2')} value="2" />
-            <ListRow title={t('familySharingFlowStep3')} value="3" />
-          </ListGroup>
-        </View>
-
         <View>
           <SectionHeader title={t('familySharingAddTitle')} />
           <Card>
             <View style={{ padding: spacing(4), gap: spacing(3) }}>
               <Field label={t('familySharingFirstNameLabel')}>
-                <Input
-                  value={givenName}
-                  onChangeText={setGivenName}
-                  placeholder={t('familySharingFirstNamePlaceholder')}
-                />
+                <Input value={givenName} onChangeText={setGivenName} placeholder={t('familySharingFirstNamePlaceholder')} autoCapitalize="words" />
               </Field>
               <Field label={t('familySharingLastNameLabel')}>
-                <Input
-                  value={familyName}
-                  onChangeText={setFamilyName}
-                  placeholder={t('familySharingLastNamePlaceholder')}
-                />
+                <Input value={familyName} onChangeText={setFamilyName} placeholder={t('familySharingLastNamePlaceholder')} autoCapitalize="words" />
               </Field>
-              <Field label={t('familySharingEmailOptionalLabel')}>
+              <Field
+                label={t('familySharingEmailLabel')}
+                error={email.trim() && !isEmail(email) ? t('familySharingEmailRequired') : hasDuplicate ? t('familySharingDuplicateHint') : undefined}
+              >
                 <Input
                   value={email}
                   onChangeText={setEmail}
@@ -214,38 +183,42 @@ export default function FamilySharingScreen() {
                   autoCorrect={false}
                   keyboardType="email-address"
                   textContentType="emailAddress"
+                  invalid={Boolean(email.trim()) && !isEmail(email)}
                 />
               </Field>
               <Field label={t('familySharingRelationshipLabel')}>
                 <AnimatedSegmentedControl
                   value={relationshipCode}
-                  onChange={(next) =>
-                    setRelationshipCode(next as (typeof RELATIONSHIP_OPTIONS)[number]['value'])
-                  }
-                  options={RELATIONSHIP_OPTIONS.map((option) => ({
-                    value: option.value,
-                    label: t(option.labelKey),
-                  }))}
+                  onChange={(next) => setRelationshipCode(next as (typeof RELATIONSHIP_OPTIONS)[number]['value'])}
+                  options={RELATIONSHIP_OPTIONS.map((option) => ({ value: option.value, label: t(option.labelKey) }))}
                 />
               </Field>
-              {hasDuplicate ? (
-                <Badge label={t('familySharingDuplicateHint')} tone="warning" />
-              ) : null}
+
+              {/* Unbundled, affirmative Article 9 consent for this one relative. */}
+              <AnimatedPressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: consented }}
+                accessibilityLabel={consentText}
+                onPress={() => setConsented((value) => !value)}
+                style={[
+                  styles.consentRow,
+                  { borderColor: consented ? c.accent : c.separator, backgroundColor: consented ? `${c.accent}0F` : c.surface },
+                ]}
+              >
+                <Ionicons name={consented ? 'checkbox' : 'square-outline'} size={24} color={consented ? c.accent : c.textTertiary} />
+                <Text style={[typography.subhead, { color: c.textPrimary, flex: 1, minWidth: 0 }]}>{consentText}</Text>
+              </AnimatedPressable>
+
               {submitError ? (
-                <Text style={[typography.footnote, { color: c.destructive }]}>{submitError}</Text>
+                <Text accessibilityRole="alert" style={[typography.footnote, { color: c.destructive }]}>{submitError}</Text>
               ) : null}
-              {successMessage ? (
-                <Text style={[typography.footnote, { color: c.success }]}>{successMessage}</Text>
-              ) : null}
+              {successMessage ? <Text style={[typography.footnote, { color: c.success }]}>{successMessage}</Text> : null}
+
               <Button
-                label={grantMutation.isPending ? t('familySharingGranting') : t('familySharingGrantCta')}
-                disabled={
-                  grantMutation.isPending ||
-                  revokeMutation.isPending ||
-                  hasDuplicate ||
-                  !givenName.trim() ||
-                  !familyName.trim()
-                }
+                label={t('familySharingGrantCta')}
+                icon={<Ionicons name="mail-outline" size={18} color={c.surface} />}
+                loading={grantMutation.isPending}
+                disabled={!canSubmit || revokeMutation.isPending}
                 onPress={() => void submitGrant()}
               />
             </View>
@@ -253,42 +226,33 @@ export default function FamilySharingScreen() {
         </View>
 
         <View>
-          <SectionHeader
-            title={t('familySharingActiveListTitle').replace('{count}', activeGrants.length.toString())}
-          />
+          <SectionHeader title={t('familySharingActiveListTitle').replace('{count}', activeGrants.length.toString())} />
           {activeGrants.length === 0 ? (
-            <EmptyState
-              title={t('familySharingNoGrants')}
-              description={t('familySharingNoGrantsHint')}
-            />
+            <EmptyState title={t('familySharingNoGrants')} description={t('familySharingNoGrantsHint')} />
           ) : (
             <Stack>
               {activeGrants.map((grant) => {
-                const relationLabel =
-                  grant.relationshipCode === 'SPS'
-                    ? t('familySharingRelationshipSpouse')
-                    : grant.relationshipCode === 'CGV'
-                      ? t('familySharingRelationshipCaregiver')
-                      : t('familySharingRelationshipFamily');
+                const accepted = Boolean(grant.linkedAccountRef);
                 const revokeConfirm = pendingRevokeGrantId === grant.id;
+                const subtitle = accepted
+                  ? t('familySharingActiveSince').replace('{date}', formatDateTime(new Date(grant.acceptedAt ?? grant.grantedAt)))
+                  : t('familySharingInvitedWaiting').replace('{email}', grant.email ?? '');
 
                 return (
                   <Card key={grant.id}>
-                    <View style={{ padding: spacing(4), gap: spacing(3) }}>
-                      <ListGroup>
-                        <ListRow
-                          isFirst
-                          title={grant.relatedPersonLabel}
-                          subtitle={`${relationLabel} · ${t('familySharingGrantedAt')}: ${formatDateTime(
-                            new Date(grant.grantedAt),
-                          )}`}
-                          value={t('statusActive')}
-                        />
-                      </ListGroup>
-
+                    <ListRow
+                      isFirst
+                      title={`${grant.relatedPersonLabel} · ${relationLabel(grant.relationshipCode)}`}
+                      subtitle={subtitle}
+                      trailing={
+                        <Badge label={accepted ? t('statusActive') : t('familySharingStatusInvited')} tone={accepted ? 'success' : 'neutral'} />
+                      }
+                    />
+                    <View style={styles.grantActions}>
                       <Button
                         kind="secondary"
-                        label={t('familySharingOpenRelativeView')}
+                        size="sm"
+                        label={t('familySharingPreviewCta')}
                         onPress={() =>
                           router.push({
                             pathname: '/settings/relative-view',
@@ -296,27 +260,18 @@ export default function FamilySharingScreen() {
                           } as never)
                         }
                       />
-
                       <Button
                         kind={revokeConfirm ? 'destructive' : 'secondary'}
-                        label={
-                          revokeMutation.isPending && revokeConfirm
-                            ? t('familySharingRevoking')
-                            : revokeConfirm
-                              ? t('familySharingRevokeConfirmCta')
-                              : t('familySharingRevokeCta')
-                        }
+                        size="sm"
+                        label={revokeConfirm ? t('familySharingRevokeConfirmCta') : t('familySharingRevokeCta')}
+                        loading={revokeMutation.isPending && revokeConfirm}
                         disabled={revokeMutation.isPending || grantMutation.isPending}
-                        onPress={() =>
-                          revokeConfirm ? void revokeGrant(grant) : requestRevoke(grant.id)
-                        }
+                        onPress={() => (revokeConfirm ? void revokeGrant(grant) : setPendingRevokeGrantId(grant.id))}
                       />
-                      {revokeConfirm ? (
-                        <Text style={[typography.footnote, { color: c.textSecondary }]}>
-                          {t('familySharingRevokeConfirmHint')}
-                        </Text>
-                      ) : null}
                     </View>
+                    {revokeConfirm ? (
+                      <Text style={[typography.footnote, styles.hint, { color: c.textSecondary }]}>{t('familySharingRevokeConfirmHint')}</Text>
+                    ) : null}
                   </Card>
                 );
               })}
@@ -338,7 +293,7 @@ export default function FamilySharingScreen() {
                       ? `${t('familySharingRevokedAt')}: ${formatDateTime(new Date(grant.revokedAt))}`
                       : t('statusArchived')
                   }
-                  value={t('statusArchived')}
+                  trailing={<Badge label={t('familySharingRevokedAt')} tone="neutral" />}
                 />
               ))}
             </ListGroup>
@@ -348,30 +303,35 @@ export default function FamilySharingScreen() {
         <View>
           <SectionHeader title={t('familySharingScopeTitle')} />
           <ListGroup>
-            <ListRow
-              isFirst
-              title={t('familySharingAllowedLine1')}
-              trailing={<Ionicons name="checkmark-circle" size={18} color="#10B981" />}
-            />
-            <ListRow
-              title={t('familySharingAllowedLine2')}
-              trailing={<Ionicons name="checkmark-circle" size={18} color="#10B981" />}
-            />
-            <ListRow
-              title={t('familySharingBlockedLine1')}
-              trailing={<Ionicons name="close-circle" size={18} color={c.textTertiary} />}
-            />
-            <ListRow
-              title={t('familySharingBlockedLine2')}
-              trailing={<Ionicons name="close-circle" size={18} color={c.textTertiary} />}
-            />
-            <ListRow
-              title={t('familySharingBlockedLine3')}
-              trailing={<Ionicons name="close-circle" size={18} color={c.textTertiary} />}
-            />
+            <ListRow isFirst title={t('familySharingAllowedLine1')} trailing={<Ionicons name="checkmark-circle" size={20} color={c.success} />} />
+            <ListRow title={t('familySharingAllowedLine2')} trailing={<Ionicons name="checkmark-circle" size={20} color={c.success} />} />
+            <ListRow title={t('familySharingBlockedLine1')} trailing={<Ionicons name="close-circle" size={20} color={c.textTertiary} />} />
+            <ListRow title={t('familySharingBlockedLine2')} trailing={<Ionicons name="close-circle" size={20} color={c.textTertiary} />} />
+            <ListRow title={t('familySharingBlockedLine3')} trailing={<Ionicons name="close-circle" size={20} color={c.textTertiary} />} />
           </ListGroup>
         </View>
       </Stack>
     </PageShell>
   );
 }
+
+const styles = StyleSheet.create({
+  consentRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing(3),
+    padding: spacing(3),
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  grantActions: {
+    flexDirection: 'row',
+    gap: spacing(2),
+    paddingHorizontal: spacing(4),
+    paddingBottom: spacing(4),
+  },
+  hint: {
+    paddingHorizontal: spacing(4),
+    paddingBottom: spacing(3),
+  },
+});

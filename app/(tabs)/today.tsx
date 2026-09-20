@@ -26,6 +26,7 @@ import {
   useTokens,
 } from '@/components/ui';
 import { NextDoseCard, type NextDosePending } from '@/components/ui/next-dose-card';
+import { SharedWithMeCard } from '@/components/takt/shared-with-me-card';
 import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
@@ -319,6 +320,8 @@ export default function TodayScreen() {
                 onSnooze={(dose) => void runNextAction('snooze', dose)}
                 onAddMedication={() => router.push('/medications/new')}
               />
+
+              <SharedWithMeCard />
 
               <GreetingHeroCard
                 patientName={patientFirstName}
