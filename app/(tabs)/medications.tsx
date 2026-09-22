@@ -206,6 +206,7 @@ export default function MedicationsScreen() {
       />
 
       <Stack>
+        {plans.plans.length > 0 ? (
         <View style={{ gap: spacing(3) }}>
           <View>
             <Input
@@ -246,6 +247,7 @@ export default function MedicationsScreen() {
             ]}
           />
         </View>
+        ) : null}
 
         <View>
           {isLoading ? (

@@ -5,10 +5,8 @@ import { Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  Badge,
   Button,
   Card,
-  PageHeader,
   PageShell,
   Stack,
   radius,
@@ -73,7 +71,6 @@ export default function ConsentScreen() {
 
   return (
     <PageShell>
-      <PageHeader title={t('consentTitle')} subtitle={t('legal')} />
       <Stack>
         {/* Shield Hero */}
         <Card>
@@ -94,7 +91,6 @@ export default function ConsentScreen() {
             </View>
 
             <View style={{ alignItems: 'center', gap: spacing(1) }}>
-              <Badge label={t('legal')} tone="accent" />
               <Text style={[typography.title2, { color: c.textPrimary, textAlign: 'center' }]}>
                 {t('consentTitle')}
               </Text>

@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native';
-import { Badge, Card, PageHeader, PageShell, Stack, spacing, typography, useTokens } from '@/components/ui';
+import { Badge, Card, PageShell, Stack, spacing, typography, useTokens } from '@/components/ui';
 import { useLocale } from '@/lib/takt/l10n';
 
 type MessageKey = Parameters<ReturnType<typeof useLocale>['t']>[0];
@@ -22,7 +22,6 @@ export default function ImprintScreen() {
 
   return (
     <PageShell>
-      <PageHeader title={t('imprint')} subtitle={t('legal')} />
       <Stack>
         <Card>
           <View style={{ padding: spacing(4), gap: spacing(2) }}>

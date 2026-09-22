@@ -361,8 +361,6 @@ export default function TodayScreen() {
                 onAddMedication={() => router.push('/medications/new')}
               />
 
-              <SharedWithMeCard />
-
               <GreetingHeroCard
                 patientName={patientFirstName}
                 takenCount={summary.taken}
@@ -377,6 +375,7 @@ export default function TodayScreen() {
                   takenToday: t('takenToday'),
                   dueNow: t('dueNow'),
                   toCome: t('toCome'),
+                  noDoses: t('noDosesToday'),
                 }}
               />
 
@@ -386,6 +385,8 @@ export default function TodayScreen() {
                 adherenceMap={adherenceMap}
                 todayLabel={t('today')}
               />
+
+              <SharedWithMeCard />
 
               {autoMissedCount > 0 ? (
                 <Card>
@@ -418,8 +419,9 @@ export default function TodayScreen() {
 
               <View>
                 <SectionHeader title={t('timeline')} />
-                <View style={{ marginBottom: spacing(3) }}>
-                  <AnimatedSegmentedControl
+                {selectedDoses.length > 0 ? (
+                  <View style={{ marginBottom: spacing(3) }}>
+                    <AnimatedSegmentedControl
                     value={timelineFilter}
                     onChange={(next) => setTimelineFilter(next as 'all' | 'pending' | 'completed')}
                     options={[
@@ -428,7 +430,8 @@ export default function TodayScreen() {
                       { value: 'completed', label: t('todayFilterCompleted') },
                     ]}
                   />
-                </View>
+                  </View>
+                ) : null}
 
                 {grouped.length === 0 ? (
                   <EmptyState

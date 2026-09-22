@@ -133,7 +133,7 @@ export default function FamilySharingScreen() {
   if (patient.isLoading || grants.isLoading) {
     return (
       <PageShell>
-        <PageHeader title={t('familySharingTitle')} subtitle={t('familySharingSubtitle')} />
+        <PageHeader subtitle={t('familySharingSubtitle')} />
         <SkeletonCard rows={3} />
       </PageShell>
     );
@@ -158,7 +158,7 @@ export default function FamilySharingScreen() {
 
   return (
     <PageShell>
-      <PageHeader title={t('familySharingTitle')} subtitle={t('familySharingSubtitle')} />
+      <PageHeader subtitle={t('familySharingSubtitle')} />
 
       <Stack>
         <View>

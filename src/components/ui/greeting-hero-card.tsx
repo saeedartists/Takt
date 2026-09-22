@@ -69,6 +69,8 @@ type GreetingHeroCardProps = {
     takenToday: string;
     dueNow: string;
     toCome: string;
+    /** Shown instead of the metric when nothing is scheduled for the day. */
+    noDoses?: string;
   };
 };
 
@@ -96,12 +98,16 @@ export function GreetingHeroCard({
           <Text numberOfLines={1} style={[typography.subhead, { color: c.textSecondary }]}>
             {greetingText}
           </Text>
-          <View style={styles.metricRow}>
-            <Text style={[typography.metricSm, { color: c.textPrimary, fontVariant: ['tabular-nums'] }]}>
-              {`${takenCount}/${totalCount}`}
-            </Text>
-            <Text style={[typography.footnote, { color: c.textSecondary }]}>{labels.takenToday}</Text>
-          </View>
+          {totalCount === 0 && labels.noDoses ? (
+            <Text style={[typography.headline, { color: c.textPrimary }]}>{labels.noDoses}</Text>
+          ) : (
+            <View style={styles.metricRow}>
+              <Text style={[typography.metricSm, { color: c.textPrimary, fontVariant: ['tabular-nums'] }]}>
+                {`${takenCount}/${totalCount}`}
+              </Text>
+              <Text style={[typography.footnote, { color: c.textSecondary }]}>{labels.takenToday}</Text>
+            </View>
+          )}
           {totalCount > 0 ? (
             <View style={styles.badges}>
               {dueNowCount > 0 ? <Badge label={`${dueNowCount} ${labels.dueNow}`} tone="warning" /> : null}
@@ -109,7 +115,7 @@ export function GreetingHeroCard({
             </View>
           ) : null}
         </View>
-        <ProgressRing pct={completionPct} />
+        {totalCount > 0 ? <ProgressRing pct={completionPct} /> : null}
       </View>
     </Card>
   );

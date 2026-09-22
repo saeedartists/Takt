@@ -166,12 +166,15 @@ export function NextDoseCard({
               </Animated.View>
             ) : null}
           </>
+        ) : next ? (
+          <View>
+            <Text style={[typography.title2, { color: c.textPrimary }]}>{next.label}</Text>
+            <Text style={[typography.subhead, { color: c.textSecondary, marginTop: 2, fontVariant: ['tabular-nums'] }]}>
+              {[time, next.strength].filter(Boolean).join(' · ')}
+            </Text>
+          </View>
         ) : (
-          <Text style={[typography.headline, { color: c.textPrimary, fontVariant: ['tabular-nums'] }]}>
-            {next
-              ? t('nextDoseAt').replace('{time}', time).replace('{label}', next.label)
-              : t('noMoreDosesToday')}
-          </Text>
+          <Text style={[typography.headline, { color: c.textPrimary }]}>{t('noMoreDosesToday')}</Text>
         )}
 
         {showFirstDoseHint && due ? (

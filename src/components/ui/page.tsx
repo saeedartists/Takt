@@ -1,6 +1,7 @@
 import { useSegments } from 'expo-router';
-import type { ReactNode } from 'react';
-import { Platform, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import type { ComponentType, ReactNode } from 'react';
+import { Platform, ScrollView, StatusBar, StyleSheet, Text, View, type ScrollViewProps } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CONTENT_MAX_WIDTH, spacing, typography } from '../../theme/tokens';
@@ -11,6 +12,14 @@ import { useTokens } from '../../theme/use-tokens';
  * scaffold. Health uses a large left-aligned title with generous top
  * space over a grouped background.
  */
+
+/*
+ * Native: the focused input scrolls clear of the keyboard and of a
+ * KeyboardStickyView footer (bottomOffset). Web has no soft keyboard.
+ */
+const Scroll = (Platform.OS === 'web' ? ScrollView : KeyboardAwareScrollView) as ComponentType<
+  ScrollViewProps & { bottomOffset?: number }
+>;
 
 const fallbackStatusBarTop = (): number =>
   Platform.OS === 'ios' ? 59 : StatusBar.currentHeight ?? 24;
@@ -31,14 +40,16 @@ export const PageShell = ({ children }: { children: ReactNode }) => {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background, paddingTop: topInset }}>
-      <ScrollView
+      <Scroll
         style={{ backgroundColor: c.background }}
         contentContainerStyle={styles.content}
         contentInsetAdjustmentBehavior="never"
         automaticallyAdjustContentInsets={false}
+        keyboardShouldPersistTaps="handled"
+        bottomOffset={96}
       >
         {children}
-      </ScrollView>
+      </Scroll>
     </View>
   );
 };
@@ -48,7 +59,8 @@ export const PageHeader = ({
   subtitle,
   action,
 }: {
-  title: string;
+  /** Omit on stack screens: the native header already shows the title, so only the lead line renders. */
+  title?: string;
   subtitle?: string;
   action?: ReactNode;
 }) => {
@@ -56,9 +68,9 @@ export const PageHeader = ({
   return (
     <View style={styles.header}>
       <View style={styles.headerText}>
-        <Text style={[typography.largeTitle, { color: c.textPrimary }]}>{title}</Text>
+        {title ? <Text style={[typography.largeTitle, { color: c.textPrimary }]}>{title}</Text> : null}
         {subtitle ? (
-          <Text style={[typography.subhead, styles.subtitle, { color: c.textSecondary }]}>
+          <Text style={[title ? typography.subhead : typography.body, title ? styles.subtitle : null, { color: c.textSecondary }]}>
             {subtitle}
           </Text>
         ) : null}

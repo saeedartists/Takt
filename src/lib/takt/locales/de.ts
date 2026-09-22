@@ -90,7 +90,7 @@ export const de = {
     savingMedicationChanges: 'Änderungen werden gespeichert…',
     cadenceDaily: 'Täglich',
     cadenceWeekdays: 'Werktage',
-    cadenceSpecificDays: 'Bestimmte Tage',
+    cadenceSpecificDays: 'Auswahl',
     specificDaysLabel: 'Tage',
     dayMon: 'Mo',
     dayTue: 'Di',

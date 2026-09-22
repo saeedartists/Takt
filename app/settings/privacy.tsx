@@ -25,7 +25,7 @@ export default function PrivacyNoticeScreen() {
 
   return (
     <PageShell>
-      <PageHeader title={t('privacyNotice')} subtitle={t('privacyVersionLabel')} />
+      <PageHeader subtitle={t('privacyVersionLabel')} />
       <Stack>
         <ListGroup>
           {SECTIONS.map((section, index) => (

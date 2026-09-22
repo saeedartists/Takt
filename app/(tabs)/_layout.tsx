@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Tabs, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef } from 'react';
 import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
@@ -19,6 +20,7 @@ export default function TabsLayout() {
   const { t } = useLocale();
   const router = useRouter();
   const { c } = useTokens();
+  const insets = useSafeAreaInsets();
 
   const patient = usePrimaryPatient();
   const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
@@ -122,7 +124,8 @@ export default function TabsLayout() {
           backgroundColor: c.surface,
           borderTopColor: c.separator,
           borderTopWidth: 0.5,
-          height: 64,
+          // React Navigation pads the bar by the bottom inset; a fixed height would squeeze icons on iPhones with a home indicator.
+          height: 64 + insets.bottom,
           paddingTop: spacing(1),
           borderTopLeftRadius: radius.lg,
           borderTopRightRadius: radius.lg,

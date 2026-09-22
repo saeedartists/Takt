@@ -72,7 +72,7 @@ export const ListRow = ({
         </Text>
         {subtitle ? (
           <Text
-            numberOfLines={1}
+            numberOfLines={2}
             style={[typography.footnote, { color: c.textSecondary }]}
           >
             {subtitle}
