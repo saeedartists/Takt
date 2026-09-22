@@ -46,6 +46,7 @@ export const ListRow = ({
   leading,
   onPress,
   trailing,
+  action,
   isFirst = false,
   accessibilityLabel,
 }: {
@@ -57,6 +58,8 @@ export const ListRow = ({
   leading?: ReactNode;
   onPress?: () => void;
   trailing?: ReactNode;
+  /** An interactive control (a button) rendered beside the pressable row, never inside it: nested buttons are invalid on web. */
+  action?: ReactNode;
   /** Suppresses the top hairline. Set on the first row of a group. */
   isFirst?: boolean;
   accessibilityLabel?: string;
@@ -110,13 +113,20 @@ export const ListRow = ({
     !isFirst && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator },
   ];
 
-  if (!onPress) return <View style={rowStyle}>{body}</View>;
+  if (!onPress) {
+    return (
+      <View style={rowStyle}>
+        {body}
+        {action}
+      </View>
+    );
+  }
 
-  return (
+  const pressable = (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
-        ...rowStyle,
+        ...(action ? [styles.row, styles.grow] : rowStyle),
         pressed && { backgroundColor: c.background },
       ]}
       accessibilityRole="button"
@@ -124,6 +134,15 @@ export const ListRow = ({
     >
       {body}
     </Pressable>
+  );
+
+  if (!action) return pressable;
+
+  return (
+    <View style={[styles.withAction, !isFirst && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator }]}>
+      {pressable}
+      <View style={styles.actionSlot}>{action}</View>
+    </View>
   );
 };
 
@@ -137,6 +156,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing(2.5),
   },
   textCol: { flex: 1, minWidth: 0 },
+  grow: { flex: 1, minWidth: 0 },
+  withAction: { flexDirection: 'row', alignItems: 'center' },
+  actionSlot: { paddingRight: spacing(3) },
   meta: { marginTop: spacing(1), alignSelf: 'flex-start' },
   lightShadow: {
     shadowColor: '#000000',

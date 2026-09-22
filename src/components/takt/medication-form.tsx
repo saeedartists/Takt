@@ -35,7 +35,6 @@ import {
   validateMedicationForm,
   type MedicationFormErrors,
   type MedicationFormValues,
-  type MedicationStatus,
 } from '@/lib/takt/medication-form';
 import { sortTimes, WEEKDAY_ORDER } from '@/lib/takt/time';
 import type { MedicationCadence, WeekdayCode } from '@/lib/takt/types';
@@ -370,25 +369,6 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
             </Card>
           </Animated.View>
 
-          {/* Status (edit only) */}
-          {mode === 'edit' ? (
-            <Animated.View entering={enter(3)} layout={expand}>
-              <SectionHeader title={t('statusLabel')} />
-              <Card>
-                <View style={styles.cardBody}>
-                  <SegmentedControl
-                    value={values.status}
-                    onChange={(next) => set('status', next as MedicationStatus)}
-                    options={[
-                      { value: 'active', label: t('statusActive') },
-                      { value: 'on-hold', label: t('statusPaused') },
-                      { value: 'stopped', label: t('statusArchived') },
-                    ]}
-                  />
-                </View>
-              </Card>
-            </Animated.View>
-          ) : null}
         </Stack>
       </PageShell>
 

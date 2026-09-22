@@ -1,11 +1,10 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
   AnimatedPressable,
-  AnimatedSegmentedControl,
   Badge,
   Button,
   Card,
@@ -24,21 +23,19 @@ import {
   useMotion,
   useTokens,
 } from '@/components/ui';
-import { useDoseEvents } from '@/lib/hooks/use-dose-events';
+import { MedicationActionSheet, pausedUntil, type SheetStep } from '@/components/takt/medication-action-sheet';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useLocale } from '@/lib/takt/l10n';
-import { useReminderPreferences } from '@/lib/takt/preferences';
-import { buildDoseOccurrencesForDay } from '@/lib/takt/schedule';
-import { getSupplyCount } from '@/lib/takt/supply-tracker';
-import { startOfDay } from '@/lib/takt/time';
+import { formatDayLabel } from '@/lib/takt/medication-form';
+import { LOW_SUPPLY_THRESHOLD, getSupplySnapshot, type SupplySnapshot } from '@/lib/takt/supply-tracker';
 import type { MedicationPlan } from '@/lib/takt/types';
 
-const SUPPLY_LOW_THRESHOLD = 7;
+/** Most people have three to five medications; a search box only earns its place beyond that. */
+const SEARCH_FROM = 6;
 const CLEAR_HIT = 44;
 
-type SupplyMap = Record<string, number | null>;
-type StatusFilter = 'all' | 'active' | 'paused' | 'archived';
+type SupplyMap = Record<string, SupplySnapshot | null>;
 
 const getFormIconName = (form?: string): keyof typeof Ionicons.glyphMap => {
   const normalized = (form ?? '').toLowerCase();
@@ -51,21 +48,21 @@ const getFormIconName = (form?: string): keyof typeof Ionicons.glyphMap => {
 
 export default function MedicationsScreen() {
   const { c } = useTokens();
-  const { t, formatTime } = useLocale();
+  const { t, formatDate } = useLocale();
   const { enter } = useMotion();
   const router = useRouter();
 
   const patient = usePrimaryPatient();
   const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
   const plans = useMedicationPlans(patientRef);
-  const events = useDoseEvents(patientRef);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [showArchived, setShowArchived] = useState(false);
   const [supplyByMedication, setSupplyByMedication] = useState<SupplyMap>({});
+  const [sheet, setSheet] = useState<{ plan: MedicationPlan; step: SheetStep } | null>(null);
 
   const isLoading = patient.isLoading || plans.isLoading;
-  // Stagger rows once, on the first render that has data; filter/search changes only re-layout.
+  // Stagger rows once, on the first render that has data; later changes only re-layout.
   const firstLoad = useRef(true);
   useEffect(() => {
     if (!isLoading) firstLoad.current = false;
@@ -76,7 +73,7 @@ export default function MedicationsScreen() {
     for (const plan of plans.plans) {
       const medicationId = plan.medication?.id;
       if (!medicationId) continue;
-      next[medicationId] = await getSupplyCount(medicationId);
+      next[medicationId] = await getSupplySnapshot(medicationId);
     }
     setSupplyByMedication(next);
   }, [plans.plans]);
@@ -87,71 +84,53 @@ export default function MedicationsScreen() {
     }, [refreshSupply]),
   );
 
-  // First still-open dose today per request, for the "Next today" line.
-  const prefs = useReminderPreferences();
-  const nextTodayByRequest = useMemo(() => {
-    const now = new Date();
-    const doses = buildDoseOccurrencesForDay(
-      plans.plans,
-      (events.data?.entry ?? []).map((x) => x.resource),
-      startOfDay(now),
-      now,
-      prefs.data?.graceHours,
-    );
-    const next = new Map<string, Date>();
-    for (const dose of doses) {
-      if ((dose.state === 'scheduled' || dose.state === 'due') && !next.has(dose.requestId)) {
-        next.set(dose.requestId, dose.scheduledAt);
-      }
-    }
-    return next;
-  }, [events.data?.entry, plans.plans, prefs.data?.graceHours]);
-
   const filteredPlans = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
-    return plans.plans.filter((plan) => {
-      if (statusFilter === 'active' && plan.request.status !== 'active') return false;
-      if (statusFilter === 'paused' && plan.request.status !== 'on-hold') return false;
-      if (statusFilter === 'archived' && plan.request.status !== 'stopped') return false;
-
-      if (!search) return true;
-      const hay = `${plan.label} ${plan.form ?? ''} ${plan.strength ?? ''}`.toLowerCase();
-      return hay.includes(search);
-    });
-  }, [plans.plans, searchTerm, statusFilter]);
+    if (!search) return plans.plans;
+    return plans.plans.filter((plan) =>
+      `${plan.label} ${plan.form ?? ''} ${plan.strength ?? ''}`.toLowerCase().includes(search),
+    );
+  }, [plans.plans, searchTerm]);
 
   const activePlans = filteredPlans.filter((plan) => plan.request.status === 'active');
   const pausedPlans = filteredPlans.filter((plan) => plan.request.status === 'on-hold');
   const archivedPlans = filteredPlans.filter((plan) => plan.request.status === 'stopped');
 
-  const cadenceLabel = (plan: MedicationPlan): string => {
+  const cadenceText = (plan: MedicationPlan): string => {
     if (plan.cadence === 'daily') return t('cadenceDaily');
     if (plan.cadence === 'weekdays') return t('cadenceWeekdays');
-    return t('cadenceSpecificDays');
+    return plan.dayOfWeek.map((day) => formatDayLabel(day, t)).join(', ');
   };
 
   const statusTint = (plan: MedicationPlan): string =>
     plan.request.status === 'active' ? c.accent : plan.request.status === 'on-hold' ? c.warning : c.textTertiary;
 
-  // Third line: low-supply chip wins, otherwise the next open dose today.
+  // Third line, by priority: pause end, then the supply state, or the way to set one.
   const rowMeta = (plan: MedicationPlan) => {
-    const medicationId = plan.medication?.id;
-    const count = medicationId ? supplyByMedication[medicationId] : undefined;
-
-    if (typeof count === 'number' && count <= 0) {
-      return <Badge label={t('supplyRefillNeeded')} tone="destructive" />;
+    if (plan.request.status === 'on-hold') {
+      const until = pausedUntil(plan);
+      return until
+        ? t('pausedUntil').replace('{date}', formatDate(until, { day: 'numeric', month: 'short' }))
+        : t('statusPaused');
     }
-    if (typeof count === 'number' && count <= SUPPLY_LOW_THRESHOLD) {
+    if (plan.request.status === 'stopped') return undefined;
+
+    const medicationId = plan.medication?.id;
+    const supply = medicationId ? supplyByMedication[medicationId] : undefined;
+    if (supply === undefined) return undefined;
+    if (supply === null) return t('supplySet');
+    if (supply.count <= 0) return <Badge label={t('supplyRefillNeeded')} tone="destructive" />;
+    if (supply.count <= LOW_SUPPLY_THRESHOLD) {
       return (
         <Badge
-          label={`${t('supplyLow')} · ${t('supplyRemaining').replace('{count}', count.toString())}`}
+          label={`${t('supplyLow')} · ${t('supplyLeft').replace('{count}', String(supply.count))}`}
           tone="warning"
         />
       );
     }
-
-    const next = nextTodayByRequest.get(plan.request.id);
-    return next ? t('medsNextToday').replace('{time}', formatTime(next)) : undefined;
+    return t('supplyLeftDays')
+      .replace('{count}', String(supply.count))
+      .replace('{days}', String(supply.daysUntilRefill));
   };
 
   const renderList = (rows: MedicationPlan[], offset: number) => (
@@ -167,21 +146,23 @@ export default function MedicationsScreen() {
             <ListRow
               isFirst={index === 0}
               title={plan.label}
-              subtitle={[cadenceLabel(plan), plan.times.join(', '), plan.strength || plan.form || t('formNotSet')].join(' · ')}
+              subtitle={[cadenceText(plan), plan.times.join(', '), plan.strength || plan.form || t('formNotSet')].join(' · ')}
               meta={rowMeta(plan)}
               leading={
-                <View
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: radius.md,
-                    backgroundColor: `${tint}1A`,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
+                <View style={[styles.formIcon, { backgroundColor: `${tint}1A` }]}>
                   <Ionicons name={getFormIconName(plan.form)} size={16} color={tint} />
                 </View>
+              }
+              action={
+                <AnimatedPressable
+                  onPress={() => setSheet({ plan, step: 'root' })}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('moreActionsFor').replace('{name}', plan.label)}
+                  hitSlop={4}
+                  style={[styles.more, { backgroundColor: c.surfaceRaised }]}
+                >
+                  <Ionicons name="ellipsis-horizontal" size={20} color={c.textPrimary} />
+                </AnimatedPressable>
               }
               onPress={() => router.push({ pathname: '/medications/[id]', params: { id: plan.request.id } })}
             />
@@ -198,16 +179,16 @@ export default function MedicationsScreen() {
         action={
           <Button
             size="sm"
-            label={t('addMedication')}
+            label={t('addCta')}
             icon={<Ionicons name="add" size={16} color={c.surface} />}
+            accessibilityLabel={t('addMedication')}
             onPress={() => router.push('/medications/new')}
           />
         }
       />
 
       <Stack>
-        {plans.plans.length > 0 ? (
-        <View style={{ gap: spacing(3) }}>
+        {plans.plans.length >= SEARCH_FROM ? (
           <View>
             <Input
               value={searchTerm}
@@ -222,31 +203,12 @@ export default function MedicationsScreen() {
                 onPress={() => setSearchTerm('')}
                 accessibilityRole="button"
                 accessibilityLabel={t('medsSearchClear')}
-                style={{
-                  position: 'absolute',
-                  right: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: CLEAR_HIT,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+                style={styles.clear}
               >
                 <Ionicons name="close-circle" size={18} color={c.textTertiary} />
               </AnimatedPressable>
             ) : null}
           </View>
-          <AnimatedSegmentedControl
-            value={statusFilter}
-            onChange={(next) => setStatusFilter(next as StatusFilter)}
-            options={[
-              { value: 'all', label: t('medsFilterAll') },
-              { value: 'active', label: t('medsFilterActive') },
-              { value: 'paused', label: t('medsFilterPaused') },
-              { value: 'archived', label: t('medsFilterArchived') },
-            ]}
-          />
-        </View>
         ) : null}
 
         <View>
@@ -291,15 +253,54 @@ export default function MedicationsScreen() {
               ) : null}
 
               {archivedPlans.length > 0 ? (
-                <View>
-                  <SectionHeader title={t('statusArchived')} />
-                  {renderList(archivedPlans, activePlans.length + pausedPlans.length)}
-                </View>
+                <Animated.View layout={LinearTransition} style={{ gap: spacing(3) }}>
+                  <Button
+                    kind="secondary"
+                    label={t('archivedMedicationsCount').replace('{count}', String(archivedPlans.length))}
+                    icon={<Ionicons name={showArchived ? 'chevron-up' : 'chevron-down'} size={16} color={c.textPrimary} />}
+                    onPress={() => setShowArchived((open) => !open)}
+                  />
+                  {showArchived ? renderList(archivedPlans, activePlans.length + pausedPlans.length) : null}
+                </Animated.View>
               ) : null}
             </Stack>
           )}
         </View>
       </Stack>
+
+      <MedicationActionSheet
+        plan={sheet?.plan ?? null}
+        patientRef={patientRef}
+        initialStep={sheet?.step ?? 'root'}
+        onClose={() => setSheet(null)}
+        onChanged={() => void refreshSupply()}
+      />
     </PageShell>
   );
 }
+
+const styles = StyleSheet.create({
+  formIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  more: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clear: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: CLEAR_HIT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
