@@ -30,6 +30,8 @@ type AnimatedDoseRowProps = {
   isFocused?: boolean;
   canUndo: boolean;
   stateLabel: string;
+  /** Second line under the strength: "Taken at 08:05" or "Skipped · Forgot". */
+  detail?: string;
   onTake: () => Promise<void>;
   /** Skip with the reason the user picked; undefined when no reason list is offered. */
   onSkip: (reason?: SkipReason) => Promise<void>;
@@ -44,6 +46,10 @@ type AnimatedDoseRowProps = {
     /** Formatted scheduled time, used in accessibility labels. */
     time: string;
     confirmTaken: string;
+    /** Primary action on a missed dose. */
+    markTaken: string;
+    /** Quiet action on a dose that is not due yet. */
+    takeEarly: string;
     markSkipped: string;
     snooze: string;
     snoozeRemindIn: string;
@@ -62,12 +68,18 @@ const stateTone = (state: DoseState): 'neutral' | 'accent' | 'success' | 'warnin
   return 'neutral';
 };
 
+/*
+ * Every state carries its own visible action: due → Take / Skip / Snooze,
+ * missed → Mark as taken / Skip, scheduled → Take early, taken or
+ * skipped → Undo for ten minutes. Nothing hides behind a tap on the row.
+ */
 export function AnimatedDoseRow({
   dose,
   isFirst = false,
   isFocused = false,
   canUndo,
   stateLabel,
+  detail,
   onTake,
   onSkip,
   onSnooze,
@@ -145,9 +157,12 @@ export function AnimatedDoseRow({
           : dose.state === 'skipped'
             ? c.warning
             : c.separator;
+  const detailColor = dose.state === 'taken' ? c.success : dose.state === 'skipped' ? c.warning : c.textSecondary;
 
   const locked = busy || pending !== null;
   const who = `${dose.label}, ${labels.time}`;
+  const actionable = dose.state === 'due' || dose.state === 'missed';
+  const primaryLabel = dose.state === 'missed' ? labels.markTaken : labels.confirmTaken;
 
   return (
     <Animated.View
@@ -170,6 +185,11 @@ export function AnimatedDoseRow({
             {dose.strength ? (
               <Text style={[typography.footnote, { color: c.textSecondary }]}>{dose.strength}</Text>
             ) : null}
+            {detail ? (
+              <Text style={[typography.footnote, { color: detailColor, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>
+                {detail}
+              </Text>
+            ) : null}
           </Animated.View>
 
           <View style={styles.badgesWrap}>
@@ -180,14 +200,14 @@ export function AnimatedDoseRow({
           </View>
         </View>
 
-        {dose.state === 'due' ? (
+        {actionable ? (
           <View style={styles.dueActionsCol}>
             <AnimatedPressable
               onPress={handleTake}
               disabled={locked}
               haptic="success"
               accessibilityRole="button"
-              accessibilityLabel={`${labels.confirmTaken}, ${who}`}
+              accessibilityLabel={`${primaryLabel}, ${who}`}
               accessibilityState={{ disabled: locked, busy: pending === 'take' }}
               style={[styles.primaryAction, { backgroundColor: c.accent }]}
             >
@@ -197,9 +217,7 @@ export function AnimatedDoseRow({
                 ) : (
                   <Ionicons name="checkmark" size={18} color={c.surface} />
                 )}
-                <Text style={[typography.headline, { color: c.surface, fontWeight: '600' }]}>
-                  {labels.confirmTaken}
-                </Text>
+                <Text style={[typography.headline, { color: c.surface, fontWeight: '600' }]}>{primaryLabel}</Text>
               </Animated.View>
             </AnimatedPressable>
 
@@ -227,23 +245,25 @@ export function AnimatedDoseRow({
                 </Text>
               </AnimatedPressable>
 
-              <AnimatedPressable
-                onPress={() => setPanel((current) => (current === 'snooze' ? null : 'snooze'))}
-                disabled={locked}
-                hitSlop={4}
-                accessibilityRole="button"
-                accessibilityLabel={`${labels.snooze}, ${who}`}
-                accessibilityState={{ disabled: locked, expanded: panel === 'snooze' }}
-                style={[
-                  styles.secondaryPill,
-                  { backgroundColor: `${c.accent}1A`, borderColor: panel === 'snooze' ? c.accent : `${c.accent}44` },
-                ]}
-              >
-                <Ionicons name="alarm-outline" size={15} color={c.accent} />
-                <Text style={[typography.footnote, { color: c.accent, fontWeight: '600' }]}>
-                  {labels.snooze}
-                </Text>
-              </AnimatedPressable>
+              {dose.state === 'due' ? (
+                <AnimatedPressable
+                  onPress={() => setPanel((current) => (current === 'snooze' ? null : 'snooze'))}
+                  disabled={locked}
+                  hitSlop={4}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${labels.snooze}, ${who}`}
+                  accessibilityState={{ disabled: locked, expanded: panel === 'snooze' }}
+                  style={[
+                    styles.secondaryPill,
+                    { backgroundColor: `${c.accent}1A`, borderColor: panel === 'snooze' ? c.accent : `${c.accent}44` },
+                  ]}
+                >
+                  <Ionicons name="alarm-outline" size={15} color={c.accent} />
+                  <Text style={[typography.footnote, { color: c.accent, fontWeight: '600' }]}>
+                    {labels.snooze}
+                  </Text>
+                </AnimatedPressable>
+              ) : null}
             </View>
 
             {panel === 'skip' ? (
@@ -332,6 +352,26 @@ export function AnimatedDoseRow({
                 </View>
               </Animated.View>
             ) : null}
+          </View>
+        ) : dose.state === 'scheduled' ? (
+          <View style={styles.pillActionsRow}>
+            <AnimatedPressable
+              onPress={handleTake}
+              disabled={locked}
+              haptic="success"
+              hitSlop={4}
+              accessibilityRole="button"
+              accessibilityLabel={`${labels.takeEarly}, ${who}`}
+              accessibilityState={{ disabled: locked, busy: pending === 'take' }}
+              style={[styles.secondaryPill, { backgroundColor: `${c.accent}14`, borderColor: `${c.accent}33` }]}
+            >
+              {pending === 'take' ? (
+                <ActivityIndicator size="small" color={c.accent} />
+              ) : (
+                <Ionicons name="checkmark-circle-outline" size={15} color={c.accent} />
+              )}
+              <Text style={[typography.footnote, { color: c.accent, fontWeight: '600' }]}>{labels.takeEarly}</Text>
+            </AnimatedPressable>
           </View>
         ) : null}
 

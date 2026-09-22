@@ -80,7 +80,7 @@ export function FloatingUndoToast({
             <Ionicons name="checkmark-circle" size={20} color={c.success} />
           </View>
 
-          <Text numberOfLines={1} style={[typography.subhead, styles.message, { color: c.textPrimary }]}>
+          <Text numberOfLines={2} style={[typography.subhead, styles.message, { color: c.textPrimary }]}>
             {message}
           </Text>
 

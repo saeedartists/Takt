@@ -32,10 +32,9 @@ export { AnimatedPressable, triggerHaptic, type HapticKind } from './animated-pr
 export { AnimatedSegmentedControl } from './animated-segmented-control';
 export { AnimatedProgressBar } from './animated-progress-bar';
 export { AnimatedDoseRow } from './animated-dose-row';
+export { TodayHeroCard, type HeroPending } from './today-hero-card';
 export { FloatingUndoToast } from './floating-undo-toast';
-export { GreetingHeroCard } from './greeting-hero-card';
 export { WeekStripPicker } from './week-strip-picker';
-export { CelebrationCard } from './celebration-card';
 export { useTheme } from '../../theme/theme-context';
 export { paletteConfigs, type ThemePalette, type ThemeMode } from '../../theme/tokens';
 

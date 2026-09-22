@@ -1,38 +1,37 @@
-import { Link, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
+import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
+import Animated, { LinearTransition } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
   AnimatedDoseRow,
-  AnimatedSegmentedControl,
   Button,
   Card,
   EmptyState,
   ErrorState,
   FloatingUndoToast,
-  GreetingHeroCard,
   PageHeader,
   PageShell,
   SectionHeader,
   SkeletonCard,
   SkeletonRow,
   Stack,
+  TodayHeroCard,
   WeekStripPicker,
   radius,
   spacing,
   typography,
   useMotion,
   useTokens,
+  type HeroPending,
 } from '@/components/ui';
-import { NextDoseCard, type NextDosePending } from '@/components/ui/next-dose-card';
 import { SharedWithMeCard } from '@/components/takt/shared-with-me-card';
 import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useRecordDose, useUndoDose } from '@/lib/hooks/use-takt-mutations';
 import { useReminderPreferences } from '@/lib/takt/preferences';
-import { adherenceSummary, buildDoseOccurrencesForDay, upcomingCount } from '@/lib/takt/schedule';
+import { buildDoseOccurrencesForDay } from '@/lib/takt/schedule';
 import { useLocale } from '@/lib/takt/l10n';
 import { reminderDoseKey, scheduleSnoozeReminder } from '@/lib/takt/reminders';
 import { addDays, isoDateKey, startOfDay } from '@/lib/takt/time';
@@ -40,14 +39,17 @@ import type { DoseOccurrence, DoseState, SkipReason } from '@/lib/takt/types';
 
 const SNOOZE_OPTIONS = [5, 10, 15, 30];
 
+const isPersisted = (dose: DoseOccurrence): boolean =>
+  Boolean(dose.eventId) && !dose.eventId!.startsWith('optimistic-');
+
 const canUndo = (dose: DoseOccurrence): boolean => {
-  if (!dose.eventId || !dose.eventTimestamp) return false;
-  // Optimistic entries have no server id yet; the toast's Undo covers that window.
-  if (dose.eventId.startsWith('optimistic-')) return false;
+  if (!dose.eventTimestamp || !isPersisted(dose)) return false;
   if (!['taken', 'skipped'].includes(dose.state)) return false;
   const ageMs = Date.now() - new Date(dose.eventTimestamp).getTime();
   return ageMs <= 10 * 60 * 1000;
 };
+
+const isActionable = (dose: DoseOccurrence): boolean => dose.state === 'due' || dose.state === 'missed';
 
 const getTimeIcon = (hour: number, c: ReturnType<typeof useTokens>['c']) => {
   if (hour < 12) return { name: 'sunny-outline' as const, color: c.warning };
@@ -59,7 +61,7 @@ export default function TodayScreen() {
   const router = useRouter();
   const { c } = useTokens();
   const { t, formatDate, formatTime } = useLocale();
-  const { enter, duration } = useMotion();
+  const { enter } = useMotion();
 
   const params = useLocalSearchParams<{ focus?: string }>();
   const patient = usePrimaryPatient();
@@ -76,9 +78,8 @@ export default function TodayScreen() {
   const firstLoadDone = useRef(false);
   const [autoMissedCount, setAutoMissedCount] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [nextPending, setNextPending] = useState<NextDosePending>(null);
+  const [heroPending, setHeroPending] = useState<HeroPending>(null);
   const [bulkPending, setBulkPending] = useState(false);
-  const [timelineFilter, setTimelineFilter] = useState<'all' | 'pending' | 'completed'>('all');
   const [undoToast, setUndoToast] = useState<{
     visible: boolean;
     message: string;
@@ -86,7 +87,17 @@ export default function TodayScreen() {
   } | null>(null);
 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const isSelectedToday = isoDateKey(selectedDate) === isoDateKey(new Date());
+  // Dose states depend on the clock: refresh when Today gains focus and once a minute while it is shown,
+  // so a dose that becomes due (or missed) while the screen is open changes without a tap.
+  const [now, setNow] = useState(() => new Date());
+  useFocusEffect(
+    useCallback(() => {
+      setNow(new Date());
+      const id = setInterval(() => setNow(new Date()), 60_000);
+      return () => clearInterval(id);
+    }, []),
+  );
+  const isSelectedToday = isoDateKey(selectedDate) === isoDateKey(now);
 
   const eventResources = useMemo(
     () => (events.data?.entry ?? []).map((x) => x.resource),
@@ -94,22 +105,21 @@ export default function TodayScreen() {
   );
 
   const selectedDoses = useMemo(
-    () => buildDoseOccurrencesForDay(plans.plans, eventResources, startOfDay(selectedDate), new Date(), graceHours),
-    [eventResources, graceHours, plans.plans, selectedDate],
+    () => buildDoseOccurrencesForDay(plans.plans, eventResources, startOfDay(selectedDate), now, graceHours),
+    [eventResources, graceHours, now, plans.plans, selectedDate],
   );
 
-  // The next-dose card is always about today, whichever day the strip shows.
+  // The hero is always about today, whichever day the strip shows.
   const todayDoses = useMemo(
     () =>
       isSelectedToday
         ? selectedDoses
-        : buildDoseOccurrencesForDay(plans.plans, eventResources, startOfDay(new Date()), new Date(), graceHours),
-    [eventResources, graceHours, isSelectedToday, plans.plans, selectedDoses],
+        : buildDoseOccurrencesForDay(plans.plans, eventResources, startOfDay(now), now, graceHours),
+    [eventResources, graceHours, isSelectedToday, now, plans.plans, selectedDoses],
   );
 
   const adherenceMap = useMemo(() => {
     const map: Record<string, { total: number; taken: number; missed: number }> = {};
-    const now = new Date();
     for (let offset = -7; offset <= 7; offset++) {
       const d = addDays(selectedDate, offset);
       const doses = buildDoseOccurrencesForDay(plans.plans, eventResources, startOfDay(d), now, graceHours);
@@ -118,39 +128,21 @@ export default function TodayScreen() {
       map[isoDateKey(d)] = { total: doses.length, taken, missed };
     }
     return map;
-  }, [eventResources, graceHours, plans.plans, selectedDate]);
-
-  const summary = adherenceSummary(selectedDoses);
-  const toCome = upcomingCount(selectedDoses);
-  const dueNow = selectedDoses.filter((dose) => dose.state === 'due').length;
-
-  const completionPct =
-    selectedDoses.length > 0
-      ? Math.round((selectedDoses.filter((dose) => dose.state === 'taken').length / selectedDoses.length) * 100)
-      : 0;
+  }, [eventResources, graceHours, now, plans.plans, selectedDate]);
 
   const needsFirstMedication = plans.plans.length === 0;
   const needsFirstDoseLog = !needsFirstMedication && eventResources.length === 0;
 
-  const filteredTimelineDoses = useMemo(() => {
-    if (timelineFilter === 'all') return selectedDoses;
-    if (timelineFilter === 'pending')
-      return selectedDoses.filter((dose) => dose.state === 'scheduled' || dose.state === 'due');
-    return selectedDoses.filter(
-      (dose) => dose.state === 'taken' || dose.state === 'skipped' || dose.state === 'missed',
-    );
-  }, [selectedDoses, timelineFilter]);
-
   const grouped = useMemo(() => {
     const buckets = new Map<string, DoseOccurrence[]>();
-    for (const dose of filteredTimelineDoses) {
+    for (const dose of selectedDoses) {
       const key = formatTime(dose.scheduledAt);
       const list = buckets.get(key) ?? [];
       list.push(dose);
       buckets.set(key, list);
     }
     return [...buckets.entries()].map(([time, doses]) => ({ time, doses }));
-  }, [filteredTimelineDoses, formatTime]);
+  }, [formatTime, selectedDoses]);
 
   const isFirstLoad = patient.isLoading || plans.isLoading || events.isLoading;
   const loadError = patient.error || plans.error || events.error;
@@ -169,16 +161,6 @@ export default function TodayScreen() {
     ],
     [t],
   );
-
-  // One tap for a whole time group; each dose still gets its own record (brief §12).
-  const confirmAll = async (doses: DoseOccurrence[]) => {
-    setBulkPending(true);
-    try {
-      for (const dose of doses) await takeAction(dose, 'taken');
-    } finally {
-      setBulkPending(false);
-    }
-  };
 
   // VoiceOver / TalkBack: answer "what now, and did I already?" the moment Today is shown.
   const takenToday = todayDoses.filter((dose) => dose.state === 'taken').length;
@@ -222,11 +204,16 @@ export default function TodayScreen() {
     })();
   }, [isSelectedToday, patientRef, recordDose, selectedDoses]);
 
+  /** Records a taken/skipped event; a missed dose's auto-record is replaced, as History does. */
   const takeAction = async (dose: DoseOccurrence, action: 'taken' | 'skipped', reason?: SkipReason) => {
     if (!patientRef) return;
     setActionError(null);
 
     try {
+      if (isPersisted(dose)) {
+        await undoDose.mutateAsync(dose.eventId!);
+      }
+
       const result = await recordDose.mutateAsync({
         patientRef,
         medicationRef: dose.medicationRef,
@@ -246,6 +233,16 @@ export default function TodayScreen() {
       });
     } catch {
       setActionError(t('doseActionError'));
+    }
+  };
+
+  // One tap for a whole time group; each dose still gets its own record (brief §12).
+  const confirmAll = async (doses: DoseOccurrence[]) => {
+    setBulkPending(true);
+    try {
+      for (const dose of doses) await takeAction(dose, 'taken');
+    } finally {
+      setBulkPending(false);
     }
   };
 
@@ -286,13 +283,13 @@ export default function TodayScreen() {
     }
   };
 
-  const runNextAction = async (kind: Exclude<NextDosePending, null>, dose: DoseOccurrence, reason?: SkipReason) => {
-    setNextPending(kind);
+  const runHeroAction = async (kind: Exclude<HeroPending, null>, dose: DoseOccurrence, reason?: SkipReason) => {
+    setHeroPending(kind);
     try {
       if (kind === 'snooze') await snoozeDose(dose, defaultSnoozeMinutes);
       else await takeAction(dose, kind === 'take' ? 'taken' : 'skipped', reason);
     } finally {
-      setNextPending(null);
+      setHeroPending(null);
     }
   };
 
@@ -302,6 +299,18 @@ export default function TodayScreen() {
     if (state === 'skipped') return t('statusSkipped');
     if (state === 'missed') return t('statusMissed');
     return t('statusScheduled');
+  };
+
+  /** "Taken at 08:05" on taken rows, "Skipped · Forgot" on skipped rows. */
+  const doseDetail = (dose: DoseOccurrence): string | undefined => {
+    if (dose.state === 'taken' && dose.eventTimestamp) {
+      return `${t('takenAtLabel')} ${formatTime(new Date(dose.eventTimestamp))}`;
+    }
+    if (dose.state === 'skipped') {
+      const reason = skipReasons.find((option) => option.code === dose.reasonCode);
+      return reason ? `${t('statusSkipped')} · ${reason.label}` : undefined;
+    }
+    return undefined;
   };
 
   const refetchAll = () => {
@@ -321,15 +330,14 @@ export default function TodayScreen() {
           title={t('today')}
           subtitle={formatDate(new Date(), { weekday: 'long', month: 'long', day: 'numeric' })}
           action={
-            <Link href="/report" asChild>
-              <Pressable
-                accessibilityRole="link"
-                accessibilityLabel={t('openReport')}
-                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, minHeight: 44, justifyContent: 'center' })}
-              >
-                <Text style={[typography.subhead, { color: c.accent, fontWeight: '600' }]}>{t('report')}</Text>
-              </Pressable>
-            </Link>
+            <Button
+              size="sm"
+              kind="secondary"
+              label={t('report')}
+              icon={<Ionicons name="document-text-outline" size={16} color={c.textPrimary} />}
+              accessibilityLabel={t('openReport')}
+              onPress={() => router.push('/report')}
+            />
           }
         />
 
@@ -347,36 +355,19 @@ export default function TodayScreen() {
             <ErrorState description={t('loadScheduleError')} onRetry={refetchAll} />
           ) : (
             <>
-              <NextDoseCard
+              <TodayHeroCard
+                patientName={patientFirstName}
                 doses={todayDoses}
                 hasPlans={!needsFirstMedication}
                 showFirstDoseHint={needsFirstDoseLog}
-                pending={nextPending}
+                pending={heroPending}
                 snoozeMinutes={defaultSnoozeMinutes}
                 stateLabel={stateLabel}
                 skipReasons={skipReasons}
-                onTake={(dose) => void runNextAction('take', dose)}
-                onSkip={(dose, reason) => void runNextAction('skip', dose, reason)}
-                onSnooze={(dose) => void runNextAction('snooze', dose)}
+                onTake={(dose) => void runHeroAction('take', dose)}
+                onSkip={(dose, reason) => void runHeroAction('skip', dose, reason)}
+                onSnooze={(dose) => void runHeroAction('snooze', dose)}
                 onAddMedication={() => router.push('/medications/new')}
-              />
-
-              <GreetingHeroCard
-                patientName={patientFirstName}
-                takenCount={summary.taken}
-                totalCount={selectedDoses.length}
-                dueNowCount={dueNow}
-                upcomingCount={toCome}
-                completionPct={completionPct}
-                labels={{
-                  greetingMorning: t('greetingMorning'),
-                  greetingAfternoon: t('greetingAfternoon'),
-                  greetingEvening: t('greetingEvening'),
-                  takenToday: t('takenToday'),
-                  dueNow: t('dueNow'),
-                  toCome: t('toCome'),
-                  noDoses: t('noDosesToday'),
-                }}
               />
 
               <WeekStripPicker
@@ -386,9 +377,8 @@ export default function TodayScreen() {
                 todayLabel={t('today')}
               />
 
-              <SharedWithMeCard />
-
-              {autoMissedCount > 0 ? (
+              {/* Auto-marked misses are fixable on the rows below, so the notice goes once none is left. */}
+              {autoMissedCount > 0 && todayDoses.some((dose) => dose.state === 'missed') ? (
                 <Card>
                   <View style={styles.noticeRow}>
                     <Ionicons name="information-circle-outline" size={18} color={c.textSecondary} />
@@ -397,13 +387,6 @@ export default function TodayScreen() {
                         ? t('autoMissedNoticeOne')
                         : t('autoMissedNoticeMany').replace('{count}', String(autoMissedCount))}
                     </Text>
-                    <Link href="/(tabs)/history" asChild>
-                      <Pressable accessibilityRole="link" accessibilityLabel={t('fixInHistory')} hitSlop={8}>
-                        <Text style={[typography.footnote, { color: c.accent, fontWeight: '600' }]}>
-                          {t('fixInHistory')}
-                        </Text>
-                      </Pressable>
-                    </Link>
                   </View>
                 </Card>
               ) : null}
@@ -418,24 +401,17 @@ export default function TodayScreen() {
               ) : null}
 
               <View>
-                <SectionHeader title={t('timeline')} />
-                {selectedDoses.length > 0 ? (
-                  <View style={{ marginBottom: spacing(3) }}>
-                    <AnimatedSegmentedControl
-                    value={timelineFilter}
-                    onChange={(next) => setTimelineFilter(next as 'all' | 'pending' | 'completed')}
-                    options={[
-                      { value: 'all', label: t('todayFilterAll') },
-                      { value: 'pending', label: t('todayFilterPending') },
-                      { value: 'completed', label: t('todayFilterCompleted') },
-                    ]}
-                  />
-                  </View>
-                ) : null}
+                <SectionHeader
+                  title={
+                    isSelectedToday
+                      ? t('timeline')
+                      : formatDate(selectedDate, { weekday: 'long', month: 'long', day: 'numeric' })
+                  }
+                />
 
                 {grouped.length === 0 ? (
                   <EmptyState
-                    title={timelineFilter === 'all' ? t('noDosesToday') : t('noDosesForFilter')}
+                    title={t('noDosesToday')}
                     description={needsFirstMedication ? t('addMedicationHint') : undefined}
                     action={
                       needsFirstMedication ? (
@@ -444,14 +420,13 @@ export default function TodayScreen() {
                     }
                   />
                 ) : (
-                  // Filter change: crossfade the whole group container; rows only stagger on first load.
-                  <Animated.View key={timelineFilter} entering={FadeIn.duration(duration.fast)} style={styles.groups}>
+                  <View style={styles.groups}>
                     {grouped.map((bucket) => {
                       const timeIcon = getTimeIcon(bucket.doses[0]?.scheduledAt.getHours() ?? 12, c);
                       const doseCountText = `${bucket.doses.length} ${
                         bucket.doses.length === 1 ? t('singleDoseLabel') : t('multipleDosesLabel')
                       }`;
-                      const dueInBucket = bucket.doses.filter((dose) => dose.state === 'due');
+                      const actionable = bucket.doses.filter(isActionable);
 
                       return (
                         <Animated.View key={bucket.time} layout={LinearTransition}>
@@ -466,16 +441,16 @@ export default function TodayScreen() {
                                     {bucket.time}
                                   </Text>
                                 </View>
-                                {dueInBucket.length >= 2 ? (
+                                {actionable.length >= 2 ? (
                                   <Button
                                     size="sm"
-                                    label={t('confirmAllAt').replace('{count}', String(dueInBucket.length))}
+                                    label={t('confirmAllAt').replace('{count}', String(actionable.length))}
                                     icon={<Ionicons name="checkmark-done" size={16} color={c.surface} />}
                                     loading={bulkPending}
-                                    disabled={nextPending !== null}
+                                    disabled={heroPending !== null}
                                     haptic="success"
-                                    accessibilityLabel={`${t('confirmAllAt').replace('{count}', String(dueInBucket.length))}, ${bucket.time}`}
-                                    onPress={() => void confirmAll(dueInBucket)}
+                                    accessibilityLabel={`${t('confirmAllAt').replace('{count}', String(actionable.length))}, ${bucket.time}`}
+                                    onPress={() => void confirmAll(actionable)}
                                   />
                                 ) : (
                                   <Text style={[typography.footnote, { color: c.textTertiary }]}>{doseCountText}</Text>
@@ -495,6 +470,7 @@ export default function TodayScreen() {
                                       isFocused={isFocused}
                                       canUndo={canUndo(dose)}
                                       stateLabel={stateLabel(dose.state)}
+                                      detail={doseDetail(dose)}
                                       onTake={() => takeAction(dose, 'taken')}
                                       onSkip={(reason) => takeAction(dose, 'skipped', reason)}
                                       skipReasons={skipReasons}
@@ -506,12 +482,14 @@ export default function TodayScreen() {
                                           setActionError(t('undoDoseError'));
                                         }
                                       }}
-                                      busy={nextPending !== null}
+                                      busy={heroPending !== null || bulkPending}
                                       snoozeOptions={SNOOZE_OPTIONS}
                                       defaultSnoozeMinutes={defaultSnoozeMinutes}
                                       labels={{
                                         time: bucket.time,
                                         confirmTaken: t('confirmTaken'),
+                                        markTaken: t('markTakenFromHistory'),
+                                        takeEarly: t('takeEarly'),
                                         markSkipped: t('markSkipped'),
                                         snooze: t('snooze'),
                                         snoozeRemindIn: t('snoozeRemindIn'),
@@ -529,9 +507,11 @@ export default function TodayScreen() {
                         </Animated.View>
                       );
                     })}
-                  </Animated.View>
+                  </View>
                 )}
               </View>
+
+              <SharedWithMeCard />
             </>
           )}
         </Stack>
