@@ -1,16 +1,12 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState, type ReactNode } from 'react';
-import { AppState, Linking, Platform, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
+import { AppState, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  AnimatedSegmentedControl,
   Badge,
-  Button,
   Card,
-  ErrorState,
   ListGroup,
   ListRow,
   PageHeader,
@@ -23,29 +19,19 @@ import {
   useMotion,
   useTheme,
   useTokens,
-  type BadgeTone,
-  type ThemeMode,
 } from '@/components/ui';
+import { ConfirmExpander } from '@/components/takt/confirm-expander';
+import { useConsentStatus } from '@/lib/hooks/use-consent-status';
+import { useAccountEmail, useFamilySharingGrants } from '@/lib/hooks/use-family-sharing-grants';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { ovokClient } from '@/lib/ovok-client';
-import { useWithdrawConsent } from '@/lib/hooks/use-takt-mutations';
-import { CONSENT_STORAGE_KEY } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
-import { GRACE_OPTIONS, useReminderPreferences, type GraceHours } from '@/lib/takt/preferences';
+import { useReminderPreferences } from '@/lib/takt/preferences';
 import { readReminderPermissionStatus } from '@/lib/takt/reminders';
 import { env } from '@/lib/env';
 
-const SNOOZE_OPTIONS = [5, 10, 15, 30] as const;
-
 type PermissionStatus = Awaited<ReturnType<typeof readReminderPermissionStatus>>;
 type MessageKey = Parameters<ReturnType<typeof useLocale>['t']>[0];
-
-const PERMISSION_BADGE: Record<PermissionStatus, { key: MessageKey; tone: BadgeTone }> = {
-  granted: { key: 'notificationStatusGranted', tone: 'success' },
-  denied: { key: 'notificationStatusDenied', tone: 'warning' },
-  undetermined: { key: 'notificationStatusUndetermined', tone: 'neutral' },
-  unavailable: { key: 'notificationStatusUnavailable', tone: 'neutral' },
-};
 
 /** Internal QA boards. Rendered only in dev / mock builds. */
 const DEVELOPER_BOARDS: { key: MessageKey; route: string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -60,7 +46,7 @@ const DEVELOPER_BOARDS: { key: MessageKey; route: string; icon: keyof typeof Ion
   { key: 'a11yPassTitle', route: '/settings/accessibility-pass', icon: 'accessibility-outline' },
 ];
 
-function SettingsIconBadge({ name, color }: { name: keyof typeof Ionicons.glyphMap; color: string }) {
+function RowIcon({ name, color }: { name: keyof typeof Ionicons.glyphMap; color: string }) {
   const { c } = useTokens();
   // Alpha suffix only works on hex tokens; rgba tokens (textSecondary) fall back to the raised surface.
   const backgroundColor = color.startsWith('#') ? `${color}1F` : c.surfaceRaised;
@@ -71,77 +57,35 @@ function SettingsIconBadge({ name, color }: { name: keyof typeof Ionicons.glyphM
   );
 }
 
-function Section({ index, title, children }: { index: number; title: string; children: ReactNode }) {
+function Section({ index, title, children }: { index: number; title?: string; children: ReactNode }) {
   const { enter } = useMotion();
   return (
     <Animated.View entering={enter(index)}>
-      <SectionHeader title={title} />
+      {title ? <SectionHeader title={title} /> : null}
       {children}
     </Animated.View>
   );
 }
 
-/** Two-step destructive action: trigger button, then an inline confirm row. No Alert.alert (web no-op). */
-function ConfirmExpander({
-  open,
-  onOpen,
-  onCancel,
-  onConfirm,
-  triggerLabel,
-  triggerKind = 'secondary',
-  body,
-  loading = false,
-  disabled = false,
-}: {
-  open: boolean;
-  onOpen: () => void;
-  onCancel: () => void;
-  onConfirm: () => void;
-  triggerLabel: string;
-  triggerKind?: 'secondary' | 'destructive';
-  body: string;
-  loading?: boolean;
-  disabled?: boolean;
-}) {
-  const { c } = useTokens();
-  const { t } = useLocale();
-  const { duration } = useMotion();
-  return (
-    <Animated.View layout={LinearTransition}>
-      {open ? (
-        <Animated.View entering={FadeIn.duration(duration.fast)} style={{ gap: spacing(3) }}>
-          <Text style={[typography.subhead, { color: c.textPrimary }]}>{body}</Text>
-          <View style={styles.confirmRow}>
-            <View style={{ flex: 1 }}>
-              <Button kind="secondary" label={t('cancel')} onPress={onCancel} disabled={loading} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Button kind="destructive" label={triggerLabel} onPress={onConfirm} loading={loading} />
-            </View>
-          </View>
-        </Animated.View>
-      ) : (
-        <Button kind={triggerKind} label={triggerLabel} onPress={onOpen} disabled={disabled} />
-      )}
-    </Animated.View>
-  );
-}
-
+/*
+ * Settings — every feature that is not daily, as named rows with their
+ * current value. Controls live one level down (Reminders, Appearance,
+ * Consent) so nothing on this page has to be interpreted.
+ */
 export default function SettingsTabScreen() {
   const router = useRouter();
   const { c } = useTokens();
-  const { enter } = useMotion();
-  const { themeMode, setThemeMode } = useTheme();
-  const { locale, setLocale, t } = useLocale();
+  const { themeMode } = useTheme();
+  const { locale, t, formatDate } = useLocale();
   const patient = usePrimaryPatient();
-  const withdrawConsent = useWithdrawConsent();
-  const reminderPrefs = useReminderPreferences();
-  const [withdrawError, setWithdrawError] = useState<string | null>(null);
-  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
-  const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
+  const email = useAccountEmail();
+  const grants = useFamilySharingGrants(patientRef);
+  const consent = useConsentStatus(patientRef);
+  const prefs = useReminderPreferences();
   const [permission, setPermission] = useState<PermissionStatus>('unavailable');
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
 
-  // Re-read on focus and when the app returns from the system settings sheet.
   useFocusEffect(
     useCallback(() => {
       let active = true;
@@ -160,172 +104,134 @@ export default function SettingsTabScreen() {
     }, []),
   );
 
-  const patientRef = patient.data ? `Patient/${patient.data.id}` : null;
-
-  const withdraw = async () => {
-    setWithdrawError(null);
-
-    try {
-      if (patientRef) {
-        await withdrawConsent.mutateAsync(patientRef);
-      }
-      await AsyncStorage.removeItem(CONSENT_STORAGE_KEY);
-      router.replace('/consent');
-    } catch {
-      setWithdrawError(t('withdrawConsentError'));
-    }
-  };
-
   const signOut = () => {
     ovokClient.clearActiveLogin();
     router.replace('/auth/sign-in' as never);
   };
 
+  const name = patient.data?.name?.[0];
+  const fullName = [name?.given?.[0], name?.family].filter(Boolean).join(' ');
+  const initials = [name?.given?.[0]?.[0], name?.family?.[0]].filter(Boolean).join('').toUpperCase();
+
+  const remindersSummary = [
+    prefs.data?.sound === false ? t('reminderSoundOff') : t('reminderSoundOn'),
+    t('snoozeSummary').replace('{minutes}', String(prefs.data?.snoozeMinutes ?? 15)),
+    t('graceWindowHours').replace('{hours}', String(prefs.data?.graceHours ?? 4)),
+  ].join(' · ');
+
+  const activeGrants = grants.grants.filter((grant) => grant.status === 'granted').length;
+  const familySummary =
+    activeGrants === 0
+      ? t('familySharingOff')
+      : activeGrants === 1
+        ? t('familySharingOneRelative')
+        : t('familySharingRelatives').replace('{count}', String(activeGrants));
+
+  const themeLabel =
+    themeMode === 'light' ? t('themeModeLight') : themeMode === 'dark' ? t('themeModeDark') : t('themeModeSystem');
+  const appearanceSummary = `${themeLabel} · ${locale === 'de' ? 'Deutsch' : 'English'}`;
+
+  const consentSummary = consent.isActive
+    ? consent.currentAt
+      ? t('consentGivenOn').replace(
+          '{date}',
+          formatDate(new Date(consent.currentAt), { year: 'numeric', month: 'short', day: 'numeric' }),
+        )
+      : t('consentStatusActive')
+    : t('consentStatusInactive');
+
   const showDeveloper = __DEV__ || env.ovokMockEnabled;
   const version = Constants.expoConfig?.version ?? '0.0.0';
   const runtimeVersion = Constants.expoConfig?.runtimeVersion;
   const build = typeof runtimeVersion === 'string' ? runtimeVersion : Constants.expoConfig?.ios?.buildNumber;
-  const permissionBadge = PERMISSION_BADGE[permission];
 
   return (
     <PageShell>
       <PageHeader title={t('settings')} />
 
       <Stack>
-        <Section index={0} title={t('appearance')}>
-          <Card>
-            <View style={{ padding: spacing(4), gap: spacing(4) }}>
-              <View style={{ gap: spacing(2) }}>
-                <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('themeMode')}</Text>
-                <AnimatedSegmentedControl
-                  value={themeMode}
-                  onChange={(next) => void setThemeMode(next as ThemeMode)}
-                  options={[
-                    { value: 'system', label: t('themeModeSystem') },
-                    { value: 'light', label: t('themeModeLight') },
-                    { value: 'dark', label: t('themeModeDark') },
-                  ]}
-                />
-              </View>
-
-            </View>
-          </Card>
-        </Section>
-
-        <Section index={1} title={t('language')}>
-          <Card>
-            <View style={{ padding: spacing(4), gap: spacing(3) }}>
-              <AnimatedSegmentedControl
-                value={locale}
-                onChange={(next) => void setLocale(next as 'de' | 'en')}
-                options={[
-                  { value: 'en', label: 'English' },
-                  { value: 'de', label: 'Deutsch' },
-                ]}
-              />
-            </View>
-          </Card>
-        </Section>
-
-        <Section index={2} title={t('reminders')}>
-          <Card>
-            <View style={{ padding: spacing(4), gap: spacing(3) }}>
-              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('snoozeAfter')}</Text>
-              <AnimatedSegmentedControl
-                value={(reminderPrefs.data?.snoozeMinutes ?? 15).toString()}
-                onChange={(next) => void reminderPrefs.setSnoozeMinutes(Number.parseInt(next, 10))}
-                options={SNOOZE_OPTIONS.map((minutes) => ({
-                  value: minutes.toString(),
-                  label: `${minutes.toString()}m`,
-                }))}
-              />
-              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('reminderSoundLabel')}</Text>
-              <AnimatedSegmentedControl
-                value={reminderPrefs.data?.sound === false ? 'off' : 'on'}
-                onChange={(next) => void reminderPrefs.setSound(next === 'on')}
-                options={[
-                  { value: 'on', label: t('reminderSoundOn') },
-                  { value: 'off', label: t('reminderSoundOff') },
-                ]}
-              />
-              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('reminderPrivacyLabel')}</Text>
-              <AnimatedSegmentedControl
-                value={reminderPrefs.data?.hideNamesInReminders ? 'hide' : 'show'}
-                onChange={(next) => void reminderPrefs.setHideNames(next === 'hide')}
-                options={[
-                  { value: 'show', label: t('reminderPrivacyShow') },
-                  { value: 'hide', label: t('reminderPrivacyHide') },
-                ]}
-              />
-              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('graceWindowLabel')}</Text>
-              <AnimatedSegmentedControl
-                value={(reminderPrefs.data?.graceHours ?? 4).toString()}
-                onChange={(next) => void reminderPrefs.setGraceHours(Number.parseInt(next, 10) as GraceHours)}
-                options={GRACE_OPTIONS.map((hours) => ({
-                  value: hours.toString(),
-                  label: t('graceWindowHours').replace('{hours}', hours.toString()),
-                }))}
-              />
-            </View>
-          </Card>
-          {reminderPrefs.saveError ? <ErrorState description={t('saveReminderPrefError')} /> : null}
-        </Section>
-
-        <Section index={3} title={t('notificationsSection')}>
-          <Card>
-            <View style={{ padding: spacing(4), gap: spacing(3) }}>
-              <View style={styles.permissionRow}>
-                <SettingsIconBadge name="notifications-outline" color={c.accent} />
-                <Text style={[typography.body, { color: c.textPrimary, flex: 1, minWidth: 0 }]}>
-                  {t('notificationPermissionLabel')}
-                </Text>
-                <Badge label={t(permissionBadge.key)} tone={permissionBadge.tone} />
-              </View>
-              {Platform.OS === 'web' ? (
-                <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('notificationsWebHint')}</Text>
-              ) : (
-                <Button
-                  kind="secondary"
-                  size="sm"
-                  label={t('openSystemSettings')}
-                  icon={<Ionicons name="open-outline" size={16} color={c.textPrimary} />}
-                  onPress={() => void Linking.openSettings()}
-                />
-              )}
-            </View>
-          </Card>
-        </Section>
-
-        <Section index={4} title={t('careSection')}>
+        <Section index={0}>
           <ListGroup>
             <ListRow
               isFirst
-              title={t('familySharingTitle')}
-              subtitle={t('familySharingRouteSubtitle')}
-              leading={<SettingsIconBadge name="people-outline" color={c.accent} />}
-              onPress={() => router.push('/settings/family-sharing' as never)}
+              title={fullName || t('profileSignedIn')}
+              subtitle={email ?? (fullName ? t('profileSignedIn') : undefined)}
+              leading={
+                <View style={[styles.avatar, { backgroundColor: `${c.accent}1F` }]}>
+                  <Text style={[typography.headline, { color: c.accent }]}>{initials || '·'}</Text>
+                </View>
+              }
             />
           </ListGroup>
         </Section>
 
-        <Section index={5} title={t('legal')}>
+        <Section index={1}>
           <ListGroup>
             <ListRow
               isFirst
+              title={t('reminders')}
+              subtitle={remindersSummary}
+              meta={permission === 'denied' ? <Badge label={t('notificationStatusDenied')} tone="warning" /> : undefined}
+              leading={<RowIcon name="notifications-outline" color={c.accent} />}
+              onPress={() => router.push('/settings/reminders' as never)}
+            />
+          </ListGroup>
+        </Section>
+
+        <Section index={2} title={t('careSection')}>
+          <ListGroup>
+            <ListRow
+              isFirst
+              title={t('familySharingRouteTitle')}
+              subtitle={familySummary}
+              leading={<RowIcon name="people-outline" color={c.accent} />}
+              onPress={() => router.push('/settings/family-sharing' as never)}
+            />
+            <ListRow
+              title={t('report')}
+              subtitle={t('reportRouteSubtitle')}
+              leading={<RowIcon name="document-text-outline" color={c.accent} />}
+              onPress={() => router.push('/report')}
+            />
+          </ListGroup>
+        </Section>
+
+        <Section index={3}>
+          <ListGroup>
+            <ListRow
+              isFirst
+              title={t('appearance')}
+              subtitle={appearanceSummary}
+              leading={<RowIcon name="color-palette-outline" color={c.accent} />}
+              onPress={() => router.push('/settings/appearance' as never)}
+            />
+          </ListGroup>
+        </Section>
+
+        <Section index={4} title={t('legal')}>
+          <ListGroup>
+            <ListRow
+              isFirst
+              title={t('consentRouteTitle')}
+              subtitle={consentSummary}
+              leading={<RowIcon name="shield-checkmark-outline" color={c.success} />}
+              onPress={() => router.push('/settings/consent' as never)}
+            />
+            <ListRow
               title={t('privacyNotice')}
-              leading={<SettingsIconBadge name="shield-checkmark-outline" color={c.success} />}
+              leading={<RowIcon name="lock-closed-outline" color={c.textSecondary} />}
               onPress={() => router.push('/settings/privacy')}
             />
             <ListRow
               title={t('imprint')}
-              leading={<SettingsIconBadge name="information-circle-outline" color={c.textSecondary} />}
+              leading={<RowIcon name="information-circle-outline" color={c.textSecondary} />}
               onPress={() => router.push('/settings/imprint')}
             />
           </ListGroup>
         </Section>
 
         {env.ovokMockEnabled ? null : (
-          <Section index={6} title={t('accountSectionTitle')}>
+          <Section index={5} title={t('accountSectionTitle')}>
             <Card>
               <View style={{ padding: spacing(4) }}>
                 <ConfirmExpander
@@ -341,40 +247,15 @@ export default function SettingsTabScreen() {
           </Section>
         )}
 
-        <Animated.View entering={enter(7)}>
-          <Card>
-            <View style={{ padding: spacing(4), gap: spacing(3) }}>
-              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('safetyNote')}</Text>
-              <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('aboutTakt')}</Text>
-              <ConfirmExpander
-                open={confirmWithdraw}
-                onOpen={() => setConfirmWithdraw(true)}
-                onCancel={() => setConfirmWithdraw(false)}
-                onConfirm={() => void withdraw()}
-                triggerLabel={t('withdrawConsent')}
-                triggerKind="destructive"
-                body={t('withdrawConsentConfirmBody')}
-                loading={withdrawConsent.isPending}
-                disabled={patient.isLoading}
-              />
-              {withdrawError ? (
-                <Text accessibilityRole="alert" style={[typography.footnote, { color: c.destructive }]}>
-                  {withdrawError}
-                </Text>
-              ) : null}
-            </View>
-          </Card>
-        </Animated.View>
-
         {showDeveloper ? (
-          <Section index={8} title={t('developerSection')}>
+          <Section index={6} title={t('developerSection')}>
             <ListGroup>
               {DEVELOPER_BOARDS.map((board, index) => (
                 <ListRow
                   key={board.route}
                   isFirst={index === 0}
                   title={t(board.key)}
-                  leading={<SettingsIconBadge name={board.icon} color={c.textSecondary} />}
+                  leading={<RowIcon name={board.icon} color={c.textSecondary} />}
                   onPress={() => router.push(board.route as never)}
                 />
               ))}
@@ -385,10 +266,13 @@ export default function SettingsTabScreen() {
           </Section>
         ) : null}
 
-        <Text style={[typography.caption, styles.version, { color: c.textTertiary }]}>
-          {t('versionLabel').replace('{version}', version)}
-          {build ? ` · ${t('buildLabel').replace('{build}', build)}` : ''}
-        </Text>
+        <View style={styles.footer}>
+          <Text style={[typography.footnote, { color: c.textTertiary, textAlign: 'center' }]}>{t('safetyNote')}</Text>
+          <Text style={[typography.caption, { color: c.textTertiary, textAlign: 'center' }]}>
+            {t('versionLabel').replace('{version}', version)}
+            {build ? ` · ${t('buildLabel').replace('{build}', build)}` : ''}
+          </Text>
+        </View>
       </Stack>
     </PageShell>
   );
@@ -402,21 +286,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  permissionRow: {
-    flexDirection: 'row',
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.full,
     alignItems: 'center',
-    gap: spacing(3),
+    justifyContent: 'center',
   },
-  confirmRow: {
-    flexDirection: 'row',
-    gap: spacing(2),
-  },
-  footnote: {
-    marginTop: spacing(2),
-    paddingHorizontal: spacing(1),
-  },
-  version: {
-    textAlign: 'center',
-    fontVariant: ['tabular-nums'],
-  },
+  footnote: { marginTop: spacing(2), paddingHorizontal: spacing(1) },
+  footer: { gap: spacing(2), paddingHorizontal: spacing(2), paddingTop: spacing(2) },
 });

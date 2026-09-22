@@ -46,6 +46,9 @@ function AppStack() {
       <Stack.Screen name="report" options={{ title: t('reportRouteTitle') }} />
       <Stack.Screen name="settings/privacy" options={{ title: t('privacyRouteTitle') }} />
       <Stack.Screen name="settings/imprint" options={{ title: t('imprintRouteTitle') }} />
+      <Stack.Screen name="settings/reminders" options={{ title: t('reminders') }} />
+      <Stack.Screen name="settings/appearance" options={{ title: t('appearance') }} />
+      <Stack.Screen name="settings/consent" options={{ title: t('consentRouteTitle') }} />
       <Stack.Screen name="settings/release-hub" options={{ title: t('releaseHubRouteTitle') }} />
       <Stack.Screen name="settings/readiness" options={{ title: t('readinessRouteTitle') }} />
       <Stack.Screen name="settings/isolation" options={{ title: t('isolationRouteTitle') }} />

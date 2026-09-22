@@ -640,6 +640,17 @@ export const MEDICATION_ADMINS: FhirResource[] = [
 export const CONSENTS: FhirResource[] = [
   {
     resourceType: 'Consent',
+    id: 'consent-takt-3',
+    meta: meta(1),
+    status: 'active',
+    patient: { reference: 'Patient/pat-003' },
+    dateTime: isoDaysAgo(1),
+    scope: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/consentscope', code: 'patient-privacy' }] },
+    category: [{ coding: [{ system: 'http://loinc.org', code: '59284-0', display: 'Patient Consent' }] }],
+    policyRule: { text: 'takt-consent-v1' },
+  },
+  {
+    resourceType: 'Consent',
     id: 'consent-takt-1',
     meta: meta(3),
     status: 'active',
