@@ -7,10 +7,10 @@ import { useLocale } from '@/lib/takt/l10n';
 import {
   EMPTY_MEDICATION_FORM,
   parseSupply,
-  resolveDayOfWeek,
+  scheduleFieldsFromForm,
   type MedicationFormValues,
 } from '@/lib/takt/medication-form';
-import type { MedicationCadence, WeekdayCode } from '@/lib/takt/types';
+import type { IntakeInstruction, MedicationCadence, MedicationShape, WeekdayCode } from '@/lib/takt/types';
 
 /** Optional prefill, used by "Duplicate" on the detail screen. */
 type PrefillParams = {
@@ -20,6 +20,11 @@ type PrefillParams = {
   times?: string;
   cadence?: MedicationCadence;
   days?: string;
+  intervalDays?: string;
+  instruction?: IntakeInstruction;
+  instructionNote?: string;
+  shape?: MedicationShape;
+  color?: string;
 };
 
 export default function AddMedicationScreen() {
@@ -40,8 +45,13 @@ export default function AddMedicationScreen() {
       times: params.times ? params.times.split(',').filter(Boolean) : EMPTY_MEDICATION_FORM.times,
       cadence: params.cadence ?? 'daily',
       days: params.days ? (params.days.split(',').filter(Boolean) as WeekdayCode[]) : EMPTY_MEDICATION_FORM.days,
+      intervalDays: params.intervalDays ?? EMPTY_MEDICATION_FORM.intervalDays,
+      instruction: params.instruction ?? '',
+      instructionNote: params.instructionNote ?? '',
+      shape: params.shape ?? EMPTY_MEDICATION_FORM.shape,
+      color: params.color ?? EMPTY_MEDICATION_FORM.color,
     };
-  }, [params.cadence, params.days, params.form, params.name, params.strength, params.times]);
+  }, [params]);
 
   const submit = async (values: MedicationFormValues) => {
     const patientRef = patient.data ? `Patient/${patient.data.id}` : null;
@@ -56,9 +66,7 @@ export default function AddMedicationScreen() {
         name: values.name,
         form: values.form,
         strength: values.strength,
-        cadence: values.cadence,
-        dayOfWeek: resolveDayOfWeek(values.cadence, values.days),
-        times: values.times,
+        ...scheduleFieldsFromForm(values),
         supplyCount: parseSupply(values.supply),
       });
       router.replace('/(tabs)/medications');

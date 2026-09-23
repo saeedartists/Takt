@@ -7,9 +7,10 @@ import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useUpdateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
 import { useLocale } from '@/lib/takt/l10n';
 import {
+  EMPTY_MEDICATION_FORM,
   normalizeDateInput,
   parseSupply,
-  resolveDayOfWeek,
+  scheduleFieldsFromForm,
   type MedicationFormValues,
   type MedicationStatus,
 } from '@/lib/takt/medication-form';
@@ -60,6 +61,14 @@ export default function EditMedicationScreen() {
               : '',
         status: toStatus(plan.request.status),
         lastRefilled: refilledAt ? refilledAt.slice(0, 10) : '',
+        intervalDays: plan.intervalDays ? String(plan.intervalDays) : EMPTY_MEDICATION_FORM.intervalDays,
+        intervalStart: plan.intervalStart ?? '',
+        endDate: plan.endDate ?? '',
+        maxPerDay: plan.maxPerDay ? String(plan.maxPerDay) : '',
+        instruction: plan.instruction ?? '',
+        instructionNote: plan.instructionNote ?? '',
+        shape: plan.appearance?.shape ?? EMPTY_MEDICATION_FORM.shape,
+        color: plan.appearance?.color ?? EMPTY_MEDICATION_FORM.color,
       });
     })();
     return () => {
@@ -79,9 +88,7 @@ export default function EditMedicationScreen() {
         name: values.name,
         form: values.form,
         strength: values.strength,
-        cadence: values.cadence,
-        dayOfWeek: resolveDayOfWeek(values.cadence, values.days),
-        times: values.times,
+        ...scheduleFieldsFromForm(values),
         supplyCount: parseSupply(values.supply),
         lastRefilledDate: normalizeDateInput(values.lastRefilled) ?? '',
         status: values.status,

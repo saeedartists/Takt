@@ -10,8 +10,11 @@ import type {
   ConsentResource,
   FhirBundle,
   FhirExtension,
+  IntakeInstruction,
   MedicationAdministrationResource,
+  MedicationAppearance,
   MedicationCadence,
+  MedicationPlan,
   MedicationRequestResource,
   MedicationResource,
   PausePeriod,
@@ -19,7 +22,7 @@ import type {
   WeekdayCode,
 } from '@/lib/takt/types';
 
-type PlanInput = {
+export type PlanInput = {
   patientRef: string;
   name: string;
   form: string;
@@ -29,7 +32,37 @@ type PlanInput = {
   times: string[];
   supplyCount?: number;
   lastRefilledDate?: string;
+  /** Every N days from `intervalStart` (YYYY-MM-DD); cadence 'interval'. */
+  intervalDays?: number;
+  intervalStart?: string;
+  /** Last day of a course, YYYY-MM-DD. */
+  endDate?: string;
+  asNeeded?: boolean;
+  maxPerDay?: number;
+  instruction?: IntakeInstruction;
+  instructionNote?: string;
+  appearance?: MedicationAppearance;
 };
+
+/** Full input for a status-only change, so the update never drops fields the plan already has. */
+export const planToInput = (plan: MedicationPlan, patientRef: string, supplyCount?: number): Omit<PlanInput, 'patientRef'> & { patientRef: string } => ({
+  patientRef,
+  name: plan.label,
+  form: plan.form,
+  strength: plan.strength,
+  cadence: plan.cadence,
+  dayOfWeek: plan.dayOfWeek,
+  times: plan.times,
+  supplyCount: supplyCount ?? plan.supplyCount,
+  intervalDays: plan.intervalDays,
+  intervalStart: plan.intervalStart,
+  endDate: plan.endDate,
+  asNeeded: plan.asNeeded,
+  maxPerDay: plan.maxPerDay,
+  instruction: plan.instruction,
+  instructionNote: plan.instructionNote,
+  appearance: plan.appearance,
+});
 
 type UpdatePlanInput = PlanInput & {
   request: MedicationRequestResource;
@@ -53,30 +86,57 @@ const resolveDays = (cadence: MedicationCadence, dayOfWeek?: WeekdayCode[]): Wee
   return normalized.length > 0 ? normalized : WEEKDAYS_ONLY;
 };
 
-const cadenceRepeat = (
-  cadence: MedicationCadence,
-  times: string[],
-  dayOfWeek?: WeekdayCode[],
-): {
-  frequency: number;
-  period: number;
-  periodUnit: 'd';
-  dayOfWeek: WeekdayCode[];
-  timeOfDay: string[];
-} => ({
-  frequency: 1,
-  period: 1,
-  periodUnit: 'd',
-  dayOfWeek: resolveDays(cadence, dayOfWeek),
-  timeOfDay: sortTimes(times).map(toTimeOfDay),
-});
+type DosageInput = Pick<PlanInput, 'cadence' | 'times' | 'dayOfWeek' | 'intervalDays' | 'intervalStart' | 'endDate' | 'asNeeded' | 'maxPerDay' | 'instruction' | 'instructionNote'>;
+
+/** The one dosageInstruction Takt writes: timing (or as-needed), course bounds, instruction, daily cap. */
+const buildDosage = (input: DosageInput): NonNullable<MedicationRequestResource['dosageInstruction']>[number] => {
+  const bounds = {
+    ...(input.cadence === 'interval' && input.intervalStart ? { start: input.intervalStart } : {}),
+    ...(input.endDate ? { end: input.endDate } : {}),
+  };
+  const hasBounds = Object.keys(bounds).length > 0;
+  const asNeeded = input.asNeeded || input.cadence === 'as-needed';
+
+  const repeat = asNeeded
+    ? hasBounds
+      ? { boundsPeriod: bounds }
+      : undefined
+    : {
+        frequency: 1,
+        period: input.cadence === 'interval' ? Math.max(2, input.intervalDays ?? 2) : 1,
+        periodUnit: 'd' as const,
+        ...(input.cadence === 'interval' ? {} : { dayOfWeek: resolveDays(input.cadence, input.dayOfWeek) }),
+        timeOfDay: sortTimes(input.times).map(toTimeOfDay),
+        ...(hasBounds ? { boundsPeriod: bounds } : {}),
+      };
+
+  return {
+    ...(repeat ? { timing: { repeat } } : {}),
+    ...(asNeeded ? { asNeededBoolean: true } : {}),
+    ...(asNeeded && input.maxPerDay
+      ? { maxDosePerPeriod: { numerator: { value: input.maxPerDay }, denominator: { value: 1, unit: 'd' } } }
+      : {}),
+    ...(input.instruction
+      ? { additionalInstruction: [{ coding: [{ system: TAKT_EXT.intakeInstruction, code: input.instruction }] }] }
+      : {}),
+    ...(input.instructionNote?.trim() ? { patientInstruction: input.instructionNote.trim() } : {}),
+  };
+};
+
+const medicationExtensions = (input: Pick<PlanInput, 'strength' | 'appearance'>): FhirExtension[] => [
+  { url: TAKT_EXT.strength, valueString: input.strength.trim() },
+  ...(input.appearance ? [{ url: TAKT_EXT.appearance, valueString: JSON.stringify(input.appearance) }] : []),
+];
 
 const estimateDailyConsumptionRate = (
   cadence: MedicationCadence,
   times: string[],
   dayOfWeek?: WeekdayCode[],
+  intervalDays?: number,
 ): number => {
   const dosesPerActiveDay = Math.max(1, times.length);
+  if (cadence === 'as-needed') return 1;
+  if (cadence === 'interval') return dosesPerActiveDay / Math.max(2, intervalDays ?? 2);
   if (cadence === 'daily') return dosesPerActiveDay;
   if (cadence === 'weekdays') return (dosesPerActiveDay * 5) / 7;
 
@@ -183,12 +243,7 @@ export const useCreateMedicationPlan = () => {
           status: 'active',
           code: { text: input.name.trim() },
           form: { text: input.form.trim() || 'Tablet' },
-          extension: [
-            {
-              url: TAKT_EXT.strength,
-              valueString: input.strength.trim(),
-            },
-          ],
+          extension: medicationExtensions(input),
         }),
       });
 
@@ -212,13 +267,7 @@ export const useCreateMedicationPlan = () => {
               valueString: '[]',
             },
           ],
-          dosageInstruction: [
-            {
-              timing: {
-                repeat: cadenceRepeat(input.cadence, input.times, input.dayOfWeek),
-              },
-            },
-          ],
+          dosageInstruction: [buildDosage(input)],
           ...(typeof input.supplyCount === 'number' && Number.isFinite(input.supplyCount)
             ? {
                 dispenseRequest: {
@@ -233,7 +282,7 @@ export const useCreateMedicationPlan = () => {
       });
 
       const medicationId = medication.id;
-      const dailyRate = estimateDailyConsumptionRate(input.cadence, input.times, input.dayOfWeek);
+      const dailyRate = estimateDailyConsumptionRate(input.cadence, input.times, input.dayOfWeek, input.intervalDays);
 
       await setDailyConsumptionRate(medicationId, dailyRate);
 
@@ -264,12 +313,7 @@ export const useUpdateMedicationPlan = () => {
           ...input.medication,
           code: { text: input.name.trim() },
           form: { text: input.form.trim() || 'Tablet' },
-          extension: [
-            {
-              url: TAKT_EXT.strength,
-              valueString: input.strength.trim(),
-            },
-          ],
+          extension: medicationExtensions(input),
         }),
       });
 
@@ -283,13 +327,7 @@ export const useUpdateMedicationPlan = () => {
             ...input.request,
             status: input.status,
             extension: extensions,
-            dosageInstruction: [
-              {
-                timing: {
-                  repeat: cadenceRepeat(input.cadence, input.times, input.dayOfWeek),
-                },
-              },
-            ],
+            dosageInstruction: [buildDosage(input)],
             ...(typeof input.supplyCount === 'number' && Number.isFinite(input.supplyCount)
               ? {
                   dispenseRequest: {
@@ -307,7 +345,7 @@ export const useUpdateMedicationPlan = () => {
       );
 
       const medicationId = medication.id;
-      const dailyRate = estimateDailyConsumptionRate(input.cadence, input.times, input.dayOfWeek);
+      const dailyRate = estimateDailyConsumptionRate(input.cadence, input.times, input.dayOfWeek, input.intervalDays);
 
       await setDailyConsumptionRate(medicationId, dailyRate);
 

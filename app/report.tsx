@@ -29,7 +29,8 @@ import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useLocale } from '@/lib/takt/l10n';
 import { useReminderPreferences } from '@/lib/takt/preferences';
 import { buildReportSummary } from '@/lib/takt/report-summary';
-import { buildHistory } from '@/lib/takt/schedule';
+import { describeCadence, describeInstruction } from '@/lib/takt/medication-form';
+import { buildAsNeededLogForDay, buildHistory } from '@/lib/takt/schedule';
 
 const esc = (value: string): string =>
   value
@@ -78,11 +79,26 @@ export default function ReportScreen() {
     [events.data?.entry, graceHours, plans.plans, windowDays],
   );
 
+  const asNeededCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    const resources = (events.data?.entry ?? []).map((x) => x.resource);
+    for (const day of history) {
+      for (const entry of buildAsNeededLogForDay(plans.plans, resources, day.date)) {
+        counts[entry.plan.request.id] = (counts[entry.plan.request.id] ?? 0) + entry.doses.length;
+      }
+    }
+    return counts;
+  }, [events.data?.entry, history, plans.plans]);
+
+  const medicationValue = (row: { pct: number; asNeeded?: boolean; asNeededCount?: number }): string =>
+    row.asNeeded ? t('reportAsNeededDoses').replace('{count}', String(row.asNeededCount ?? 0)) : `${row.pct}%`;
+
   const summary = useMemo(
     () =>
       buildReportSummary({
         plans: plans.plans,
         history,
+        asNeededCounts,
         formatMissedDateTime: (value) =>
           formatDateTime(value, {
             year: 'numeric',
@@ -92,7 +108,7 @@ export default function ReportScreen() {
             minute: '2-digit',
           }),
       }),
-    [formatDateTime, history, plans.plans],
+    [asNeededCounts, formatDateTime, history, plans.plans],
   );
 
   const recentMissed = summary.missedRows[0];
@@ -155,15 +171,11 @@ export default function ReportScreen() {
     setNote(null);
     setExporting(true);
     try {
-      const cadenceLabel = (cadence: 'daily' | 'weekdays' | 'custom') =>
-        cadence === 'weekdays' ? t('cadenceWeekdays') : cadence === 'custom' ? t('cadenceSpecificDays') : t('cadenceDaily');
       const active = plans.plans.filter((plan) => plan.request.status === 'active');
       const rows = active
         .map(
           (plan) =>
-            `<tr><td>${esc(plan.label)}</td><td>${esc([plan.form, plan.strength].filter(Boolean).join(' · '))}</td><td>${esc(
-              cadenceLabel(plan.cadence),
-            )}</td><td style="text-align:right">${esc(plan.times.join(', '))}</td></tr>`,
+            `<tr><td>${esc(plan.label)}</td><td>${esc([plan.form, plan.strength].filter(Boolean).join(' · '))}</td><td>${esc([describeCadence(plan, t), describeInstruction(plan, t)].filter(Boolean).join(', '))}</td><td style="text-align:right">${esc(plan.times.join(', '))}</td></tr>`,
         )
         .join('');
       const html = `
@@ -210,7 +222,7 @@ export default function ReportScreen() {
 
     try {
       const medicationRows = visibleMeds
-        .map((row) => `<tr><td>${esc(row.label)}</td><td style=\"text-align:right\">${row.pct}%</td></tr>`)
+        .map((row) => `<tr><td>${esc(row.label)}</td><td style=\"text-align:right\">${esc(medicationValue(row))}</td></tr>`)
         .join('');
 
       const missedRows = visibleMissed
@@ -402,7 +414,7 @@ export default function ReportScreen() {
                 ) : (
                   <View>
                     {visibleMeds.map((row, index) => (
-                      <PaperRow key={row.id} isFirst={index === 0} label={row.label} value={`${row.pct.toString()}%`} />
+                      <PaperRow key={row.id} isFirst={index === 0} label={row.label} value={medicationValue(row)} />
                     ))}
                   </View>
                 )}

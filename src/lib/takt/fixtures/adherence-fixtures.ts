@@ -1,4 +1,4 @@
-import { buildDoseOccurrencesForDay, buildHistory, localScheduledKey, resolveDoseState } from '../schedule';
+import { buildAsNeededLogForDay, buildDoseOccurrencesForDay, buildHistory, localScheduledKey, resolveDoseState } from '../schedule';
 import { atClockTime, startOfDay } from '../time';
 import type { MedicationAdministrationResource, MedicationPlan, PausePeriod } from '../types';
 
@@ -9,7 +9,10 @@ type FixtureResult = {
   details: string;
 };
 
-const createPlan = (id: string, params?: { createdAt?: string; pauseHistory?: PausePeriod[] }): MedicationPlan => ({
+const createPlan = (
+  id: string,
+  params?: { createdAt?: string; pauseHistory?: PausePeriod[] } & Partial<Pick<MedicationPlan, 'cadence' | 'intervalDays' | 'intervalStart' | 'endDate' | 'asNeeded'>>,
+): MedicationPlan => ({
   request: {
     resourceType: 'MedicationRequest',
     id,
@@ -27,10 +30,14 @@ const createPlan = (id: string, params?: { createdAt?: string; pauseHistory?: Pa
   form: 'Tablet',
   strength: '10 mg',
   times: ['08:00'],
-  cadence: 'daily',
+  cadence: params?.cadence ?? 'daily',
   dayOfWeek: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
   createdAt: params?.createdAt,
   pauseHistory: params?.pauseHistory ?? [],
+  intervalDays: params?.intervalDays,
+  intervalStart: params?.intervalStart,
+  endDate: params?.endDate,
+  asNeeded: params?.asNeeded,
 });
 
 const createEvent = (
@@ -235,6 +242,53 @@ const fixtureParallelDoseIsolation = (): FixtureResult => {
   };
 };
 
+const fixtureIntervalCadence = (): FixtureResult => {
+  const plan = createPlan('interval', { cadence: 'interval', intervalDays: 2, intervalStart: '2026-01-08' });
+  const now = new Date('2026-01-13T20:00:00');
+  const on = ['2026-01-08', '2026-01-09', '2026-01-10', '2026-01-11', '2026-01-12'].map(
+    (day) => buildDoseOccurrencesForDay([plan], [], new Date(`${day}T00:00:00`), now).length,
+  );
+
+  return {
+    id: 'edge-interval-cadence',
+    title: 'Every 2 days from the start date: doses on days 0, 2, 4 only',
+    passed: on.join(',') === '1,0,1,0,1',
+    details: `doses per day Jan 8..12 = ${on.join(',')}`,
+  };
+};
+
+const fixtureCourseEnd = (): FixtureResult => {
+  const plan = createPlan('course', { endDate: '2026-01-10' });
+  const now = new Date('2026-01-12T20:00:00');
+  const onEndDay = buildDoseOccurrencesForDay([plan], [], new Date('2026-01-10T00:00:00'), now).length;
+  const afterEnd = buildDoseOccurrencesForDay([plan], [], new Date('2026-01-11T00:00:00'), now).length;
+  const history = buildHistory([plan], [], 3, { today: new Date('2026-01-12T00:00:00'), now });
+  const totals = countTotals(history);
+
+  return {
+    id: 'edge-course-end',
+    title: 'Course end: the end day still counts, the day after has no dose and no missed',
+    passed: onEndDay === 1 && afterEnd === 0 && totals.missed === 1,
+    details: `endDay=${onEndDay}, after=${afterEnd}, missed in 3-day history=${totals.missed}`,
+  };
+};
+
+const fixtureAsNeededExcluded = (): FixtureResult => {
+  const plan = createPlan('prn', { cadence: 'as-needed', asNeeded: true });
+  const day = startOfDay(new Date('2026-01-10T00:00:00'));
+  const loggedAt = new Date('2026-01-10T14:05:00');
+  const events = [createEvent('prn', loggedAt, 'taken')];
+  const scheduled = buildDoseOccurrencesForDay([plan], events, day, new Date('2026-01-10T20:00:00')).length;
+  const log = buildAsNeededLogForDay([plan], events, day)[0];
+
+  return {
+    id: 'edge-as-needed',
+    title: 'As-needed: no scheduled doses, no adherence effect, logged doses listed for the day',
+    passed: scheduled === 0 && log?.doses.length === 1 && log.doses[0]?.state === 'taken' && log.atMax === false,
+    details: `scheduled=${scheduled}, logged=${log?.doses.length ?? 0}`,
+  };
+};
+
 export const runAdherenceFixtureSuite = (): { passed: boolean; results: FixtureResult[] } => {
   const results = [
     fixtureOneMedication(),
@@ -244,6 +298,9 @@ export const runAdherenceFixtureSuite = (): { passed: boolean; results: FixtureR
     fixturePauseExclusion(),
     fixtureStateMachineBoundaries(),
     fixtureParallelDoseIsolation(),
+    fixtureIntervalCadence(),
+    fixtureCourseEnd(),
+    fixtureAsNeededExcluded(),
   ];
 
   return {

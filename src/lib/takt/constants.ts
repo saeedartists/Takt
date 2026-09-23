@@ -15,6 +15,10 @@ export const TAKT_EXT = {
   familyShareAcceptedAt: 'https://actimi.com/fhir/takt/family-share/accepted-at',
   /** Coding system for the user-reported reason on a skipped dose. */
   skipReason: 'https://actimi.com/fhir/takt/skip-reason',
+  /** Coding system for the intake instruction chosen on a medication. */
+  intakeInstruction: 'https://actimi.com/fhir/takt/intake-instruction',
+  /** On the Medication: JSON { shape, color } for the row icon. */
+  appearance: 'https://actimi.com/fhir/takt/appearance',
 } as const;
 
 export const TAKT_CONSENT_VERSION = 'takt-consent-v1';

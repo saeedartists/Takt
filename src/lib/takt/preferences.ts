@@ -6,7 +6,13 @@ import { DEFAULT_GRACE_HOURS, DEFAULT_SNOOZE_MINUTES, REMINDER_PREFS_STORAGE_KEY
 
 export type GraceHours = 2 | 4 | 6;
 
+export type FollowUpMinutes = 0 | 15 | 30;
+export const FOLLOW_UP_OPTIONS: FollowUpMinutes[] = [0, 15, 30];
+export const DEFAULT_FOLLOW_UP_MINUTES: FollowUpMinutes = 30;
+
 export type ReminderPreferences = {
+  /** One quiet second reminder this many minutes after the first, while the dose is still open. 0 = off. */
+  followUpMinutes: FollowUpMinutes;
   snoozeMinutes: number;
   /** Play the default notification sound; false schedules silent reminders. */
   sound: boolean;
@@ -32,6 +38,9 @@ const sanitize = (input: Partial<ReminderPreferences> | undefined): ReminderPref
   graceHours: GRACE_OPTIONS.includes(input?.graceHours as GraceHours)
     ? (input?.graceHours as GraceHours)
     : (DEFAULT_GRACE_HOURS as GraceHours),
+  followUpMinutes: FOLLOW_UP_OPTIONS.includes(input?.followUpMinutes as FollowUpMinutes)
+    ? (input?.followUpMinutes as FollowUpMinutes)
+    : DEFAULT_FOLLOW_UP_MINUTES,
 });
 
 export const readReminderPreferences = async (): Promise<ReminderPreferences> => {
@@ -72,6 +81,7 @@ export const useReminderPreferences = () => {
     setSound: (sound: boolean) => mutation.mutateAsync({ sound }),
     setHideNames: (hideNamesInReminders: boolean) => mutation.mutateAsync({ hideNamesInReminders }),
     setGraceHours: (graceHours: GraceHours) => mutation.mutateAsync({ graceHours }),
+    setFollowUpMinutes: (followUpMinutes: FollowUpMinutes) => mutation.mutateAsync({ followUpMinutes }),
     isSaving: mutation.isPending,
     saveError: mutation.error,
   };

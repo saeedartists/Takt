@@ -25,17 +25,19 @@ import {
   useTokens,
   type HeroPending,
 } from '@/components/ui';
+import { MedicationGlyph } from '@/components/takt/medication-glyph';
 import { SharedWithMeCard } from '@/components/takt/shared-with-me-card';
 import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useRecordDose, useUndoDose } from '@/lib/hooks/use-takt-mutations';
 import { useReminderPreferences } from '@/lib/takt/preferences';
-import { buildDoseOccurrencesForDay } from '@/lib/takt/schedule';
+import { describeInstruction } from '@/lib/takt/medication-form';
+import { buildAsNeededLogForDay, buildDoseOccurrencesForDay } from '@/lib/takt/schedule';
 import { useLocale } from '@/lib/takt/l10n';
 import { reminderDoseKey, scheduleSnoozeReminder } from '@/lib/takt/reminders';
 import { addDays, isoDateKey, startOfDay } from '@/lib/takt/time';
-import type { DoseOccurrence, DoseState, SkipReason } from '@/lib/takt/types';
+import type { DoseOccurrence, DoseState, MedicationPlan, SkipReason } from '@/lib/takt/types';
 
 const SNOOZE_OPTIONS = [5, 10, 15, 30];
 
@@ -80,6 +82,7 @@ export default function TodayScreen() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [heroPending, setHeroPending] = useState<HeroPending>(null);
   const [bulkPending, setBulkPending] = useState(false);
+  const [prnPending, setPrnPending] = useState<string | null>(null);
   const [undoToast, setUndoToast] = useState<{
     visible: boolean;
     message: string;
@@ -129,6 +132,12 @@ export default function TodayScreen() {
     }
     return map;
   }, [eventResources, graceHours, now, plans.plans, selectedDate]);
+
+  // As-needed medications: never scheduled, logged when taken.
+  const asNeededLog = useMemo(
+    () => buildAsNeededLogForDay(plans.plans, eventResources, startOfDay(selectedDate)),
+    [eventResources, plans.plans, selectedDate],
+  );
 
   const needsFirstMedication = plans.plans.length === 0;
   const needsFirstDoseLog = !needsFirstMedication && eventResources.length === 0;
@@ -233,6 +242,27 @@ export default function TodayScreen() {
       });
     } catch {
       setActionError(t('doseActionError'));
+    }
+  };
+
+  /** An as-needed dose is recorded at the moment it is logged; Undo lives in the toast. */
+  const logAsNeeded = async (plan: MedicationPlan) => {
+    if (!patientRef) return;
+    setActionError(null);
+    setPrnPending(plan.request.id);
+    try {
+      const result = await recordDose.mutateAsync({
+        patientRef,
+        medicationRef: plan.request.medicationReference?.reference,
+        requestRef: `MedicationRequest/${plan.request.id}`,
+        scheduledAt: new Date(),
+        action: 'taken',
+      });
+      setUndoToast({ visible: true, message: `${plan.label} · ${t('doseConfirmedToast')}`, eventId: result.id });
+    } catch {
+      setActionError(t('doseActionError'));
+    } finally {
+      setPrnPending(null);
     }
   };
 
@@ -470,6 +500,7 @@ export default function TodayScreen() {
                                       isFocused={isFocused}
                                       canUndo={canUndo(dose)}
                                       stateLabel={stateLabel(dose.state)}
+                                      instruction={describeInstruction(dose, t)}
                                       detail={doseDetail(dose)}
                                       onTake={() => takeAction(dose, 'taken')}
                                       onSkip={(reason) => takeAction(dose, 'skipped', reason)}
@@ -511,6 +542,57 @@ export default function TodayScreen() {
                 )}
               </View>
 
+              {asNeededLog.length > 0 ? (
+                <View>
+                  <SectionHeader title={t('cadenceAsNeeded')} />
+                  <Card>
+                    {asNeededLog.map((entry, index) => {
+                      const last = entry.doses[entry.doses.length - 1];
+                      const line = last
+                        ? t('asNeededTakenToday')
+                            .replace('{count}', String(entry.doses.length))
+                            .replace('{time}', formatTime(last.scheduledAt))
+                        : t('asNeededNoneToday');
+                      return (
+                        <View
+                          key={entry.plan.request.id}
+                          style={[styles.prnRow, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator }]}
+                        >
+                          <MedicationGlyph appearance={entry.plan.appearance} form={entry.plan.form} />
+                          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                            <Text numberOfLines={2} style={[typography.headline, { color: c.textPrimary }]}>
+                              {entry.plan.label}
+                            </Text>
+                            <Text style={[typography.footnote, { color: c.textSecondary }]}>
+                              {[
+                                entry.plan.strength,
+                                entry.plan.maxPerDay ? t('asNeededUpTo').replace('{count}', String(entry.plan.maxPerDay)) : undefined,
+                                describeInstruction(entry.plan, t),
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </Text>
+                            <Text style={[typography.footnote, { color: last ? c.success : c.textSecondary, fontWeight: '600' }]}>
+                              {entry.atMax ? t('asNeededMaxReached') : line}
+                            </Text>
+                          </View>
+                          <Button
+                            size="sm"
+                            label={t('logDoseCta')}
+                            icon={<Ionicons name="add" size={16} color={c.surface} />}
+                            disabled={entry.atMax || !isSelectedToday || prnPending !== null}
+                            loading={prnPending === entry.plan.request.id}
+                            haptic="success"
+                            accessibilityLabel={`${t('logDoseCta')}, ${entry.plan.label}`}
+                            onPress={() => void logAsNeeded(entry.plan)}
+                          />
+                        </View>
+                      );
+                    })}
+                  </Card>
+                </View>
+              ) : null}
+
               <SharedWithMeCard />
             </>
           )}
@@ -530,6 +612,13 @@ export default function TodayScreen() {
 
 const styles = StyleSheet.create({
   groups: { gap: spacing(3) },
+  prnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(3),
+    paddingHorizontal: spacing(4),
+    paddingVertical: spacing(3),
+  },
   noticeRow: {
     flexDirection: 'row',
     alignItems: 'center',

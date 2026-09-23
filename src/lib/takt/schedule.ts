@@ -53,16 +53,43 @@ const indexEvents = (
   return map;
 };
 
-const requestIsDueOnDay = (plan: MedicationPlan, day: Date): boolean => {
-  if (plan.dayOfWeek.length === 0) return true;
-  return plan.dayOfWeek.includes(dayCodeFromDate(day));
-};
-
 const parseIsoDateTime = (value?: string): Date | null => {
   if (!value) return null;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed;
+};
+
+/** YYYY-MM-DD as local midnight; date-only values must not shift with the timezone. */
+export const parseDateOnly = (value?: string): Date | null => {
+  if (!value) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return null;
+  const parsed = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Whether the plan has a scheduled dose on this calendar day. As-needed plans never do. */
+export const planDueOnDay = (plan: MedicationPlan, day: Date): boolean => {
+  if (plan.asNeeded || plan.cadence === 'as-needed') return false;
+  if (plan.cadence === 'interval') {
+    const every = Math.max(1, plan.intervalDays ?? 1);
+    const start = parseDateOnly(plan.intervalStart) ?? parseIsoDateTime(plan.createdAt);
+    if (!start) return true;
+    // Rounded so a DST change inside the span does not shift the day count.
+    const diff = Math.round((startOfDay(day).getTime() - startOfDay(start).getTime()) / DAY_MS);
+    return diff >= 0 && diff % every === 0;
+  }
+  if (plan.dayOfWeek.length === 0) return true;
+  return plan.dayOfWeek.includes(dayCodeFromDate(day));
+};
+
+/** True once the course end date has passed (the whole end day still counts). */
+export const courseEnded = (plan: MedicationPlan, at: Date): boolean => {
+  const end = parseDateOnly(plan.endDate);
+  return Boolean(end) && at >= addDays(startOfDay(end as Date), 1);
 };
 
 const isWithinPausePeriod = (scheduledAt: Date, period: PausePeriod): boolean => {
@@ -80,6 +107,10 @@ const isWithinPausePeriod = (scheduledAt: Date, period: PausePeriod): boolean =>
 const doseSuppressed = (plan: MedicationPlan, scheduledAt: Date): boolean => {
   const createdAt = parseIsoDateTime(plan.createdAt);
   if (createdAt && scheduledAt < createdAt) {
+    return true;
+  }
+
+  if (courseEnded(plan, scheduledAt)) {
     return true;
   }
 
@@ -135,7 +166,7 @@ export const buildDoseOccurrencesForDay = (
   const doses: DoseOccurrence[] = [];
 
   for (const plan of plans) {
-    if (!requestIsDueOnDay(plan, day)) continue;
+    if (!planDueOnDay(plan, day)) continue;
 
     for (const time of plan.times) {
       const scheduledAt = atClockTime(day, time);
@@ -157,11 +188,55 @@ export const buildDoseOccurrencesForDay = (
         eventId: lookup?.id,
         eventTimestamp: lookup?.effectiveDateTime,
         reasonCode: skipReasonOf(lookup),
+        instruction: plan.instruction,
+        instructionNote: plan.instructionNote,
       });
     }
   }
 
   return doses.sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+};
+
+export type AsNeededLog = {
+  plan: MedicationPlan;
+  /** Doses logged on the day, oldest first, each as a taken occurrence. */
+  doses: DoseOccurrence[];
+  /** True when `maxPerDay` is set and reached. */
+  atMax: boolean;
+};
+
+/** As-needed medications are never scheduled and never count toward adherence; this is their day log. */
+export const buildAsNeededLogForDay = (
+  plans: MedicationPlan[],
+  events: MedicationAdministrationResource[],
+  day: Date,
+): AsNeededLog[] => {
+  const dayStart = startOfDay(day);
+  const dayEnd = addDays(dayStart, 1);
+  return plans
+    .filter((plan) => (plan.asNeeded || plan.cadence === 'as-needed') && plan.request.status === 'active')
+    .map((plan) => {
+      const requestRef = `MedicationRequest/${plan.request.id}`;
+      const doses = events
+        .filter((event) => event.request?.reference === requestRef && event.status === 'completed')
+        .map((event) => ({ event, at: parseIsoDateTime(event.extension?.find((x) => x.url === TAKT_EXT.scheduledTime)?.valueDateTime ?? event.effectiveDateTime) }))
+        .filter((row): row is { event: MedicationAdministrationResource; at: Date } => Boolean(row.at) && (row.at as Date) >= dayStart && (row.at as Date) < dayEnd)
+        .sort((a, b) => a.at.getTime() - b.at.getTime())
+        .map<DoseOccurrence>(({ event, at }) => ({
+          id: `${plan.request.id}-prn-${event.id}`,
+          requestId: plan.request.id,
+          medicationRef: plan.request.medicationReference?.reference,
+          label: plan.label,
+          strength: plan.strength || undefined,
+          scheduledAt: at,
+          state: 'taken',
+          eventId: event.id,
+          eventTimestamp: event.effectiveDateTime,
+          instruction: plan.instruction,
+          instructionNote: plan.instructionNote,
+        }));
+      return { plan, doses, atMax: typeof plan.maxPerDay === 'number' && doses.length >= plan.maxPerDay };
+    });
 };
 
 export const adherenceSummary = (doses: DoseOccurrence[]) => {

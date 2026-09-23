@@ -11,6 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 import { useLocale } from '../../lib/takt/l10n';
+import { describeInstruction } from '../../lib/takt/medication-form';
 import type { DoseOccurrence, DoseState, SkipReason } from '../../lib/takt/types';
 import { motion, radius, spacing, typography } from '../../theme/tokens';
 import { useMotion } from '../../theme/use-motion';
@@ -183,6 +184,9 @@ export function TodayHeroCard({
               <Text style={[typography.subhead, { color: c.textSecondary, marginTop: 2, fontVariant: ['tabular-nums'] }]}>
                 {[time, dose.strength].filter(Boolean).join(' · ')}
               </Text>
+              {describeInstruction(dose, t) ? (
+                <Text style={[typography.footnote, { color: c.textSecondary, marginTop: 2 }]}>{describeInstruction(dose, t)}</Text>
+              ) : null}
             </View>
 
             {due ? (

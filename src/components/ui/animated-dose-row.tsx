@@ -30,6 +30,8 @@ type AnimatedDoseRowProps = {
   isFocused?: boolean;
   canUndo: boolean;
   stateLabel: string;
+  /** "With food · with a glass of water", already localised. */
+  instruction?: string;
   /** Second line under the strength: "Taken at 08:05" or "Skipped · Forgot". */
   detail?: string;
   onTake: () => Promise<void>;
@@ -79,6 +81,7 @@ export function AnimatedDoseRow({
   isFocused = false,
   canUndo,
   stateLabel,
+  instruction,
   detail,
   onTake,
   onSkip,
@@ -184,6 +187,9 @@ export function AnimatedDoseRow({
             </Text>
             {dose.strength ? (
               <Text style={[typography.footnote, { color: c.textSecondary }]}>{dose.strength}</Text>
+            ) : null}
+            {instruction ? (
+              <Text style={[typography.footnote, { color: c.textSecondary }]}>{instruction}</Text>
             ) : null}
             {detail ? (
               <Text style={[typography.footnote, { color: detailColor, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>

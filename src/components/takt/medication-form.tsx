@@ -14,7 +14,6 @@ import {
   Input,
   PageShell,
   SectionHeader,
-  SegmentedControl,
   Stack,
   motion,
   radius,
@@ -23,11 +22,18 @@ import {
   useMotion,
   useTokens,
 } from '@/components/ui';
+import { MedicationGlyph } from '@/components/takt/medication-glyph';
 import { TimeField } from '@/components/takt/time-field';
 import { WeekdayPicker } from '@/components/takt/weekday-picker';
 import { useLocale } from '@/lib/takt/l10n';
 import {
+  COLOR_OPTIONS,
   FORM_PRESETS,
+  INSTRUCTION_LABEL_KEY,
+  INSTRUCTION_OPTIONS,
+  SHAPE_LABEL_KEY,
+  INTERVAL_PRESETS,
+  SHAPE_OPTIONS,
   SUPPLY_PRESETS,
   TIME_PRESETS,
   formatDayLabel,
@@ -148,12 +154,21 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
   };
 
   const submit = async () => {
-    setTouched({ name: true, times: true, days: true, lastRefilled: true });
+    setTouched({ name: true, times: true, days: true, lastRefilled: true, interval: true, endDate: true, maxPerDay: true });
     if (!isValid || submitting) return;
     await onSubmit({ ...values, name: values.name.trim(), form: values.form.trim(), times: sortTimes(values.times) });
   };
 
   const timeChips = [...values.times, ...TIME_PRESETS.filter((preset) => !values.times.includes(preset))];
+  const asNeeded = values.cadence === 'as-needed';
+
+  const cadenceOptions: { value: MedicationCadence; label: string }[] = [
+    { value: 'daily', label: t('cadenceDaily') },
+    { value: 'weekdays', label: t('cadenceWeekdays') },
+    { value: 'custom', label: t('cadenceSpecificDays') },
+    { value: 'interval', label: t('cadenceEveryDays').replace('{days}', values.intervalDays || '2') },
+    { value: 'as-needed', label: t('cadenceAsNeeded') },
+  ];
 
   const saveBar = (
     <View
@@ -244,27 +259,61 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
             </Card>
           </Animated.View>
 
-          {/* Schedule */}
+          {/* Appearance: what the tablet looks like */}
           <Animated.View entering={enter(1)} layout={expand}>
+            <SectionHeader title={t('appearance')} />
+            <Card>
+              <View style={styles.cardBody}>
+                <View style={styles.previewRow}>
+                  <MedicationGlyph appearance={{ shape: values.shape, color: values.color }} size={52} />
+                  <Text style={[typography.footnote, { color: c.textSecondary, flex: 1, minWidth: 0 }]}>{t('appearanceHint')}</Text>
+                </View>
+                <View style={styles.chips}>
+                  {SHAPE_OPTIONS.map((shape) => (
+                    <Chip key={shape} label={t(SHAPE_LABEL_KEY[shape])} selected={values.shape === shape} onPress={() => set('shape', shape)} />
+                  ))}
+                </View>
+                <View style={styles.chips} accessibilityRole="radiogroup">
+                  {COLOR_OPTIONS.map((color) => {
+                    const selected = values.color === color;
+                    return (
+                      <AnimatedPressable
+                        key={color}
+                        accessibilityRole="radio"
+                        accessibilityLabel={color}
+                        accessibilityState={{ selected }}
+                        hitSlop={4}
+                        onPress={() => set('color', color)}
+                        style={[styles.swatchRing, { borderColor: selected ? c.accent : 'transparent' }]}
+                      >
+                        <View style={[styles.swatch, { backgroundColor: color, borderColor: c.separator }]} />
+                      </AnimatedPressable>
+                    );
+                  })}
+                </View>
+              </View>
+            </Card>
+          </Animated.View>
+
+          {/* Schedule */}
+          <Animated.View entering={enter(2)} layout={expand}>
             <SectionHeader title={t('medicationScheduleSectionTitle')} />
             <Card>
               <View style={styles.cardBody}>
-                <Field label={t('medicationCadence')} error={shown('days')}>
-                  <SegmentedControl
-                    value={values.cadence}
-                    onChange={(next) => set('cadence', next as MedicationCadence)}
-                    options={[
-                      { value: 'daily', label: t('cadenceDaily') },
-                      { value: 'weekdays', label: t('cadenceWeekdays') },
-                      { value: 'custom', label: t('cadenceSpecificDays') },
-                    ]}
-                  />
+                <Field label={t('medicationCadence')} error={shown('days') ?? shown('interval')}>
+                  <Animated.View layout={expand} style={styles.chips}>
+                    {cadenceOptions.map((option) => (
+                      <Chip
+                        key={option.value}
+                        label={option.label}
+                        selected={values.cadence === option.value}
+                        onPress={() => set('cadence', option.value)}
+                      />
+                    ))}
+                  </Animated.View>
+
                   {values.cadence === 'custom' ? (
-                    <Animated.View
-                      entering={FadeIn.duration(duration.fast)}
-                      exiting={FadeOut.duration(duration.fast)}
-                      style={styles.expander}
-                    >
+                    <Animated.View entering={FadeIn.duration(duration.fast)} exiting={FadeOut.duration(duration.fast)} style={styles.expander}>
                       <WeekdayPicker
                         days={WEEKDAY_ORDER}
                         selected={values.days}
@@ -273,66 +322,157 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
                       />
                     </Animated.View>
                   ) : null}
-                </Field>
 
-                <Field label={t('medicationTimes')} hint={t('medicationTimesHint')} error={shown('times')}>
-                  <Animated.View layout={expand} style={styles.chips}>
-                    {timeChips.map((time) => {
-                      const selected = values.times.includes(time);
-                      return (
-                        <Chip
-                          key={time}
-                          label={time}
-                          selected={selected}
-                          accessibilityLabel={selected ? t('removeTimeLabel').replace('{time}', time) : time}
-                          onPress={() => (selected ? removeTime(time) : addTime(time))}
-                          trailing={selected ? <Ionicons name="close" size={14} color={c.accent} /> : null}
-                        />
-                      );
-                    })}
-                    {!addingTime ? (
-                      <Chip
-                        label={t('addTimeCta')}
-                        onPress={() => {
-                          setDraftTime(TIME_PRESETS.find((preset) => !values.times.includes(preset)) ?? '08:00');
-                          setAddingTime(true);
-                        }}
-                      />
-                    ) : null}
-                  </Animated.View>
-                  {addingTime ? (
-                    <Animated.View
-                      entering={FadeIn.duration(duration.fast)}
-                      exiting={FadeOut.duration(duration.fast)}
-                      style={styles.addRow}
-                    >
-                      <View style={styles.grow}>
-                        <TimeField
-                          mode="time"
-                          value={draftTime}
-                          onChange={setDraftTime}
-                          accessibilityLabel={t('selectTimeLabel')}
-                          autoFocus
-                        />
+                  {values.cadence === 'interval' ? (
+                    <Animated.View entering={FadeIn.duration(duration.fast)} exiting={FadeOut.duration(duration.fast)} style={[styles.expander, { gap: spacing(3) }]}>
+                      <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('intervalDaysLabel')}</Text>
+                      <View style={styles.chips}>
+                        {INTERVAL_PRESETS.map((days) => (
+                          <Chip
+                            key={days}
+                            label={t('cadenceEveryDays').replace('{days}', days)}
+                            selected={values.intervalDays === days}
+                            onPress={() => {
+                              set('intervalDays', days);
+                              touch('interval');
+                            }}
+                          />
+                        ))}
+                        <View style={styles.smallInput}>
+                          <Input
+                            value={INTERVAL_PRESETS.includes(values.intervalDays) ? '' : values.intervalDays}
+                            onChangeText={(next) => {
+                              set('intervalDays', next.replace(/[^\d]/g, ''));
+                              touch('interval');
+                            }}
+                            keyboardType="number-pad"
+                            inputMode="numeric"
+                            placeholder={t('refillCustomPlaceholder')}
+                            accessibilityLabel={t('intervalDaysLabel')}
+                            style={styles.smallInputField}
+                          />
+                        </View>
                       </View>
-                      <Button size="sm" label={t('addTimeConfirm')} onPress={commitDraft} disabled={!isClockTime(draftTime)} />
-                      <AnimatedPressable
-                        accessibilityRole="button"
-                        accessibilityLabel={t('cancel')}
-                        onPress={() => setAddingTime(false)}
-                        style={[styles.iconButton, { backgroundColor: c.surfaceRaised, borderColor: c.separator }]}
-                      >
-                        <Ionicons name="close" size={18} color={c.textSecondary} />
-                      </AnimatedPressable>
+                      <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('intervalStartLabel')}</Text>
+                      <TimeField
+                        mode="date"
+                        value={values.intervalStart}
+                        onChange={(next) => {
+                          set('intervalStart', next);
+                          touch('interval');
+                        }}
+                        accessibilityLabel={t('intervalStartLabel')}
+                      />
                     </Animated.View>
                   ) : null}
+                </Field>
+
+                {asNeeded ? (
+                  <Animated.View entering={FadeIn.duration(duration.fast)} exiting={FadeOut.duration(duration.fast)} style={{ gap: spacing(4) }}>
+                    <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('asNeededHint')}</Text>
+                    <Field label={t('maxPerDayLabel')} error={shown('maxPerDay')}>
+                      <Input
+                        value={values.maxPerDay}
+                        onChangeText={(next) => {
+                          set('maxPerDay', next.replace(/[^\d]/g, ''));
+                          touch('maxPerDay');
+                        }}
+                        keyboardType="number-pad"
+                        inputMode="numeric"
+                        placeholder="3"
+                        invalid={Boolean(shown('maxPerDay'))}
+                      />
+                    </Field>
+                  </Animated.View>
+                ) : (
+                  <Field label={t('medicationTimes')} hint={t('medicationTimesHint')} error={shown('times')}>
+                    <Animated.View layout={expand} style={styles.chips}>
+                      {timeChips.map((time) => {
+                        const selected = values.times.includes(time);
+                        return (
+                          <Chip
+                            key={time}
+                            label={time}
+                            selected={selected}
+                            accessibilityLabel={selected ? t('removeTimeLabel').replace('{time}', time) : time}
+                            onPress={() => (selected ? removeTime(time) : addTime(time))}
+                            trailing={selected ? <Ionicons name="close" size={14} color={c.accent} /> : null}
+                          />
+                        );
+                      })}
+                      {!addingTime ? (
+                        <Chip
+                          label={t('addTimeCta')}
+                          onPress={() => {
+                            setDraftTime(TIME_PRESETS.find((preset) => !values.times.includes(preset)) ?? '08:00');
+                            setAddingTime(true);
+                          }}
+                        />
+                      ) : null}
+                    </Animated.View>
+                    {addingTime ? (
+                      <Animated.View entering={FadeIn.duration(duration.fast)} exiting={FadeOut.duration(duration.fast)} style={styles.addRow}>
+                        <View style={styles.grow}>
+                          <TimeField mode="time" value={draftTime} onChange={setDraftTime} accessibilityLabel={t('selectTimeLabel')} autoFocus />
+                        </View>
+                        <Button size="sm" label={t('addTimeConfirm')} onPress={commitDraft} disabled={!isClockTime(draftTime)} />
+                        <AnimatedPressable
+                          accessibilityRole="button"
+                          accessibilityLabel={t('cancel')}
+                          onPress={() => setAddingTime(false)}
+                          style={[styles.iconButton, { backgroundColor: c.surfaceRaised, borderColor: c.separator }]}
+                        >
+                          <Ionicons name="close" size={18} color={c.textSecondary} />
+                        </AnimatedPressable>
+                      </Animated.View>
+                    ) : null}
+                  </Field>
+                )}
+
+                <Field label={t('endDateLabel')} hint={t('endDateHint')} error={shown('endDate')}>
+                  <TimeField
+                    mode="date"
+                    value={values.endDate}
+                    onChange={(next) => {
+                      set('endDate', next);
+                      touch('endDate');
+                    }}
+                    accessibilityLabel={t('endDateLabel')}
+                    invalid={Boolean(shown('endDate'))}
+                  />
+                </Field>
+              </View>
+            </Card>
+          </Animated.View>
+
+          {/* How to take it */}
+          <Animated.View entering={enter(3)} layout={expand}>
+            <SectionHeader title={t('instructionLabel')} />
+            <Card>
+              <View style={styles.cardBody}>
+                <View style={styles.chips}>
+                  {INSTRUCTION_OPTIONS.map((option) => (
+                    <Chip
+                      key={option}
+                      label={t(INSTRUCTION_LABEL_KEY[option])}
+                      selected={values.instruction === option}
+                      onPress={() => set('instruction', values.instruction === option ? '' : option)}
+                    />
+                  ))}
+                </View>
+                <Field label={t('instructionNoteLabel')}>
+                  <Input
+                    value={values.instructionNote}
+                    onChangeText={(next) => set('instructionNote', next)}
+                    placeholder={t('instructionNotePlaceholder')}
+                  />
                 </Field>
               </View>
             </Card>
           </Animated.View>
 
           {/* Supply */}
-          <Animated.View entering={enter(2)} layout={expand}>
+          <Animated.View entering={enter(4)} layout={expand}>
             <SectionHeader title={t('medicationSupplySectionTitle')} />
             <Card>
               <View style={styles.cardBody}>
@@ -368,7 +508,6 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
               </View>
             </Card>
           </Animated.View>
-
         </Stack>
       </PageShell>
 
@@ -383,9 +522,8 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  intro: { marginBottom: spacing(4) },
   cardBody: { padding: spacing(4), gap: spacing(4) },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), alignItems: 'center' },
   chip: {
     minHeight: 40,
     flexDirection: 'row',
@@ -396,9 +534,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     borderWidth: 1,
   },
+  previewRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
+  swatchRing: { width: 40, height: 40, borderRadius: radius.full, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  swatch: { width: 28, height: 28, borderRadius: radius.full, borderWidth: StyleSheet.hairlineWidth },
   expander: { marginTop: spacing(1) },
   addRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing(2) },
   grow: { flex: 1, minWidth: 0 },
+  smallInput: { width: 96 },
+  smallInputField: { minHeight: 40, paddingVertical: 0 },
   iconButton: {
     width: 44,
     height: 44,

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack as RouterStack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState, type ComponentProps } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import {
@@ -37,12 +37,12 @@ import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { TAKT_EXT } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
-import { formatDayLabel } from '@/lib/takt/medication-form';
+import { MedicationGlyph } from '@/components/takt/medication-glyph';
+import { describeCadence, describeInstruction } from '@/lib/takt/medication-form';
+import { parseDateOnly } from '@/lib/takt/schedule';
 import { LOW_SUPPLY_THRESHOLD, getSupplySnapshot, type SupplySnapshot } from '@/lib/takt/supply-tracker';
 import { isoDateKey } from '@/lib/takt/time';
 import type { MedicationAdministrationResource, MedicationPlan } from '@/lib/takt/types';
-
-type IconName = ComponentProps<typeof Ionicons>['name'];
 
 const expand = LinearTransition.springify()
   .damping(motion.spring.gentle.damping)
@@ -53,15 +53,6 @@ const statusTone = (status: string): 'success' | 'warning' | 'destructive' =>
 
 const statusLabelKey = (status: string): 'statusActive' | 'statusPaused' | 'statusArchived' =>
   status === 'on-hold' ? 'statusPaused' : status === 'stopped' ? 'statusArchived' : 'statusActive';
-
-const formIcon = (form: string): IconName => {
-  const key = form.toLowerCase();
-  if (key.includes('capsule')) return 'medkit';
-  if (key.includes('drop')) return 'water';
-  if (key.includes('inhal')) return 'cloud-outline';
-  if (key.includes('syrup')) return 'flask';
-  return 'medical';
-};
 
 const eventTimestamp = (event: MedicationAdministrationResource): string | undefined =>
   event.extension?.find((entry) => entry.url === TAKT_EXT.scheduledTime)?.valueDateTime ?? event.effectiveDateTime;
@@ -181,12 +172,9 @@ export default function MedicationDetailsScreen() {
 
   const status = plan.request.status;
   const until = pausedUntil(plan);
-  const cadenceText =
-    plan.cadence === 'daily'
-      ? t('cadenceDaily')
-      : plan.cadence === 'weekdays'
-        ? t('cadenceWeekdays')
-        : plan.dayOfWeek.map((day) => formatDayLabel(day, t)).join(', ');
+  const cadenceText = describeCadence(plan, t);
+  const instructionText = describeInstruction(plan, t);
+  const courseEnd = parseDateOnly(plan.endDate);
   const supplyTone =
     supply && supply.count <= 0 ? 'destructive' : supply && supply.count <= LOW_SUPPLY_THRESHOLD ? 'warning' : 'neutral';
   const supplyColor = supplyTone === 'destructive' ? c.destructive : supplyTone === 'warning' ? c.warning : c.accent;
@@ -201,9 +189,7 @@ export default function MedicationDetailsScreen() {
           <Card>
             <View style={styles.cardBody}>
               <View style={styles.heroRow}>
-                <View style={[styles.heroIcon, { backgroundColor: `${c.accent}1A`, borderColor: `${c.accent}33` }]}>
-                  <Ionicons name={formIcon(plan.form)} size={26} color={c.accent} />
-                </View>
+                <MedicationGlyph appearance={plan.appearance} form={plan.form} size={52} />
                 <View style={styles.grow}>
                   <Text style={[typography.title2, { color: c.textPrimary }]} numberOfLines={2}>
                     {plan.label}
@@ -244,6 +230,14 @@ export default function MedicationDetailsScreen() {
                 <Text style={[typography.overline, { color: c.textSecondary }]}>{t('medicationCadence')}</Text>
                 <Text style={[typography.body, { color: c.textPrimary }]}>{cadenceText}</Text>
               </View>
+              {plan.cadence === 'as-needed' ? (
+                <View style={{ gap: spacing(1) }}>
+                  {plan.maxPerDay ? (
+                    <Text style={[typography.body, { color: c.textPrimary }]}>{t('asNeededUpTo').replace('{count}', String(plan.maxPerDay))}</Text>
+                  ) : null}
+                  <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('asNeededHint')}</Text>
+                </View>
+              ) : (
               <View style={{ gap: spacing(1.5) }}>
                 <Text style={[typography.overline, { color: c.textSecondary }]}>{t('medicationTimes')}</Text>
                 <View style={styles.wrapRow}>
@@ -257,6 +251,20 @@ export default function MedicationDetailsScreen() {
                   ))}
                 </View>
               </View>
+              )}
+
+              {instructionText ? (
+                <View style={{ gap: spacing(1) }}>
+                  <Text style={[typography.overline, { color: c.textSecondary }]}>{t('instructionLabel')}</Text>
+                  <Text style={[typography.body, { color: c.textPrimary }]}>{instructionText}</Text>
+                </View>
+              ) : null}
+
+              {courseEnd ? (
+                <Text style={[typography.footnote, { color: c.textSecondary }]}>
+                  {t(status === 'stopped' ? 'courseEndedOn' : 'courseEndsOn').replace('{date}', formatDate(courseEnd, { day: 'numeric', month: 'long' }))}
+                </Text>
+              ) : null}
 
               {status === 'active' ? (
                 <Button
@@ -409,14 +417,6 @@ export default function MedicationDetailsScreen() {
 const styles = StyleSheet.create({
   cardBody: { padding: spacing(4), gap: spacing(3.5) },
   heroRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
-  heroIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   grow: { flex: 1, minWidth: 0 },
   wrapRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing(2) },
   timeChip: {

@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable, Button, CONTENT_MAX_WIDTH, Input, radius, spacing, typography, useTokens } from '@/components/ui';
 import { Chip } from '@/components/takt/medication-form';
 import { TimeField } from '@/components/takt/time-field';
-import { useUpdateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
+import { planToInput, useUpdateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
 import { useLocale } from '@/lib/takt/l10n';
 import { normalizeDateInput, parseSupply } from '@/lib/takt/medication-form';
 import { getSupplyCount, setSupplyCount } from '@/lib/takt/supply-tracker';
@@ -19,14 +19,22 @@ type PlanStatus = 'active' | 'on-hold' | 'stopped';
 const REFILL_PRESETS = [28, 30, 60, 90];
 
 /** Prefill for "Duplicate": the new-medication form reads these params. */
-export const duplicateParams = (plan: MedicationPlan) => ({
-  name: plan.label,
-  form: plan.form,
-  strength: plan.strength,
-  times: plan.times.join(','),
-  cadence: plan.cadence,
-  days: plan.dayOfWeek.join(','),
-});
+export const duplicateParams = (plan: MedicationPlan): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries({
+      name: plan.label,
+      form: plan.form,
+      strength: plan.strength,
+      times: plan.times.join(','),
+      cadence: plan.cadence,
+      days: plan.dayOfWeek.join(','),
+      intervalDays: plan.intervalDays ? String(plan.intervalDays) : undefined,
+      instruction: plan.instruction,
+      instructionNote: plan.instructionNote,
+      shape: plan.appearance?.shape,
+      color: plan.appearance?.color,
+    }).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1] !== ''),
+  );
 
 /** End of the current pause when one was set, so rows can say "Paused until 30 Sep". */
 export const pausedUntil = (plan: MedicationPlan): Date | null => {
@@ -52,14 +60,7 @@ export const usePlanStatusUpdate = (patientRef?: string) => {
     if (!patientRef || !plan.medication) return;
     const supplyCount = await getSupplyCount(plan.medication.id);
     await updatePlan.mutateAsync({
-      patientRef,
-      name: plan.label,
-      form: plan.form,
-      strength: plan.strength,
-      cadence: plan.cadence,
-      dayOfWeek: plan.dayOfWeek,
-      times: plan.times,
-      supplyCount: supplyCount ?? undefined,
+      ...planToInput(plan, patientRef, supplyCount ?? undefined),
       status,
       pauseUntil,
       request: plan.request,

@@ -7,6 +7,8 @@ import { TAKT_EXT } from '@/lib/takt/constants';
 import { fromTimeOfDay, normalizeWeekdayCodes, sortTimes, WEEKDAY_ORDER, WEEKDAYS_ONLY } from '@/lib/takt/time';
 import type {
   FhirBundle,
+  IntakeInstruction,
+  MedicationAppearance,
   MedicationCadence,
   MedicationPlan,
   MedicationRequestResource,
@@ -60,7 +62,31 @@ const readCreatedAt = (request: MedicationRequestResource): string | undefined =
   return undefined;
 };
 
+const SHAPES = new Set(['round', 'oval', 'capsule', 'drops', 'inhaler', 'injection', 'other']);
+const INSTRUCTIONS = new Set(['with-food', 'empty-stomach', 'before-bed']);
+
+const readAppearance = (medication: MedicationResource | null): MedicationAppearance | undefined => {
+  const raw = medication?.extension?.find((x) => x.url === TAKT_EXT.appearance)?.valueString;
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw) as { shape?: unknown; color?: unknown };
+    if (typeof parsed.shape !== 'string' || !SHAPES.has(parsed.shape)) return undefined;
+    if (typeof parsed.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(parsed.color)) return undefined;
+    return { shape: parsed.shape as MedicationAppearance['shape'], color: parsed.color };
+  } catch {
+    return undefined;
+  }
+};
+
+const readInstruction = (request: MedicationRequestResource): IntakeInstruction | undefined => {
+  const code = request.dosageInstruction?.[0]?.additionalInstruction
+    ?.flatMap((entry) => entry.coding ?? [])
+    .find((coding) => coding.system === TAKT_EXT.intakeInstruction)?.code;
+  return code && INSTRUCTIONS.has(code) ? (code as IntakeInstruction) : undefined;
+};
+
 const readTimes = (request: MedicationRequestResource): string[] => {
+  if (request.dosageInstruction?.[0]?.asNeededBoolean) return [];
   const times = request.dosageInstruction?.[0]?.timing?.repeat?.timeOfDay ?? [];
   if (times.length === 0) return ['08:00'];
   return sortTimes(times.map(fromTimeOfDay));
@@ -73,7 +99,10 @@ const readDayOfWeek = (request: MedicationRequestResource): WeekdayCode[] => {
   return normalized.length > 0 ? normalized : WEEKDAY_ORDER;
 };
 
-const readCadence = (dayOfWeek: WeekdayCode[]): MedicationCadence => {
+const readCadence = (request: MedicationRequestResource, dayOfWeek: WeekdayCode[]): MedicationCadence => {
+  const dosage = request.dosageInstruction?.[0];
+  if (dosage?.asNeededBoolean) return 'as-needed';
+  if ((dosage?.timing?.repeat?.period ?? 1) > 1) return 'interval';
   if (dayOfWeek.length === WEEKDAY_ORDER.length) return 'daily';
   if (
     dayOfWeek.length === WEEKDAYS_ONLY.length &&
@@ -106,6 +135,9 @@ export const useMedicationPlans = (patientRef?: string) => {
       const ref = request.medicationReference?.reference?.split('/')[1];
       const medication = ref ? medicationById.get(ref) ?? null : null;
       const dayOfWeek = readDayOfWeek(request);
+      const dosage = request.dosageInstruction?.[0];
+      const repeat = dosage?.timing?.repeat;
+      const cadence = readCadence(request, dayOfWeek);
 
       return {
         request,
@@ -114,8 +146,16 @@ export const useMedicationPlans = (patientRef?: string) => {
         form: medication?.form?.text ?? '',
         strength: readStrength(medication),
         times: readTimes(request),
-        cadence: readCadence(dayOfWeek),
+        cadence,
         dayOfWeek,
+        intervalDays: cadence === 'interval' ? repeat?.period : undefined,
+        intervalStart: cadence === 'interval' ? repeat?.boundsPeriod?.start?.slice(0, 10) : undefined,
+        endDate: repeat?.boundsPeriod?.end?.slice(0, 10),
+        asNeeded: cadence === 'as-needed',
+        maxPerDay: dosage?.maxDosePerPeriod?.numerator?.value,
+        instruction: readInstruction(request),
+        instructionNote: dosage?.patientInstruction?.trim() || undefined,
+        appearance: readAppearance(medication),
         supplyCount: request.dispenseRequest?.quantity?.value,
         createdAt: readCreatedAt(request),
         archivedAt: readRequestExtensionDateTime(request, TAKT_EXT.archivedAt),

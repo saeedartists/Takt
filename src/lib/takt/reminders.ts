@@ -3,9 +3,10 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Linking, PermissionsAndroid, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { addDays, atClockTime, dayCodeFromDate, isoDateKey, startOfDay } from './time';
+import { addDays, atClockTime, isoDateKey, startOfDay } from './time';
 import { useLocale } from './l10n';
-import type { MedicationPlan } from './types';
+import { courseEnded, planDueOnDay } from './schedule';
+import type { IntakeInstruction, MedicationPlan } from './types';
 import { readReminderPreferences, useReminderPreferences } from './preferences';
 
 const STORAGE_KEY = 'takt:scheduled-notification-ids:v1';
@@ -94,6 +95,8 @@ Notifications.setNotificationHandler({
 });
 
 type ReminderSeed = {
+  /** A follow-up fires once after the dose reminder while the dose is still open. */
+  kind: 'dose' | 'follow-up';
   triggerAt: Date;
   title: string;
   body: string;
@@ -105,6 +108,7 @@ type ReminderSeed = {
 
 export type ReminderNotificationData = {
   route: '/(tabs)/today';
+  kind?: 'dose' | 'follow-up';
   doseKey: string;
   requestRef: string;
   scheduledAt: string;
@@ -119,6 +123,11 @@ export type ReminderCopy = {
   bodyPrivate?: string;
   actionTaken?: string;
   actionSnooze?: string;
+  followUpTitle?: string;
+  followUpBody?: string;
+  followUpBodyPrivate?: string;
+  /** Localised intake instructions, appended to the reminder text. */
+  instructionLabels?: Partial<Record<IntakeInstruction, string>>;
 };
 
 const CATEGORY_ID = 'takt-dose';
@@ -140,15 +149,15 @@ const formatTemplate = (template: string, vars: Record<string, string>): string 
 const buildDoseKey = (requestId: string, triggerAt: Date): string =>
   `${requestId}|${isoDateKey(triggerAt)}|${triggerAt.getHours().toString().padStart(2, '0')}:${triggerAt.getMinutes().toString().padStart(2, '0')}`;
 
-const canScheduleOnDay = (plan: MedicationPlan, date: Date): boolean => {
-  if (plan.request.status !== 'active') return false;
-  return plan.dayOfWeek.includes(dayCodeFromDate(date));
-};
+const canScheduleOnDay = (plan: MedicationPlan, date: Date): boolean =>
+  plan.request.status === 'active' && planDueOnDay(plan, date) && !courseEnded(plan, date);
 
 const buildReminderSeeds = (
   plans: MedicationPlan[],
   copy: ReminderCopy,
   hideNames = false,
+  followUpMinutes = 0,
+  confirmedDoseKeys: ReadonlySet<string> = new Set(),
   horizonDays = 21,
 ): ReminderSeed[] => {
   const now = new Date();
@@ -162,21 +171,39 @@ const buildReminderSeeds = (
       for (const time of plan.times) {
         const triggerAt = atClockTime(day, time);
         if (triggerAt <= floor) continue;
-        const suffix = plan.strength ? ` (${plan.strength})` : '';
+        const detail = [plan.strength, plan.instruction ? copy.instructionLabels?.[plan.instruction] : undefined]
+          .filter(Boolean)
+          .join(', ');
+        const suffix = detail ? ` (${detail})` : '';
         const requestId = plan.request.id;
-        const body =
-          hideNames && copy.bodyPrivate
-            ? formatTemplate(copy.bodyPrivate, { time })
-            : formatTemplate(copy.body, { label: plan.label, suffix, time });
-        rows.push({
-          triggerAt,
-          title: copy.title,
-          body,
+        const doseKey = buildDoseKey(requestId, triggerAt);
+        const vars = { label: plan.label, suffix, time };
+        const base = {
           requestRef: `MedicationRequest/${requestId}`,
           medicationRef: plan.request.medicationReference?.reference,
           label: plan.label,
-          doseKey: buildDoseKey(requestId, triggerAt),
+          doseKey,
+        };
+        rows.push({
+          ...base,
+          kind: 'dose',
+          triggerAt,
+          title: copy.title,
+          body: hideNames && copy.bodyPrivate ? formatTemplate(copy.bodyPrivate, vars) : formatTemplate(copy.body, vars),
         });
+        // One follow-up, never a stream (brief §11): skipped once the dose has been confirmed.
+        if (followUpMinutes > 0 && copy.followUpBody && !confirmedDoseKeys.has(doseKey)) {
+          rows.push({
+            ...base,
+            kind: 'follow-up',
+            triggerAt: new Date(triggerAt.getTime() + followUpMinutes * 60_000),
+            title: copy.followUpTitle ?? copy.title,
+            body:
+              hideNames && copy.followUpBodyPrivate
+                ? formatTemplate(copy.followUpBodyPrivate, vars)
+                : formatTemplate(copy.followUpBody, vars),
+          });
+        }
       }
     }
   }
@@ -435,7 +462,11 @@ const writeScheduledIds = async (ids: string[]): Promise<void> => {
   await writeJson(STORAGE_KEY, ids);
 };
 
-const reconcileSchedule = async (plans: MedicationPlan[], copy: ReminderCopy): Promise<void> => {
+const reconcileSchedule = async (
+  plans: MedicationPlan[],
+  copy: ReminderCopy,
+  confirmedDoseKeys: ReadonlySet<string> = new Set(),
+): Promise<void> => {
   await appendDiagnosticEvent('schedule.reconcile.start', `plans:${plans.length.toString()}`);
 
   const canSchedule = await canScheduleWithoutPrompt();
@@ -458,12 +489,13 @@ const reconcileSchedule = async (plans: MedicationPlan[], copy: ReminderCopy): P
   await Promise.all(previousIds.map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => undefined)));
   await appendDiagnosticEvent('schedule.cancelled', `count:${previousIds.length.toString()}`);
 
-  const seeds = buildReminderSeeds(plans, copy, prefs.hideNamesInReminders);
+  const seeds = buildReminderSeeds(plans, copy, prefs.hideNamesInReminders, prefs.followUpMinutes, confirmedDoseKeys);
   const nextIds: string[] = [];
 
   for (const seed of seeds) {
     const data: ReminderNotificationData = {
       route: '/(tabs)/today',
+      kind: seed.kind,
       doseKey: seed.doseKey,
       requestRef: seed.requestRef,
       scheduledAt: seed.triggerAt.toISOString(),
@@ -562,7 +594,8 @@ export const handleBootComplete = async (): Promise<void> => {
   await appendDiagnosticEvent('schedule.boot-received');
 };
 
-export const useReminderSync = (plans: MedicationPlan[], enabled: boolean): void => {
+/** Dose keys (`requestId|YYYY-MM-DD|HH:MM`) that already have a taken/skipped record; their follow-ups are not scheduled. */
+export const useReminderSync = (plans: MedicationPlan[], enabled: boolean, confirmedDoseKeys: string[] = []): void => {
   const { t } = useLocale();
   const prefs = useReminderPreferences();
   const signature = useMemo(
@@ -583,6 +616,7 @@ export const useReminderSync = (plans: MedicationPlan[], enabled: boolean): void
     [plans],
   );
 
+  const confirmedSignature = [...confirmedDoseKeys].sort().join(',');
   const timezoneRef = useRef(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
   const sync = useCallback(async () => {
@@ -594,14 +628,26 @@ export const useReminderSync = (plans: MedicationPlan[], enabled: boolean): void
       await appendDiagnosticEvent('schedule.resumed-after-reboot');
     }
 
-    await reconcileSchedule(plans, {
-      title: t('reminderNotificationTitle'),
-      body: t('reminderNotificationBody'),
-      bodyPrivate: t('reminderNotificationBodyPrivate'),
-      actionTaken: t('reminderActionTaken'),
-      actionSnooze: t('reminderActionSnooze'),
-    });
-  }, [enabled, plans, t, prefs.data?.sound, prefs.data?.hideNamesInReminders]);
+    await reconcileSchedule(
+      plans,
+      {
+        title: t('reminderNotificationTitle'),
+        body: t('reminderNotificationBody'),
+        bodyPrivate: t('reminderNotificationBodyPrivate'),
+        actionTaken: t('reminderActionTaken'),
+        actionSnooze: t('reminderActionSnooze'),
+        followUpTitle: t('reminderFollowUpTitle'),
+        followUpBody: t('reminderFollowUpBody'),
+        followUpBodyPrivate: t('reminderFollowUpBodyPrivate'),
+        instructionLabels: {
+          'with-food': t('instructionWithFood'),
+          'empty-stomach': t('instructionEmptyStomach'),
+          'before-bed': t('instructionBeforeBed'),
+        },
+      },
+      new Set(confirmedSignature ? confirmedSignature.split(',') : []),
+    );
+  }, [enabled, plans, t, prefs.data?.sound, prefs.data?.hideNamesInReminders, prefs.data?.followUpMinutes, confirmedSignature]);
 
   useEffect(() => {
     void sync();

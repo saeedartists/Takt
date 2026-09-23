@@ -7,6 +7,9 @@ export type ReportMedicationSummary = {
   pct: number;
   taken: number;
   denominator: number;
+  /** As-needed plans report a dose count instead of a percentage and stay out of the adherence figure. */
+  asNeeded?: boolean;
+  asNeededCount?: number;
 };
 
 export type ReportMissedSummary = {
@@ -31,6 +34,8 @@ export const buildReportSummary = (input: {
   plans: MedicationPlan[];
   history: HistoryDay[];
   formatMissedDateTime: (value: Date) => string;
+  /** Logged as-needed doses in the window, by request id. */
+  asNeededCounts?: Record<string, number>;
 }): ReportSummary => {
   const byRequest = new Map<string, { label: string; taken: number; denominator: number }>();
 
@@ -68,6 +73,17 @@ export const buildReportSummary = (input: {
   }
 
   const byMedication = input.plans.map((plan) => {
+    if (plan.asNeeded || plan.cadence === 'as-needed') {
+      return {
+        id: plan.request.id,
+        label: plan.label,
+        pct: 0,
+        taken: 0,
+        denominator: 0,
+        asNeeded: true,
+        asNeededCount: input.asNeededCounts?.[plan.request.id] ?? 0,
+      };
+    }
     const row = byRequest.get(plan.request.id);
     const taken = row?.taken ?? 0;
     const denominator = row?.denominator ?? 0;

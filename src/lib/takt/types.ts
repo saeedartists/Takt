@@ -52,8 +52,16 @@ export type MedicationRequestResource = {
         periodUnit?: string;
         dayOfWeek?: WeekdayCode[];
         timeOfDay?: string[];
+        /** Course bounds: `start` anchors an every-N-days schedule, `end` is the last day. */
+        boundsPeriod?: { start?: string; end?: string };
       };
     };
+    /** True for "as needed" medications: no schedule, logged when taken. */
+    asNeededBoolean?: boolean;
+    /** Free-text intake note, e.g. "with a full glass of water". */
+    patientInstruction?: string;
+    additionalInstruction?: Array<{ coding?: Array<{ system?: string; code?: string; display?: string }>; text?: string }>;
+    maxDosePerPeriod?: { numerator?: { value?: number }; denominator?: { value?: number; unit?: string } };
   }>;
   dispenseRequest?: {
     quantity?: {
@@ -144,7 +152,15 @@ export type DoseState = 'scheduled' | 'due' | 'taken' | 'skipped' | 'missed';
 /** What the user said when skipping; a record, not an interpretation. */
 export type SkipReason = 'forgot' | 'side-effects' | 'ran-out' | 'not-needed' | 'other';
 
-export type MedicationCadence = 'daily' | 'weekdays' | 'custom';
+export type MedicationCadence = 'daily' | 'weekdays' | 'custom' | 'interval' | 'as-needed';
+
+/** How a dose is taken; a record the patient chose, never drug information. */
+export type IntakeInstruction = 'with-food' | 'empty-stomach' | 'before-bed';
+
+export type MedicationShape = 'round' | 'oval' | 'capsule' | 'drops' | 'inhaler' | 'injection' | 'other';
+
+/** What the tablet looks like, so the row icon matches the real thing. */
+export type MedicationAppearance = { shape: MedicationShape; color: string };
 
 export type PausePeriod = {
   start: string;
@@ -164,6 +180,17 @@ export type MedicationPlan = {
   createdAt?: string;
   archivedAt?: string;
   pauseHistory: PausePeriod[];
+  /** Every N days from `intervalStart` (cadence 'interval'). */
+  intervalDays?: number;
+  /** YYYY-MM-DD */
+  intervalStart?: string;
+  /** YYYY-MM-DD; the last day of a course. Doses stop after it and the plan archives itself. */
+  endDate?: string;
+  asNeeded?: boolean;
+  maxPerDay?: number;
+  instruction?: IntakeInstruction;
+  instructionNote?: string;
+  appearance?: MedicationAppearance;
 };
 
 export type DoseOccurrence = {
@@ -178,4 +205,6 @@ export type DoseOccurrence = {
   eventTimestamp?: string;
   /** User-reported reason on a skipped dose, when one was given. */
   reasonCode?: SkipReason;
+  instruction?: IntakeInstruction;
+  instructionNote?: string;
 };

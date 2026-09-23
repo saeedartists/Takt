@@ -6,12 +6,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
-import { useRecordDose, useUpdateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
+import { planToInput, useRecordDose, useUpdateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
 import { useLocale } from '@/lib/takt/l10n';
 import { useReminderPreferences } from '@/lib/takt/preferences';
 import { scheduleSnoozeReminder, useReminderResponseRouting, useReminderSync } from '@/lib/takt/reminders';
-import { buildDoseOccurrencesForDay } from '@/lib/takt/schedule';
-import { startOfDay } from '@/lib/takt/time';
+import { buildDoseOccurrencesForDay, courseEnded } from '@/lib/takt/schedule';
+import { TAKT_EXT } from '@/lib/takt/constants';
+import { isoDateKey, startOfDay } from '@/lib/takt/time';
 import { resolveSessionGate } from '@/lib/auth-session';
 import { CONTENT_MAX_WIDTH, radius, spacing, typography } from '@/theme/tokens';
 import { useTokens } from '@/theme/use-tokens';
@@ -29,7 +30,6 @@ export default function TabsLayout() {
   const recordDose = useRecordDose();
   const updatePlan = useUpdateMedicationPlan();
 
-  useReminderSync(plans.plans, Boolean(patientRef) && !plans.isLoading);
 
   // Lock-screen actions: confirm or snooze straight from the reminder.
   useReminderResponseRouting(router, {
@@ -53,6 +53,23 @@ export default function TabsLayout() {
   });
 
   const events = useDoseEvents(patientRef);
+
+  // Doses already confirmed today or tomorrow: their follow-up reminders must not fire.
+  const confirmedDoseKeys = useMemo(() => {
+    const keys: string[] = [];
+    const floor = startOfDay(new Date()).getTime();
+    for (const { resource } of events.data?.entry ?? []) {
+      const requestId = resource.request?.reference?.split('/')[1];
+      const scheduled = resource.extension?.find((x) => x.url === TAKT_EXT.scheduledTime)?.valueDateTime;
+      if (!requestId || !scheduled) continue;
+      const at = new Date(scheduled);
+      if (Number.isNaN(at.getTime()) || at.getTime() < floor) continue;
+      keys.push(`${requestId}|${isoDateKey(at)}|${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`);
+    }
+    return keys;
+  }, [events.data?.entry]);
+  useReminderSync(plans.plans, Boolean(patientRef) && !plans.isLoading, confirmedDoseKeys);
+
   const dueNowCount = useMemo(() => {
     const now = new Date();
     return buildDoseOccurrencesForDay(
@@ -65,25 +82,21 @@ export default function TabsLayout() {
   }, [events.data?.entry, plans.plans, prefs.data?.graceHours]);
 
   // A pause with an end date resumes by itself: flip the plan back to active once the date has passed.
-  const resumed = useRef<Set<string>>(new Set());
+  // Two things the plan does by itself: a timed pause resumes, and a finished course archives.
+  const touched = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!patientRef) return;
-    const now = Date.now();
+    const now = new Date();
     for (const plan of plans.plans) {
-      if (plan.request.status !== 'on-hold' || !plan.medication) continue;
+      if (!plan.medication || touched.current.has(plan.request.id)) continue;
       const last = plan.pauseHistory[plan.pauseHistory.length - 1];
-      if (!last?.end || new Date(last.end).getTime() > now || resumed.current.has(plan.request.id)) continue;
-      resumed.current.add(plan.request.id);
+      const pauseOver = plan.request.status === 'on-hold' && Boolean(last?.end) && new Date(last?.end ?? 0).getTime() <= now.getTime();
+      const ended = plan.request.status !== 'stopped' && courseEnded(plan, now);
+      if (!pauseOver && !ended) continue;
+      touched.current.add(plan.request.id);
       updatePlan.mutate({
-        patientRef,
-        name: plan.label,
-        form: plan.form,
-        strength: plan.strength,
-        cadence: plan.cadence,
-        dayOfWeek: plan.dayOfWeek,
-        times: plan.times,
-        supplyCount: plan.supplyCount,
-        status: 'active',
+        ...planToInput(plan, patientRef),
+        status: ended ? 'stopped' : 'active',
         request: plan.request,
         medication: plan.medication,
       });

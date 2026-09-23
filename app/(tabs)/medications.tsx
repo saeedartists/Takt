@@ -24,10 +24,12 @@ import {
   useTokens,
 } from '@/components/ui';
 import { MedicationActionSheet, pausedUntil, type SheetStep } from '@/components/takt/medication-action-sheet';
+import { MedicationGlyph } from '@/components/takt/medication-glyph';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useLocale } from '@/lib/takt/l10n';
-import { formatDayLabel } from '@/lib/takt/medication-form';
+import { describeCadence } from '@/lib/takt/medication-form';
+import { parseDateOnly } from '@/lib/takt/schedule';
 import { LOW_SUPPLY_THRESHOLD, getSupplySnapshot, type SupplySnapshot } from '@/lib/takt/supply-tracker';
 import type { MedicationPlan } from '@/lib/takt/types';
 
@@ -36,15 +38,6 @@ const SEARCH_FROM = 6;
 const CLEAR_HIT = 44;
 
 type SupplyMap = Record<string, SupplySnapshot | null>;
-
-const getFormIconName = (form?: string): keyof typeof Ionicons.glyphMap => {
-  const normalized = (form ?? '').toLowerCase();
-  if (normalized.includes('capsul') || normalized.includes('kapsel')) return 'bandage-outline';
-  if (normalized.includes('drop') || normalized.includes('tropf')) return 'water-outline';
-  if (normalized.includes('inhal')) return 'fitness-outline';
-  if (normalized.includes('inject') || normalized.includes('injekt')) return 'color-filter-outline';
-  return 'medkit';
-};
 
 export default function MedicationsScreen() {
   const { c } = useTokens();
@@ -96,10 +89,21 @@ export default function MedicationsScreen() {
   const pausedPlans = filteredPlans.filter((plan) => plan.request.status === 'on-hold');
   const archivedPlans = filteredPlans.filter((plan) => plan.request.status === 'stopped');
 
-  const cadenceText = (plan: MedicationPlan): string => {
-    if (plan.cadence === 'daily') return t('cadenceDaily');
-    if (plan.cadence === 'weekdays') return t('cadenceWeekdays');
-    return plan.dayOfWeek.map((day) => formatDayLabel(day, t)).join(', ');
+  // "Every 2 days · 08:00 · 5 mg · Ends 30 Sep" — as-needed plans show their cap instead of times.
+  const subtitle = (plan: MedicationPlan): string => {
+    const end = parseDateOnly(plan.endDate);
+    return [
+      describeCadence(plan, t),
+      plan.cadence === 'as-needed'
+        ? plan.maxPerDay
+          ? t('asNeededUpTo').replace('{count}', String(plan.maxPerDay))
+          : undefined
+        : plan.times.join(', '),
+      plan.strength || plan.form || t('formNotSet'),
+      end ? t('courseEndsOn').replace('{date}', formatDate(end, { day: 'numeric', month: 'short' })) : undefined,
+    ]
+      .filter(Boolean)
+      .join(' · ');
   };
 
   const statusTint = (plan: MedicationPlan): string =>
@@ -146,13 +150,9 @@ export default function MedicationsScreen() {
             <ListRow
               isFirst={index === 0}
               title={plan.label}
-              subtitle={[cadenceText(plan), plan.times.join(', '), plan.strength || plan.form || t('formNotSet')].join(' · ')}
+              subtitle={subtitle(plan)}
               meta={rowMeta(plan)}
-              leading={
-                <View style={[styles.formIcon, { backgroundColor: `${tint}1A` }]}>
-                  <Ionicons name={getFormIconName(plan.form)} size={16} color={tint} />
-                </View>
-              }
+              leading={<MedicationGlyph appearance={plan.appearance} form={plan.form} tint={tint} />}
               action={
                 <AnimatedPressable
                   onPress={() => setSheet({ plan, step: 'root' })}
@@ -280,13 +280,6 @@ export default function MedicationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  formIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   more: {
     width: 40,
     height: 40,

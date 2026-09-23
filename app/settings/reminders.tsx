@@ -19,7 +19,7 @@ import {
   type BadgeTone,
 } from '@/components/ui';
 import { useLocale } from '@/lib/takt/l10n';
-import { GRACE_OPTIONS, useReminderPreferences, type GraceHours } from '@/lib/takt/preferences';
+import { FOLLOW_UP_OPTIONS, GRACE_OPTIONS, useReminderPreferences, type FollowUpMinutes, type GraceHours } from '@/lib/takt/preferences';
 import { readReminderPermissionStatus } from '@/lib/takt/reminders';
 
 const SNOOZE_OPTIONS = [5, 10, 15, 30] as const;
@@ -163,6 +163,16 @@ export default function RemindersSettingsScreen() {
                   label: t('graceWindowHours').replace('{hours}', hours.toString()),
                 }))}
               />
+              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('followUpLabel')}</Text>
+              <AnimatedSegmentedControl
+                value={String(prefs.data?.followUpMinutes ?? 30)}
+                onChange={(next) => void prefs.setFollowUpMinutes(Number.parseInt(next, 10) as FollowUpMinutes)}
+                options={FOLLOW_UP_OPTIONS.map((minutes) => ({
+                  value: String(minutes),
+                  label: minutes === 0 ? t('followUpOff') : t('followUpMinutes').replace('{minutes}', String(minutes)),
+                }))}
+              />
+              <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('followUpHint')}</Text>
             </View>
           </Card>
           {prefs.saveError ? <ErrorState description={t('saveReminderPrefError')} /> : null}
