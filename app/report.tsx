@@ -1,7 +1,7 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useMemo, useState } from 'react';
-import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -155,6 +155,23 @@ export default function ReportScreen() {
 
   /** Share sheet on device; the browser's print dialog (Save as PDF) on web. */
   const deliverHtml = async (html: string) => {
+    // expo-print's web build ignores `html` and prints the app screen, so print the report from a hidden frame.
+    if (Platform.OS === 'web') {
+      const frame = document.createElement('iframe');
+      frame.setAttribute('aria-hidden', 'true');
+      Object.assign(frame.style, { position: 'fixed', width: '0', height: '0', border: '0' });
+      document.body.appendChild(frame);
+      const win = frame.contentWindow;
+      if (!win) throw new Error('print frame unavailable');
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      setNote({ tone: 'success', text: t('pdfWebPrintNote') });
+      win.focus();
+      win.print();
+      setTimeout(() => frame.remove(), 60_000);
+      return;
+    }
     if (await Sharing.isAvailableAsync()) {
       const file = await Print.printToFileAsync({ html });
       await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf' });

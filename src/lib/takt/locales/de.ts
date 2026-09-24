@@ -1006,6 +1006,7 @@ export const de = {
     snoozeRemindIn: 'Erinnern in',
     cancel: 'Abbrechen',
     undoAction: 'Rückgängig',
+    dismissNotice: 'Schließen',
 
     // Shared primitives
     tryAgain: 'Erneut versuchen',

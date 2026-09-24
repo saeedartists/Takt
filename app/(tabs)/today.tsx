@@ -603,6 +603,7 @@ export default function TodayScreen() {
         visible={Boolean(undoToast?.visible)}
         message={undoToast?.message ?? ''}
         undoLabel={t('undoAction')}
+        dismissLabel={t('dismissNotice')}
         onUndo={() => void handleUndoToast()}
         onDismiss={() => setUndoToast(null)}
       />

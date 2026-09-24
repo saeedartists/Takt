@@ -1007,6 +1007,7 @@ export const en = {
     snoozeRemindIn: 'Remind me in',
     cancel: 'Cancel',
     undoAction: 'Undo',
+    dismissNotice: 'Dismiss',
 
     // Shared primitives
     tryAgain: 'Try again',

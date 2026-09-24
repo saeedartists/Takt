@@ -16,6 +16,8 @@ type FloatingUndoToastProps = {
   visible: boolean;
   message: string;
   undoLabel: string;
+  /** Screen-reader label for the close button. */
+  dismissLabel: string;
   onUndo: () => void;
   onDismiss: () => void;
   durationMs?: number;
@@ -25,6 +27,7 @@ export function FloatingUndoToast({
   visible,
   message,
   undoLabel,
+  dismissLabel,
   onUndo,
   onDismiss,
   durationMs = 8000,
@@ -93,7 +96,13 @@ export function FloatingUndoToast({
             <Text style={[typography.footnote, { color: c.accent, fontWeight: '700' }]}>{undoLabel}</Text>
           </AnimatedPressable>
 
-          <AnimatedPressable onPress={onDismiss} accessibilityRole="button" style={styles.closeButton}>
+          <AnimatedPressable
+            onPress={onDismiss}
+            accessibilityRole="button"
+            accessibilityLabel={dismissLabel}
+            hitSlop={8}
+            style={styles.closeButton}
+          >
             <Ionicons name="close" size={18} color={c.textTertiary} />
           </AnimatedPressable>
         </View>
