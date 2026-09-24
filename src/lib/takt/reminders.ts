@@ -10,10 +10,13 @@ import type { IntakeInstruction, MedicationPlan } from './types';
 import { readReminderPreferences, useReminderPreferences } from './preferences';
 
 const STORAGE_KEY = 'takt:scheduled-notification-ids:v1';
-const CHANNEL_ID = 'takt-dose-reminders';
+/** Android fixes a channel's sound at creation, so the alarm sound needs a new channel id. */
+const CHANNEL_ID = 'takt-dose-alarm';
+const LEGACY_CHANNEL_ID = 'takt-dose-reminders';
 const SILENT_CHANNEL_ID = 'takt-dose-reminders-silent';
 const LOCALE_STORAGE_KEY = 'takt:locale';
-const DEFAULT_SOUND = 'default';
+/** Bundled alarm (assets/sounds, registered via the expo-notifications plugin). */
+export const ALARM_SOUND = 'takt_reminder.wav';
 
 /* Copy that lives outside React: Android channel names and the exact-alarm system dialog. */
 const nativeCopy = {
@@ -85,13 +88,17 @@ export type ReminderMetrics = {
   lastUpdated: string;
 };
 
+// While the app is open the spoken reminder replaces the chime, so the two never talk over each other.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async () => {
+    const prefs = await readReminderPreferences().catch(() => null);
+    return {
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: !(prefs?.voice ?? true),
+      shouldSetBadge: false,
+    };
+  },
 });
 
 type ReminderSeed = {
@@ -381,7 +388,8 @@ const ensureChannel = async (): Promise<void> => {
     vibrationPattern: [0, 250, 250, 250],
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   };
-  await Notifications.setNotificationChannelAsync(CHANNEL_ID, { ...base, name: copy.channel, sound: DEFAULT_SOUND });
+  await Notifications.deleteNotificationChannelAsync(LEGACY_CHANNEL_ID).catch(() => undefined);
+  await Notifications.setNotificationChannelAsync(CHANNEL_ID, { ...base, name: copy.channel, sound: ALARM_SOUND });
   await Notifications.setNotificationChannelAsync(SILENT_CHANNEL_ID, { ...base, name: copy.channelSilent, sound: null });
 };
 
@@ -485,9 +493,16 @@ const reconcileSchedule = async (
   await ensureChannel();
   await ensureCategory(copy);
   const prefs = await readReminderPreferences();
-  const previousIds = await readScheduledIds();
-  await Promise.all(previousIds.map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => undefined)));
-  await appendDiagnosticEvent('schedule.cancelled', `count:${previousIds.length.toString()}`);
+  // Cancel what we stored plus any dose/follow-up reminder we lost track of (older builds could
+  // run two reconciles at once and orphan a whole batch). Snoozes carry no `kind` and are kept.
+  const previousIds = new Set(await readScheduledIds());
+  const pending = await Notifications.getAllScheduledNotificationsAsync().catch(() => []);
+  for (const request of pending) {
+    const kind = (request.content.data as { kind?: unknown } | undefined)?.kind;
+    if (kind === 'dose' || kind === 'follow-up') previousIds.add(request.identifier);
+  }
+  await Promise.all([...previousIds].map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => undefined)));
+  await appendDiagnosticEvent('schedule.cancelled', `count:${previousIds.size.toString()}`);
 
   const seeds = buildReminderSeeds(plans, copy, prefs.hideNamesInReminders, prefs.followUpMinutes, confirmedDoseKeys);
   const nextIds: string[] = [];
@@ -507,7 +522,7 @@ const reconcileSchedule = async (
       content: {
         title: seed.title,
         body: seed.body,
-        sound: prefs.sound ? DEFAULT_SOUND : false,
+        sound: prefs.sound ? ALARM_SOUND : false,
         categoryIdentifier: CATEGORY_ID,
         data,
       },
@@ -568,7 +583,7 @@ export const scheduleSnoozeReminder = async (
           : copy?.body
             ? formatTemplate(copy.body, { label: input.label, minutes: delayMinutes.toString() })
             : `${input.label} reminder in ${delayMinutes.toString()} minutes`,
-      sound: prefs.sound ? DEFAULT_SOUND : false,
+      sound: prefs.sound ? ALARM_SOUND : false,
       data: {
         route: '/(tabs)/today',
         doseKey: input.doseKey,
@@ -588,6 +603,13 @@ export const scheduleSnoozeReminder = async (
   await trackReminderScheduled();
 
   return { scheduled: true };
+};
+
+// One reconcile at a time: focus, AppState and prop changes can all trigger a sync at once.
+let reconcileChain: Promise<void> = Promise.resolve();
+const queueReconcile = (...args: Parameters<typeof reconcileSchedule>): Promise<void> => {
+  reconcileChain = reconcileChain.then(() => reconcileSchedule(...args)).catch(() => undefined);
+  return reconcileChain;
 };
 
 export const handleBootComplete = async (): Promise<void> => {
@@ -628,7 +650,7 @@ export const useReminderSync = (plans: MedicationPlan[], enabled: boolean, confi
       await appendDiagnosticEvent('schedule.resumed-after-reboot');
     }
 
-    await reconcileSchedule(
+    await queueReconcile(
       plans,
       {
         title: t('reminderNotificationTitle'),
@@ -717,6 +739,8 @@ export type ReminderActionHandlers = {
   onTaken?: (target: ReminderTarget) => void;
   /** "Snooze" pressed on the notification itself. */
   onSnooze?: (target: ReminderTarget) => void;
+  /** A reminder arrived while the app is open (used for the spoken reminder). */
+  onReceived?: (target: ReminderTarget) => void;
 };
 
 /**
@@ -762,6 +786,7 @@ export const useReminderResponseRouting = (router: ReminderRouter, handlers?: Re
       if (!target) return;
       void appendDiagnosticEvent('notification.received', target.doseKey ?? target.requestRef);
       void trackReminderDelivered();
+      handlersRef.current?.onReceived?.(target);
     });
 
     const responseSub = Notifications.addNotificationResponseReceivedListener((response) => handle(response, 'push'));

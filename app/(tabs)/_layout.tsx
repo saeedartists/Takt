@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs, useRouter } from 'expo-router';
+import * as Speech from 'expo-speech';
 import { useEffect, useMemo, useRef } from 'react';
 import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,7 +19,7 @@ import { CONTENT_MAX_WIDTH, radius, spacing, typography } from '@/theme/tokens';
 import { useTokens } from '@/theme/use-tokens';
 
 export default function TabsLayout() {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const router = useRouter();
   const { c } = useTokens();
   const insets = useSafeAreaInsets();
@@ -42,6 +43,16 @@ export default function TabsLayout() {
         scheduledAt: new Date(target.scheduledAt),
         action: 'taken',
       });
+    },
+    // Spoken reminder while the app is open; the notification handler mutes the chime then.
+    onReceived: (target) => {
+      if (prefs.data?.voice === false || !target.doseKey) return;
+      const text =
+        prefs.data?.hideNamesInReminders || !target.label
+          ? t('voiceReminderPrivate')
+          : t('voiceReminder').replace('{label}', target.label);
+      Speech.stop();
+      Speech.speak(text, { language: locale === 'de' ? 'de-DE' : 'en-US', rate: 0.9 });
     },
     onSnooze: (target) => {
       if (!target.doseKey) return;

@@ -11,6 +11,8 @@ export const FOLLOW_UP_OPTIONS: FollowUpMinutes[] = [0, 15, 30];
 export const DEFAULT_FOLLOW_UP_MINUTES: FollowUpMinutes = 30;
 
 export type ReminderPreferences = {
+  /** Read the reminder aloud when it arrives while the app is open. */
+  voice: boolean;
   /** One quiet second reminder this many minutes after the first, while the dose is still open. 0 = off. */
   followUpMinutes: FollowUpMinutes;
   snoozeMinutes: number;
@@ -35,6 +37,7 @@ const sanitize = (input: Partial<ReminderPreferences> | undefined): ReminderPref
     typeof input?.snoozeMinutes === 'number' ? sanitizeSnoozeMinutes(input.snoozeMinutes) : DEFAULT_SNOOZE_MINUTES,
   sound: typeof input?.sound === 'boolean' ? input.sound : true,
   hideNamesInReminders: input?.hideNamesInReminders === true,
+  voice: typeof input?.voice === 'boolean' ? input.voice : true,
   graceHours: GRACE_OPTIONS.includes(input?.graceHours as GraceHours)
     ? (input?.graceHours as GraceHours)
     : (DEFAULT_GRACE_HOURS as GraceHours),
@@ -82,6 +85,7 @@ export const useReminderPreferences = () => {
     setHideNames: (hideNamesInReminders: boolean) => mutation.mutateAsync({ hideNamesInReminders }),
     setGraceHours: (graceHours: GraceHours) => mutation.mutateAsync({ graceHours }),
     setFollowUpMinutes: (followUpMinutes: FollowUpMinutes) => mutation.mutateAsync({ followUpMinutes }),
+    setVoice: (voice: boolean) => mutation.mutateAsync({ voice }),
     isSaving: mutation.isPending,
     saveError: mutation.error,
   };

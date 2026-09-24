@@ -1007,6 +1007,13 @@ export const en = {
     snoozeRemindIn: 'Remind me in',
     cancel: 'Cancel',
     undoAction: 'Undo',
+    voiceReminderLabel: 'Spoken reminder',
+    voiceReminderOn: 'Read aloud',
+    voiceReminderOff: 'Off',
+    voiceReminderHint: 'When the app is open, Takt reads the reminder aloud instead of playing the chime.',
+    voiceReminder: 'It’s time to take {label}.',
+    voiceReminderPrivate: 'It’s time for your medication.',
+    testReminderLabel: 'your test medication',
     dismissNotice: 'Dismiss',
 
     // Shared primitives

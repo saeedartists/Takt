@@ -1006,6 +1006,13 @@ export const de = {
     snoozeRemindIn: 'Erinnern in',
     cancel: 'Abbrechen',
     undoAction: 'Rückgängig',
+    voiceReminderLabel: 'Gesprochene Erinnerung',
+    voiceReminderOn: 'Vorlesen',
+    voiceReminderOff: 'Aus',
+    voiceReminderHint: 'Ist die App geöffnet, liest Takt die Erinnerung vor, statt den Signalton zu spielen.',
+    voiceReminder: 'Es ist Zeit für {label}.',
+    voiceReminderPrivate: 'Es ist Zeit für Ihre Medikamente.',
+    testReminderLabel: 'Ihr Testmedikament',
     dismissNotice: 'Schließen',
 
     // Shared primitives

@@ -20,7 +20,7 @@ import {
 } from '@/components/ui';
 import { useLocale } from '@/lib/takt/l10n';
 import { FOLLOW_UP_OPTIONS, GRACE_OPTIONS, useReminderPreferences, type FollowUpMinutes, type GraceHours } from '@/lib/takt/preferences';
-import { readReminderPermissionStatus } from '@/lib/takt/reminders';
+import { ALARM_SOUND, readReminderPermissionStatus } from '@/lib/takt/reminders';
 
 const SNOOZE_OPTIONS = [5, 10, 15, 30] as const;
 
@@ -67,7 +67,9 @@ export default function RemindersSettingsScreen() {
         content: {
           title: t('testReminderTitle'),
           body: t('testReminderBody'),
-          sound: prefs.data?.sound === false ? false : 'default',
+          sound: prefs.data?.sound === false ? false : ALARM_SOUND,
+          // Same shape as a dose reminder, so the spoken reminder is tested too.
+          data: { route: '/(tabs)/today', kind: 'dose', doseKey: 'test', requestRef: 'test', label: t('testReminderLabel') },
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 5, repeats: false },
       });
@@ -145,6 +147,16 @@ export default function RemindersSettingsScreen() {
                   { value: 'off', label: t('reminderSoundOff') },
                 ]}
               />
+              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('voiceReminderLabel')}</Text>
+              <AnimatedSegmentedControl
+                value={prefs.data?.voice === false ? 'off' : 'on'}
+                onChange={(next) => void prefs.setVoice(next === 'on')}
+                options={[
+                  { value: 'on', label: t('voiceReminderOn') },
+                  { value: 'off', label: t('voiceReminderOff') },
+                ]}
+              />
+              <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('voiceReminderHint')}</Text>
               <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('reminderPrivacyLabel')}</Text>
               <AnimatedSegmentedControl
                 value={prefs.data?.hideNamesInReminders ? 'hide' : 'show'}

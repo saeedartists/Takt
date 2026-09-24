@@ -47,7 +47,9 @@
         "expo-notifications",
         {
           "color": "#B4611C",
-          "sounds": [],
+          "sounds": [
+            "./assets/sounds/takt_reminder.wav"
+          ],
           "mode": "production"
         }
       ],
