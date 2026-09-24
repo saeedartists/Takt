@@ -15,7 +15,8 @@
     "verify:adherence": "npx -y tsx scripts/verify-adherence-fixtures.ts",
     "verify:report": "npx -y tsx scripts/verify-report-parity.ts",
     "verify:fhir": "npx -y tsx scripts/verify-fhir-integrity.ts",
-    "verify": "npm run -s verify:adherence && npm run -s verify:report && npm run -s verify:fhir"
+    "verify": "npm run -s verify:adherence && npm run -s verify:report && npm run -s verify:fhir",
+    "postinstall": "node scripts/fix-ios-paths.js"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.15",
