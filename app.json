@@ -3,7 +3,7 @@
     "name": "Takt Health",
     "slug": "saeed",
     "scheme": "takt",
-    "version": "0.1.2",
+    "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -13,7 +13,8 @@
       "infoPlist": {
         "CFBundleDisplayName": "Takt Health",
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "appleTeamId": "TR4973K4Q2"
     },
     "android": {
       "package": "com.actimi.takt",

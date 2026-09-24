@@ -44,10 +44,14 @@
   },
   "submit": {
     "testflight": {
-      "ios": {}
+      "ios": {
+        "appleTeamId": "TR4973K4Q2"
+      }
     },
     "production": {
-      "ios": {}
+      "ios": {
+        "appleTeamId": "TR4973K4Q2"
+      }
     }
   }
 }
