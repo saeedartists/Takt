@@ -44,3 +44,14 @@ for (const [file, from, to] of patches) {
   fs.writeFileSync(target, text.replace(from, to));
   console.log(`fix-ios-paths: patched ${file}`);
 }
+
+// Xcode 27 sandboxes build scripts by default, which blocks Node from writing main.jsbundle
+// in Release archives ("Sandbox: node deny file-write-create"). Local only, like the path fixes.
+const pbxproj = path.join(root, 'ios/TaktHealth.xcodeproj/project.pbxproj');
+if (fs.existsSync(pbxproj)) {
+  const text = fs.readFileSync(pbxproj, 'utf8');
+  if (text.includes('ENABLE_USER_SCRIPT_SANDBOXING = YES;')) {
+    fs.writeFileSync(pbxproj, text.split('ENABLE_USER_SCRIPT_SANDBOXING = YES;').join('ENABLE_USER_SCRIPT_SANDBOXING = NO;'));
+    console.log('fix-ios-paths: disabled user script sandboxing in the Xcode project');
+  }
+}
