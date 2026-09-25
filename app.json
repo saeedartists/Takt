@@ -7,9 +7,9 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.actimi.takt",
-      "buildNumber": "5",
+      "buildNumber": "6",
       "infoPlist": {
         "CFBundleDisplayName": "Takt Health",
         "ITSAppUsesNonExemptEncryption": false,
