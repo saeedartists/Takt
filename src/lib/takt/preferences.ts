@@ -11,6 +11,8 @@ export const FOLLOW_UP_OPTIONS: FollowUpMinutes[] = [0, 15, 30];
 export const DEFAULT_FOLLOW_UP_MINUTES: FollowUpMinutes = 30;
 
 export type ReminderPreferences = {
+  /** iOS 26+: ring dose reminders as AlarmKit alarms, through silent mode and Focus. */
+  alarm: boolean;
   /** Read the reminder aloud when it arrives while the app is open. */
   voice: boolean;
   /** One quiet second reminder this many minutes after the first, while the dose is still open. 0 = off. */
@@ -38,6 +40,7 @@ const sanitize = (input: Partial<ReminderPreferences> | undefined): ReminderPref
   sound: typeof input?.sound === 'boolean' ? input.sound : true,
   hideNamesInReminders: input?.hideNamesInReminders === true,
   voice: typeof input?.voice === 'boolean' ? input.voice : true,
+  alarm: typeof input?.alarm === 'boolean' ? input.alarm : true,
   graceHours: GRACE_OPTIONS.includes(input?.graceHours as GraceHours)
     ? (input?.graceHours as GraceHours)
     : (DEFAULT_GRACE_HOURS as GraceHours),
@@ -86,6 +89,7 @@ export const useReminderPreferences = () => {
     setGraceHours: (graceHours: GraceHours) => mutation.mutateAsync({ graceHours }),
     setFollowUpMinutes: (followUpMinutes: FollowUpMinutes) => mutation.mutateAsync({ followUpMinutes }),
     setVoice: (voice: boolean) => mutation.mutateAsync({ voice }),
+    setAlarm: (alarm: boolean) => mutation.mutateAsync({ alarm }),
     isSaving: mutation.isPending,
     saveError: mutation.error,
   };

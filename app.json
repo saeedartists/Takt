@@ -12,7 +12,8 @@
       "buildNumber": "4",
       "infoPlist": {
         "CFBundleDisplayName": "Takt Health",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAlarmKitUsageDescription": "Takt rings your medication reminders like an alarm, so you hear them even in silent mode or Focus."
       },
       "appleTeamId": "TR4973K4Q2"
     },

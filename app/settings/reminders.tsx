@@ -1,6 +1,6 @@
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Notifications from 'expo-notifications';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AppState, Linking, Platform, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -21,6 +21,13 @@ import {
 import { useLocale } from '@/lib/takt/l10n';
 import { FOLLOW_UP_OPTIONS, GRACE_OPTIONS, useReminderPreferences, type FollowUpMinutes, type GraceHours } from '@/lib/takt/preferences';
 import { ALARM_SOUND, readReminderPermissionStatus } from '@/lib/takt/reminders';
+import {
+  alarmsAvailable,
+  getAlarmAuthorization,
+  requestAlarmAuthorization,
+  scheduleAlarm,
+  type AlarmAuthorization,
+} from '../../modules/takt-alarm';
 
 const SNOOZE_OPTIONS = [5, 10, 15, 30] as const;
 
@@ -41,15 +48,21 @@ export default function RemindersSettingsScreen() {
   const prefs = useReminderPreferences();
   const [permission, setPermission] = useState<PermissionStatus>('unavailable');
   const [test, setTest] = useState<'idle' | 'sent' | 'error'>('idle');
+  const [alarmAuth, setAlarmAuth] = useState<AlarmAuthorization>('unavailable');
+  const params = useLocalSearchParams<{ test?: string }>();
 
   // Re-read on focus and when the app returns from the system settings sheet.
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      const refresh = () =>
+      const refresh = () => {
         void readReminderPermissionStatus().then((next) => {
           if (active) setPermission(next);
         });
+        void getAlarmAuthorization().then((next) => {
+          if (active) setAlarmAuth(next);
+        });
+      };
       refresh();
       const sub = AppState.addEventListener('change', (state) => {
         if (state === 'active') refresh();
@@ -73,10 +86,31 @@ export default function RemindersSettingsScreen() {
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 5, repeats: false },
       });
+      // The real alarm too, a few seconds later, so the silent-mode ring can be checked with the app closed.
+      if (prefs.data?.sound !== false && prefs.data?.alarm !== false && alarmAuth === 'authorized') {
+        await scheduleAlarm({
+          epochSeconds: Date.now() / 1000 + 10,
+          title: t('testReminderTitle'),
+          stopLabel: t('alarmStop'),
+          openLabel: t('alarmOpen'),
+          soundName: ALARM_SOUND,
+        });
+      }
       setTest('sent');
     } catch {
       setTest('error');
     }
+  };
+
+  // Dev hook: `xcrun simctl openurl booted "takt://settings/reminders?test=alarm"` fires the test without tapping.
+  useEffect(() => {
+    if (__DEV__ && params.test === 'alarm' && prefs.data) void sendTest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.test, prefs.data, alarmAuth]);
+
+  const setAlarm = async (on: boolean) => {
+    await prefs.setAlarm(on);
+    if (on && alarmAuth === 'notDetermined') setAlarmAuth(await requestAlarmAuthorization());
   };
 
   const badge = PERMISSION_BADGE[permission];
@@ -147,6 +181,36 @@ export default function RemindersSettingsScreen() {
                   { value: 'off', label: t('reminderSoundOff') },
                 ]}
               />
+              {Platform.OS === 'ios' ? (
+                <>
+                  <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('alarmModeLabel')}</Text>
+                  {alarmsAvailable() ? (
+                    <AnimatedSegmentedControl
+                      value={prefs.data?.alarm === false ? 'off' : 'on'}
+                      onChange={(next) => void setAlarm(next === 'on')}
+                      options={[
+                        { value: 'on', label: t('alarmModeOn') },
+                        { value: 'off', label: t('alarmModeOff') },
+                      ]}
+                    />
+                  ) : null}
+                  <Text style={[typography.footnote, { color: c.textSecondary }]}>
+                    {!alarmsAvailable()
+                      ? t('alarmModeUnavailable')
+                      : alarmAuth === 'denied'
+                        ? t('alarmModeDenied')
+                        : t('alarmModeHint')}
+                  </Text>
+                  {alarmAuth === 'denied' ? (
+                    <Button
+                      kind="secondary"
+                      label={t('openSystemSettings')}
+                      icon={<Ionicons name="open-outline" size={16} color={c.textPrimary} />}
+                      onPress={() => void Linking.openSettings()}
+                    />
+                  ) : null}
+                </>
+              ) : null}
               <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('voiceReminderLabel')}</Text>
               <AnimatedSegmentedControl
                 value={prefs.data?.voice === false ? 'off' : 'on'}

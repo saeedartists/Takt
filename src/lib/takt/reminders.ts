@@ -8,6 +8,13 @@ import { useLocale } from './l10n';
 import { courseEnded, planDueOnDay } from './schedule';
 import type { IntakeInstruction, MedicationPlan } from './types';
 import { readReminderPreferences, useReminderPreferences } from './preferences';
+import {
+  alarmsAvailable,
+  cancelAllAlarms,
+  getAlarmAuthorization,
+  requestAlarmAuthorization,
+  scheduleAlarm,
+} from '../../../modules/takt-alarm';
 
 const STORAGE_KEY = 'takt:scheduled-notification-ids:v1';
 /** Android fixes a channel's sound at creation, so the alarm sound needs a new channel id. */
@@ -77,7 +84,9 @@ export type ReminderDiagnosticEvent = {
     | 'notification.received'
     | 'notification.opened'
     | 'snooze.scheduled'
-    | 'snooze.skipped-single-limit';
+    | 'snooze.skipped-single-limit'
+    | 'alarms.scheduled'
+    | 'alarms.unavailable';
   detail?: string;
 };
 
@@ -111,6 +120,8 @@ type ReminderSeed = {
   requestRef: string;
   medicationRef?: string;
   label: string;
+  /** Title of the AlarmKit alarm for this dose: "Ramipril 5 mg", or generic when names are hidden. */
+  alarmTitle: string;
 };
 
 export type ReminderNotificationData = {
@@ -133,6 +144,10 @@ export type ReminderCopy = {
   followUpTitle?: string;
   followUpBody?: string;
   followUpBodyPrivate?: string;
+  /** AlarmKit alarm buttons and the title used when medication names are hidden. */
+  alarmStop?: string;
+  alarmOpen?: string;
+  alarmTitlePrivate?: string;
   /** Localised intake instructions, appended to the reminder text. */
   instructionLabels?: Partial<Record<IntakeInstruction, string>>;
 };
@@ -190,6 +205,9 @@ const buildReminderSeeds = (
           medicationRef: plan.request.medicationReference?.reference,
           label: plan.label,
           doseKey,
+          alarmTitle: hideNames
+            ? (copy.alarmTitlePrivate ?? copy.title)
+            : [plan.label, plan.strength].filter(Boolean).join(' '),
         };
         rows.push({
           ...base,
@@ -330,6 +348,7 @@ export const requestReminderPermissionsAtConsent = async (): Promise<boolean> =>
   }
 
   const requested = await Notifications.requestPermissionsAsync();
+  await ensureAlarmAuthorization().catch(() => undefined);
   const granted =
     requested.granted || requested.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
 
@@ -386,6 +405,12 @@ const ensureChannel = async (): Promise<void> => {
   const base = {
     importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 250, 250, 250],
+    // Alarm audio stream: plays in silent/vibrate ringer mode; bypassDnd applies once the user grants DND access.
+    audioAttributes: {
+      usage: Notifications.AndroidAudioUsage.ALARM,
+      contentType: Notifications.AndroidAudioContentType.SONIFICATION,
+    },
+    bypassDnd: true,
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   };
   await Notifications.deleteNotificationChannelAsync(LEGACY_CHANNEL_ID).catch(() => undefined);
@@ -505,6 +530,12 @@ const reconcileSchedule = async (
   await appendDiagnosticEvent('schedule.cancelled', `count:${previousIds.size.toString()}`);
 
   const seeds = buildReminderSeeds(plans, copy, prefs.hideNamesInReminders, prefs.followUpMinutes, confirmedDoseKeys);
+
+  // iOS 26+: dose reminders also ring as AlarmKit alarms, which break through silent mode and Focus.
+  // The notification for the same dose stays (Taken / Snooze buttons, history) but goes silent.
+  const useAlarms =
+    Platform.OS === 'ios' && prefs.alarm && prefs.sound && alarmsAvailable() && (await getAlarmAuthorization()) === 'authorized';
+  if (alarmsAvailable()) await cancelAllAlarms();
   const nextIds: string[] = [];
 
   for (const seed of seeds) {
@@ -522,7 +553,7 @@ const reconcileSchedule = async (
       content: {
         title: seed.title,
         body: seed.body,
-        sound: prefs.sound ? ALARM_SOUND : false,
+        sound: prefs.sound && !(useAlarms && seed.kind === 'dose') ? ALARM_SOUND : false,
         categoryIdentifier: CATEGORY_ID,
         data,
       },
@@ -538,7 +569,34 @@ const reconcileSchedule = async (
   }
 
   await writeScheduledIds(nextIds);
+
+  if (useAlarms) {
+    // ponytail: one week of alarms per reconcile; reconciles run on every launch and resume, so this rolls forward.
+    const horizon = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    let alarms = 0;
+    for (const seed of seeds) {
+      if (seed.kind !== 'dose' || seed.triggerAt.getTime() > horizon) continue;
+      const id = await scheduleAlarm({
+        epochSeconds: seed.triggerAt.getTime() / 1000,
+        title: seed.alarmTitle,
+        stopLabel: copy.alarmStop ?? 'Done',
+        openLabel: copy.alarmOpen ?? 'Open',
+        soundName: ALARM_SOUND,
+      });
+      if (id) alarms += 1;
+    }
+    await appendDiagnosticEvent('alarms.scheduled', `count:${alarms.toString()}`);
+  } else if (Platform.OS === 'ios') {
+    await appendDiagnosticEvent('alarms.unavailable', alarmsAvailable() ? 'not-authorized-or-off' : 'ios<26');
+  }
+
   await appendDiagnosticEvent('schedule.reconcile.done', `scheduled:${nextIds.length.toString()}`);
+};
+
+/** Ask once for AlarmKit access (iOS 26+); a no-op when unavailable or already decided. */
+export const ensureAlarmAuthorization = async (): Promise<void> => {
+  if (Platform.OS !== 'ios' || !alarmsAvailable()) return;
+  if ((await getAlarmAuthorization()) === 'notDetermined') await requestAlarmAuthorization();
 };
 
 const readSnoozeGuards = async (): Promise<Record<string, string>> =>
@@ -597,6 +655,16 @@ export const scheduleSnoozeReminder = async (
     },
   });
 
+  if (Platform.OS === 'ios' && prefs.alarm && prefs.sound && alarmsAvailable() && (await getAlarmAuthorization()) === 'authorized') {
+    await scheduleAlarm({
+      epochSeconds: Date.now() / 1000 + delayMinutes * 60,
+      title: prefs.hideNamesInReminders ? (copy?.alarmTitlePrivate ?? copy?.title ?? 'Takt') : input.label,
+      stopLabel: copy?.alarmStop ?? 'Done',
+      openLabel: copy?.alarmOpen ?? 'Open',
+      soundName: ALARM_SOUND,
+    });
+  }
+
   guards[input.doseKey] = new Date().toISOString();
   await writeSnoozeGuards(guards);
   await appendDiagnosticEvent('snooze.scheduled', `${input.doseKey}|${delayMinutes.toString()}`);
@@ -645,6 +713,7 @@ export const useReminderSync = (plans: MedicationPlan[], enabled: boolean, confi
     // ponytail: expo-notifications has no web scheduler; every call throws UnavailabilityError there
     if (!enabled || Platform.OS === 'web') return;
 
+    await ensureAlarmAuthorization().catch(() => undefined);
     const wasRebooted = await checkForReboot();
     if (wasRebooted) {
       await appendDiagnosticEvent('schedule.resumed-after-reboot');
@@ -661,6 +730,9 @@ export const useReminderSync = (plans: MedicationPlan[], enabled: boolean, confi
         followUpTitle: t('reminderFollowUpTitle'),
         followUpBody: t('reminderFollowUpBody'),
         followUpBodyPrivate: t('reminderFollowUpBodyPrivate'),
+        alarmStop: t('alarmStop'),
+        alarmOpen: t('alarmOpen'),
+        alarmTitlePrivate: t('alarmTitlePrivate'),
         instructionLabels: {
           'with-food': t('instructionWithFood'),
           'empty-stomach': t('instructionEmptyStomach'),
@@ -669,7 +741,7 @@ export const useReminderSync = (plans: MedicationPlan[], enabled: boolean, confi
       },
       new Set(confirmedSignature ? confirmedSignature.split(',') : []),
     );
-  }, [enabled, plans, t, prefs.data?.sound, prefs.data?.hideNamesInReminders, prefs.data?.followUpMinutes, confirmedSignature]);
+  }, [enabled, plans, t, prefs.data?.sound, prefs.data?.hideNamesInReminders, prefs.data?.followUpMinutes, prefs.data?.alarm, confirmedSignature]);
 
   useEffect(() => {
     void sync();
