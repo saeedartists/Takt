@@ -16,6 +16,8 @@
  * apps/api/src/sandbox/sandbox-fs.service.ts).
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { env } from './env';
 import { SEED, type FhirResource } from './seed/fixtures';
 
@@ -352,6 +354,37 @@ export const isOvokMockActive = (): boolean => isMockEnabled();
 let installed = false;
 
 /*
+ * On a device the demo data survives restarts, so medications added while testing keep their
+ * reminders (a reseed would drop them and the reminder sync would cancel every reminder).
+ * Web keeps the reseed-on-reload behaviour the e2e suite relies on.
+ */
+const PERSIST_KEY = 'takt:mock-store:v1';
+const persistStore = Platform.OS !== 'web';
+
+const restoreStore = async (): Promise<void> => {
+  if (!persistStore) return;
+  try {
+    const raw = await AsyncStorage.getItem(PERSIST_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw) as { nextId: number; resources: Record<string, FhirResource[]> };
+    store.clear();
+    for (const [resourceType, resources] of Object.entries(saved.resources)) {
+      const b = bucket(resourceType);
+      for (const r of resources) b.set(r.id, r);
+    }
+    nextIdCounter = Math.max(nextIdCounter, saved.nextId);
+  } catch {
+    seedStore();
+  }
+};
+
+const saveStore = (): void => {
+  if (!persistStore) return;
+  const resources = Object.fromEntries([...store].map(([type, b]) => [type, [...b.values()]]));
+  void AsyncStorage.setItem(PERSIST_KEY, JSON.stringify({ nextId: nextIdCounter, resources })).catch(() => undefined);
+};
+
+/*
  * Install the demo-data fetch interceptor.
  *
  * Called at module scope from app/_layout.tsx — NOT from an effect.
@@ -371,12 +404,14 @@ export const installOvokMocks = (): void => {
   }
   installed = true;
   seedStore();
+  const ready = restoreStore();
 
   const realFetch = globalThis.fetch.bind(globalThis);
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
     const method = (init?.method ?? 'GET').toUpperCase();
     const pathname = new URL(url, 'http://mock.local').pathname;
+    await ready;
 
     for (const route of routes) {
       if (route.method !== method) continue;
@@ -390,6 +425,7 @@ export const installOvokMocks = (): void => {
         body: responseBody,
         headers: responseHeaders,
       } = route.respond({ url, body, headers }, match);
+      if (method !== 'GET') saveStore();
       return new Response(
         responseBody === null ? null : JSON.stringify(responseBody),
         {

@@ -10,13 +10,16 @@ import type { IntakeInstruction, MedicationPlan } from './types';
 import { readReminderPreferences, useReminderPreferences } from './preferences';
 import {
   alarmsAvailable,
-  cancelAllAlarms,
+  cancelAlarm,
+  listAlarms,
   getAlarmAuthorization,
   requestAlarmAuthorization,
   scheduleAlarm,
 } from '../../../modules/takt-alarm';
 
 const STORAGE_KEY = 'takt:scheduled-notification-ids:v1';
+/** Alarm ids by reminder key, so a reconcile only touches alarms that actually changed. */
+const ALARM_IDS_KEY = 'takt:scheduled-alarm-ids:v1';
 /** Android fixes a channel's sound at creation, so the alarm sound needs a new channel id. */
 const CHANNEL_ID = 'takt-dose-alarm';
 const LEGACY_CHANNEL_ID = 'takt-dose-reminders';
@@ -132,6 +135,8 @@ export type ReminderNotificationData = {
   scheduledAt: string;
   medicationRef?: string;
   label?: string;
+  /** Identity of the scheduled reminder (kind, dose, time, sound, text); unchanged ones survive a reconcile. */
+  key?: string;
 };
 
 export type ReminderCopy = {
@@ -183,7 +188,7 @@ const buildReminderSeeds = (
   horizonDays = 21,
 ): ReminderSeed[] => {
   const now = new Date();
-  const floor = new Date(now.getTime() + 60_000);
+  const floor = new Date(now.getTime() + 5_000);
   const days = Array.from({ length: horizonDays }, (_, i) => addDays(startOfDay(now), i));
 
   const rows: ReminderSeed[] = [];
@@ -518,27 +523,40 @@ const reconcileSchedule = async (
   await ensureChannel();
   await ensureCategory(copy);
   const prefs = await readReminderPreferences();
-  // Cancel what we stored plus any dose/follow-up reminder we lost track of (older builds could
-  // run two reconciles at once and orphan a whole batch). Snoozes carry no `kind` and are kept.
-  const previousIds = new Set(await readScheduledIds());
-  const pending = await Notifications.getAllScheduledNotificationsAsync().catch(() => []);
-  for (const request of pending) {
-    const kind = (request.content.data as { kind?: unknown } | undefined)?.kind;
-    if (kind === 'dose' || kind === 'follow-up') previousIds.add(request.identifier);
-  }
-  await Promise.all([...previousIds].map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => undefined)));
-  await appendDiagnosticEvent('schedule.cancelled', `count:${previousIds.size.toString()}`);
-
   const seeds = buildReminderSeeds(plans, copy, prefs.hideNamesInReminders, prefs.followUpMinutes, confirmedDoseKeys);
 
   // iOS 26+: dose reminders also ring as AlarmKit alarms, which break through silent mode and Focus.
   // The notification for the same dose stays (Taken / Snooze buttons, history) but goes silent.
-  const useAlarms =
-    Platform.OS === 'ios' && prefs.alarm && prefs.sound && alarmsAvailable() && (await getAlarmAuthorization()) === 'authorized';
-  if (alarmsAvailable()) await cancelAllAlarms();
-  const nextIds: string[] = [];
+  const alarmAuth = await getAlarmAuthorization();
+  const useAlarms = Platform.OS === 'ios' && prefs.alarm && prefs.sound && alarmAuth === 'authorized';
+  const sound = (seed: ReminderSeed): string | false =>
+    prefs.sound && !(useAlarms && seed.kind === 'dose') ? ALARM_SOUND : false;
+  const keyOf = (seed: ReminderSeed): string =>
+    [seed.kind, seed.doseKey, seed.triggerAt.toISOString(), String(sound(seed)), seed.title, seed.body].join('|');
+  const wanted = new Map(seeds.map((seed) => [keyOf(seed), seed]));
 
-  for (const seed of seeds) {
+  // Diff, don't rebuild: reconciles run on every resume and data refresh, and cancelling and
+  // re-adding everything each time could drop a reminder that was about to fire.
+  // Anything we scheduled (stored ids, or a dose/follow-up we lost track of) that is no longer wanted goes.
+  const storedIds = new Set(await readScheduledIds());
+  const pending = await Notifications.getAllScheduledNotificationsAsync().catch(() => []);
+  const nextIds: string[] = [];
+  const stale: string[] = [];
+  for (const request of pending) {
+    const data = request.content.data as Partial<ReminderNotificationData> | undefined;
+    const ours = storedIds.has(request.identifier) || data?.kind === 'dose' || data?.kind === 'follow-up';
+    if (!ours) continue; // snoozes and test reminders
+    if (data?.key && wanted.has(data.key)) {
+      wanted.delete(data.key);
+      nextIds.push(request.identifier);
+    } else {
+      stale.push(request.identifier);
+    }
+  }
+  await Promise.all(stale.map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => undefined)));
+  await appendDiagnosticEvent('schedule.cancelled', `count:${stale.length.toString()}`);
+
+  for (const [key, seed] of wanted) {
     const data: ReminderNotificationData = {
       route: '/(tabs)/today',
       kind: seed.kind,
@@ -547,13 +565,14 @@ const reconcileSchedule = async (
       scheduledAt: seed.triggerAt.toISOString(),
       medicationRef: seed.medicationRef,
       label: seed.label,
+      key,
     };
 
     const id = await Notifications.scheduleNotificationAsync({
       content: {
         title: seed.title,
         body: seed.body,
-        sound: prefs.sound && !(useAlarms && seed.kind === 'dose') ? ALARM_SOUND : false,
+        sound: sound(seed),
         categoryIdentifier: CATEGORY_ID,
         data,
       },
@@ -569,28 +588,49 @@ const reconcileSchedule = async (
   }
 
   await writeScheduledIds(nextIds);
-
-  if (useAlarms) {
-    // ponytail: one week of alarms per reconcile; reconciles run on every launch and resume, so this rolls forward.
-    const horizon = Date.now() + 7 * 24 * 60 * 60 * 1000;
-    let alarms = 0;
-    for (const seed of seeds) {
-      if (seed.kind !== 'dose' || seed.triggerAt.getTime() > horizon) continue;
-      const id = await scheduleAlarm({
-        epochSeconds: seed.triggerAt.getTime() / 1000,
-        title: seed.alarmTitle,
-        stopLabel: copy.alarmStop ?? 'Done',
-        openLabel: copy.alarmOpen ?? 'Open',
-        soundName: ALARM_SOUND,
-      });
-      if (id) alarms += 1;
-    }
-    await appendDiagnosticEvent('alarms.scheduled', `count:${alarms.toString()}`);
-  } else if (Platform.OS === 'ios') {
-    await appendDiagnosticEvent('alarms.unavailable', alarmsAvailable() ? 'not-authorized-or-off' : 'ios<26');
+  await reconcileAlarms(useAlarms ? seeds : [], copy).catch((error: unknown) =>
+    appendDiagnosticEvent('alarms.unavailable', `error:${String(error)}`),
+  );
+  if (Platform.OS === 'ios' && !useAlarms) {
+    await appendDiagnosticEvent('alarms.unavailable', `auth:${alarmAuth} alarm:${String(prefs.alarm)} sound:${String(prefs.sound)}`);
   }
 
-  await appendDiagnosticEvent('schedule.reconcile.done', `scheduled:${nextIds.length.toString()}`);
+  await appendDiagnosticEvent('schedule.reconcile.done', `scheduled:${nextIds.length.toString()} new:${wanted.size.toString()}`);
+};
+
+/** Same diff for AlarmKit: keep alarms whose dose, time and title are unchanged. One week ahead. */
+const reconcileAlarms = async (seeds: ReminderSeed[], copy: ReminderCopy): Promise<void> => {
+  if (!alarmsAvailable()) return;
+  // ponytail: one week of alarms; reconciles run on every launch and resume, so this rolls forward.
+  const horizon = Date.now() + 7 * 24 * 60 * 60 * 1000;
+  const wanted = new Map(
+    seeds
+      .filter((seed) => seed.kind === 'dose' && seed.triggerAt.getTime() <= horizon)
+      .map((seed) => [[seed.doseKey, seed.triggerAt.toISOString(), seed.alarmTitle].join('|'), seed]),
+  );
+  const stored = await readJson<Record<string, string>>(ALARM_IDS_KEY, {});
+  const live = new Set(await listAlarms());
+  const next: Record<string, string> = {};
+  for (const [key, id] of Object.entries(stored)) {
+    if (wanted.has(key) && live.has(id)) {
+      next[key] = id;
+      wanted.delete(key);
+    } else {
+      await cancelAlarm(id);
+    }
+  }
+  for (const [key, seed] of wanted) {
+    const id = await scheduleAlarm({
+      epochSeconds: seed.triggerAt.getTime() / 1000,
+      title: seed.alarmTitle,
+      stopLabel: copy.alarmStop ?? 'Done',
+      openLabel: copy.alarmOpen ?? 'Open',
+      soundName: ALARM_SOUND,
+    });
+    if (id) next[key] = id;
+  }
+  await writeJson(ALARM_IDS_KEY, next);
+  if (seeds.length) await appendDiagnosticEvent('alarms.scheduled', `count:${Object.keys(next).length.toString()} new:${wanted.size.toString()}`);
 };
 
 /** Ask once for AlarmKit access (iOS 26+); a no-op when unavailable or already decided. */
@@ -700,6 +740,10 @@ export const useReminderSync = (plans: MedicationPlan[], enabled: boolean, confi
             times: [...plan.times].sort(),
             label: plan.label,
             strength: plan.strength,
+            interval: [plan.intervalDays, plan.intervalStart],
+            endDate: plan.endDate,
+            asNeeded: plan.asNeeded,
+            instruction: plan.instruction,
           }))
           .sort((a, b) => a.id.localeCompare(b.id)),
       ),
@@ -707,6 +751,8 @@ export const useReminderSync = (plans: MedicationPlan[], enabled: boolean, confi
   );
 
   const confirmedSignature = [...confirmedDoseKeys].sort().join(',');
+  const plansRef = useRef(plans);
+  plansRef.current = plans;
   const timezoneRef = useRef(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
   const sync = useCallback(async () => {
@@ -720,7 +766,7 @@ export const useReminderSync = (plans: MedicationPlan[], enabled: boolean, confi
     }
 
     await queueReconcile(
-      plans,
+      plansRef.current,
       {
         title: t('reminderNotificationTitle'),
         body: t('reminderNotificationBody'),
@@ -741,11 +787,12 @@ export const useReminderSync = (plans: MedicationPlan[], enabled: boolean, confi
       },
       new Set(confirmedSignature ? confirmedSignature.split(',') : []),
     );
-  }, [enabled, plans, t, prefs.data?.sound, prefs.data?.hideNamesInReminders, prefs.data?.followUpMinutes, prefs.data?.alarm, confirmedSignature]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, signature, t, prefs.data?.sound, prefs.data?.hideNamesInReminders, prefs.data?.followUpMinutes, prefs.data?.alarm, confirmedSignature]);
 
   useEffect(() => {
     void sync();
-  }, [sync, signature]);
+  }, [sync]);
 
   useEffect(() => {
     if (!enabled) return;

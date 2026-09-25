@@ -14,6 +14,8 @@ type TaktAlarmNative = {
     soundName?: string;
     tintHex?: string;
   }): Promise<string | null>;
+  list(): Promise<string[]>;
+  cancel(id: string): Promise<void>;
   cancelAll(): Promise<number>;
 };
 
@@ -33,3 +35,9 @@ export const scheduleAlarm = async (options: Parameters<TaktAlarmNative['schedul
   native ? native.schedule(options) : null;
 
 export const cancelAllAlarms = async (): Promise<number> => (native ? native.cancelAll() : 0);
+
+export const listAlarms = async (): Promise<string[]> => (native ? native.list() : []);
+
+export const cancelAlarm = async (id: string): Promise<void> => {
+  if (native) await native.cancel(id);
+};
