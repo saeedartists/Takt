@@ -1,0 +1,88 @@
+/* Takt Health site. Colours mirror src/theme/tokens.ts (Takt Amber palette). */
+:root {
+  color-scheme: light dark;
+  --bg: #FAFAF9;
+  --surface: #FFFFFF;
+  --raised: #F1EFEB;
+  --text: #0E1218;
+  --muted: #5C646F;
+  --line: #E5E2DC;
+  --accent: #B4611C;
+  --accent-soft: #F6E9DD;
+  --ph-bg: #FFF3C4;
+  --ph-text: #6B4A00;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0E1218;
+    --surface: #151A22;
+    --raised: #1E2530;
+    --text: #F8FAFC;
+    --muted: #A3ACB9;
+    --line: #262E3A;
+    --accent: #E07D2C;
+    --accent-soft: #2A1E14;
+    --ph-bg: #4A3A00;
+    --ph-text: #FFE8A3;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 17px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.wrap { max-width: 760px; margin: 0 auto; padding: 0 20px; }
+
+header.site { border-bottom: 1px solid var(--line); background: var(--surface); }
+header.site .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding-top: 14px; padding-bottom: 14px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 650; color: var(--text); text-decoration: none; margin-right: auto; }
+.brand img { width: 32px; height: 32px; border-radius: 8px; }
+nav.links { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 15px; }
+nav.links a { color: var(--muted); text-decoration: none; }
+nav.links a:hover, nav.links a[aria-current="page"] { color: var(--accent); }
+.lang { font-size: 15px; font-weight: 600; }
+
+main { padding: 40px 0 56px; }
+h1 { font-size: 34px; line-height: 1.2; letter-spacing: -0.01em; margin: 0 0 8px; }
+h2 { font-size: 22px; line-height: 1.3; margin: 40px 0 8px; }
+h3 { font-size: 18px; margin: 24px 0 4px; }
+p, ul, ol, dl { margin: 0 0 14px; }
+ul, ol { padding-left: 22px; }
+li { margin-bottom: 6px; }
+.lead { font-size: 20px; color: var(--muted); max-width: 36em; }
+.meta { color: var(--muted); font-size: 15px; }
+
+.hero { display: flex; gap: 20px; align-items: center; margin-bottom: 24px; }
+.hero img { width: 88px; height: 88px; border-radius: 20px; flex: none; }
+.button {
+  display: inline-block; background: var(--accent); color: #fff; text-decoration: none;
+  font-weight: 600; padding: 12px 20px; border-radius: 12px; margin: 8px 0 4px;
+}
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 4px 20px; margin: 16px 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 16px 0; padding: 0; list-style: none; }
+.grid li { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin: 0; }
+.grid strong { display: block; }
+.note { background: var(--accent-soft); border-radius: 12px; padding: 14px 16px; }
+details { border-bottom: 1px solid var(--line); padding: 12px 0; }
+details summary { cursor: pointer; font-weight: 600; }
+details[open] summary { margin-bottom: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin-bottom: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); }
+.ph { background: var(--ph-bg); color: var(--ph-text); padding: 0 4px; border-radius: 4px; font-weight: 600; }
+.table-scroll { overflow-x: auto; }
+
+footer.site { border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; padding: 24px 0 40px; }
+footer.site p { margin: 0 0 8px; }
+footer.site a { color: var(--muted); }
+
+@media (max-width: 520px) {
+  body { font-size: 17px; }
+  h1 { font-size: 28px; }
+  .hero { flex-direction: column; align-items: flex-start; }
+}
