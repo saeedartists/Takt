@@ -140,7 +140,7 @@ export default function SettingsTabScreen() {
       : t('consentStatusActive')
     : t('consentStatusInactive');
 
-  const showDeveloper = __DEV__ || env.ovokMockEnabled;
+  const showDeveloper = __DEV__;
   const version = Constants.expoConfig?.version ?? '0.0.0';
   const runtimeVersion = Constants.expoConfig?.runtimeVersion;
   const build = typeof runtimeVersion === 'string' ? runtimeVersion : Constants.expoConfig?.ios?.buildNumber;

@@ -101,6 +101,15 @@ export default function TodayScreen() {
     }, []),
   );
   const isSelectedToday = isoDateKey(selectedDate) === isoDateKey(now);
+  // Past midnight (app left open, or resumed next morning) follow the new day, unless the user picked another day.
+  const todayKey = isoDateKey(now);
+  const lastTodayKey = useRef(todayKey);
+  useEffect(() => {
+    if (lastTodayKey.current === todayKey) return;
+    const previous = lastTodayKey.current;
+    lastTodayKey.current = todayKey;
+    setSelectedDate((selected) => (isoDateKey(selected) === previous ? new Date() : selected));
+  }, [todayKey]);
 
   const eventResources = useMemo(
     () => (events.data?.entry ?? []).map((x) => x.resource),
