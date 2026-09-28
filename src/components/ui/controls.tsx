@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import Animated, { interpolateColor, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
-import { MIN_TOUCH_TARGET, font, radius, spacing, typography } from '../../theme/tokens';
+import { INK, MIN_TOUCH_TARGET, PAPER, font, radius, spacing, typography } from '../../theme/tokens';
 import { useTokens } from '../../theme/use-tokens';
 import { AnimatedPressable, type HapticKind } from './animated-pressable';
 import { AnimatedSegmentedControl } from './animated-segmented-control';
@@ -126,6 +126,7 @@ export const Button = ({
   accessibilityLabel,
   style,
   fullWidth = true,
+  onTone = false,
 }: {
   label: string;
   onPress?: () => void;
@@ -142,18 +143,28 @@ export const Button = ({
   accessibilityLabel?: string;
   style?: StyleProp<ViewStyle>;
   fullWidth?: boolean;
+  /** Sitting on a pastel tile: tiles stay light in dark mode, so colours are fixed ink/paper. */
+  onTone?: boolean;
 }) => {
   const { c } = useTokens();
   const isDisabled = Boolean(disabled) || loading;
   const height = size === 'lg' ? 64 : size === 'md' ? 56 : MIN_TOUCH_TARGET;
 
-  const palette: Record<ButtonKind, { bg: string; fg: string; border?: string }> = {
-    primary: { bg: c.ink, fg: c.onInk },
-    secondary: { bg: c.surfaceRaised, fg: c.textPrimary },
-    outline: { bg: 'transparent', fg: c.textPrimary, border: c.separator },
-    ghost: { bg: 'transparent', fg: c.textPrimary },
-    destructive: { bg: c.tones.rose.bg, fg: c.tones.rose.fg },
-  };
+  const palette: Record<ButtonKind, { bg: string; fg: string; border?: string }> = onTone
+    ? {
+        primary: { bg: INK, fg: PAPER },
+        secondary: { bg: 'rgba(255,255,255,0.74)', fg: INK },
+        outline: { bg: 'transparent', fg: INK, border: 'rgba(21,23,28,0.24)' },
+        ghost: { bg: 'transparent', fg: INK },
+        destructive: { bg: c.tones.rose.bg, fg: c.tones.rose.fg },
+      }
+    : {
+        primary: { bg: c.ink, fg: c.onInk },
+        secondary: { bg: c.surfaceRaised, fg: c.textPrimary },
+        outline: { bg: 'transparent', fg: c.textPrimary, border: c.separator },
+        ghost: { bg: 'transparent', fg: c.textPrimary },
+        destructive: { bg: c.tones.rose.bg, fg: c.tones.rose.fg },
+      };
   const tone = palette[kind];
   const withDot = kind === 'primary' && Boolean(accentIcon);
   const textStyle = size === 'sm' ? typography.subhead : typography.headline;
@@ -194,7 +205,7 @@ export const Button = ({
       </View>
       {withDot && accentIcon ? (
         <View style={[styles.dot, { width: height - 16, height: height - 16, backgroundColor: c.accentSoft }]}>
-          <Ionicons name={accentIcon} size={22} color={c.onAccentSoft} />
+          <Ionicons name={accentIcon} size={22} color={INK} />
         </View>
       ) : null}
       {loading ? <ActivityIndicator color={tone.fg} style={StyleSheet.absoluteFill} /> : null}

@@ -40,3 +40,4 @@ export { useTheme } from '../../theme/theme-context';
 export { paletteConfigs, type ThemePalette, type ThemeMode } from '../../theme/tokens';
 
 export { StackHeader } from './stack-header';
+export { AnimatedNumber, ProgressRing } from './animated-metrics';

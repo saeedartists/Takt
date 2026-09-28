@@ -1,16 +1,20 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
-import Animated, { LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
   AnimatedDoseRow,
+  AnimatedNumber,
   Button,
   Card,
+  IconButton,
+  ProgressRing,
+  Tile,
+  TileIcon,
   EmptyState,
   ErrorState,
   FloatingUndoToast,
-  PageHeader,
   PageShell,
   SectionHeader,
   SkeletonCard,
@@ -27,6 +31,8 @@ import {
   font,
 } from '@/components/ui';
 import { MedicationGlyph } from '@/components/takt/medication-glyph';
+import { INK } from '@/theme/tokens';
+import { LOW_SUPPLY_THRESHOLD, getSupplySnapshot } from '@/lib/takt/supply-tracker';
 import { SharedWithMeCard } from '@/components/takt/shared-with-me-card';
 import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
@@ -55,9 +61,9 @@ const canUndo = (dose: DoseOccurrence): boolean => {
 const isActionable = (dose: DoseOccurrence): boolean => dose.state === 'due' || dose.state === 'missed';
 
 const getTimeIcon = (hour: number, c: ReturnType<typeof useTokens>['c']) => {
-  if (hour < 12) return { name: 'sunny-outline' as const, color: c.warning };
+  if (hour < 12) return { name: 'sunny-outline' as const, color: c.accent };
   if (hour < 18) return { name: 'partly-sunny-outline' as const, color: c.accent };
-  return { name: 'moon-outline' as const, color: c.textSecondary };
+  return { name: 'moon-outline' as const, color: c.tones.lilac.solid };
 };
 
 export default function TodayScreen() {
@@ -180,6 +186,41 @@ export default function TodayScreen() {
     ],
     [t],
   );
+
+  // The one medication closest to running out (at or under the low-supply line), for the bento tile.
+  const [lowSupply, setLowSupply] = useState<{ label: string; count: number; requestId: string } | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      void (async () => {
+        let lowest: { label: string; count: number; requestId: string } | null = null;
+        for (const plan of plans.plans) {
+          const id = plan.medication?.id;
+          if (!id || plan.request.status !== 'active') continue;
+          const snap = await getSupplySnapshot(id);
+          if (!snap || snap.count > LOW_SUPPLY_THRESHOLD) continue;
+          if (!lowest || snap.count < lowest.count) lowest = { label: plan.label, count: snap.count, requestId: plan.request.id };
+        }
+        if (active) setLowSupply(lowest);
+      })();
+      return () => {
+        active = false;
+      };
+    }, [plans.plans]),
+  );
+
+  // Days in a row (up to a week back, today excluded) with every scheduled dose taken.
+  const rhythmDays = useMemo(() => {
+    let days = 0;
+    for (let offset = 1; offset <= 7; offset++) {
+      const day = adherenceMap[isoDateKey(addDays(now, -offset))];
+      if (!day || day.total === 0 || day.taken < day.total) break;
+      days += 1;
+    }
+    return days;
+  }, [adherenceMap, now]);
+
+  const planByRequest = useMemo(() => new Map(plans.plans.map((plan) => [plan.request.id, plan])), [plans.plans]);
 
   // VoiceOver / TalkBack: answer "what now, and did I already?" the moment Today is shown.
   const takenToday = todayDoses.filter((dose) => dose.state === 'taken').length;
@@ -361,25 +402,41 @@ export default function TodayScreen() {
   };
 
   const patientFirstName = patient.data?.name?.[0]?.given?.[0];
+  const hour = now.getHours();
+  const greeting = hour < 12 ? t('greetingMorning') : hour < 18 ? t('greetingAfternoon') : t('greetingEvening');
+  const todayTotal = todayDoses.length;
+  const todayTaken = takenToday;
+  // The dose after the one the hero is showing: what the next reminder will be about.
+  const heroDose = todayDoses.find((d) => d.state === 'due') ?? todayDoses.find((d) => d.state === 'scheduled');
+  const nextReminder = todayDoses.find((d) => d.state === 'scheduled' && d.id !== heroDose?.id);
+  const hasSecondTile = Boolean(lowSupply) || rhythmDays >= 2 || Boolean(nextReminder);
   let rowIndex = 0;
 
   return (
     <View style={{ flex: 1 }}>
       <PageShell>
-        <PageHeader
-          title={t('today')}
-          subtitle={formatDate(new Date(), { weekday: 'long', month: 'long', day: 'numeric' })}
-          action={
-            <Button
-              size="sm"
-              kind="secondary"
-              label={t('report')}
-              icon={<Ionicons name="document-text-outline" size={16} color={c.textPrimary} />}
-              accessibilityLabel={t('openReport')}
-              onPress={() => router.push('/report')}
-            />
-          }
-        />
+        {/* Greeting row: who, and a one-tap way to the doctor report. */}
+        <View style={styles.greetingRow}>
+          <View style={[styles.avatar, { backgroundColor: c.tones.lilac.bg }]}>
+            <Text style={[typography.title3, { color: INK }]}>{(patientFirstName ?? 'T').slice(0, 1).toUpperCase()}</Text>
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text numberOfLines={1} style={[typography.subhead, { color: c.textSecondary }]}>
+              {patientFirstName ? `${greeting},` : greeting}
+            </Text>
+            {patientFirstName ? (
+              <Text numberOfLines={1} style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold, fontSize: 18 }]}>
+                {patientFirstName}
+              </Text>
+            ) : null}
+          </View>
+          <IconButton icon="document-text-outline" accessibilityLabel={t('openReport')} onPress={() => router.push('/report')} />
+        </View>
+
+        <Text accessibilityRole="header" style={[typography.display, styles.dateTitle, { color: c.textPrimary }]}>
+          {`${formatDate(now, { weekday: 'long' })},\n`}
+          <Text style={{ color: c.textTertiary }}>{formatDate(now, { day: 'numeric', month: 'long' })}</Text>
+        </Text>
 
         <Stack>
           {isFirstLoad ? (
@@ -395,34 +452,102 @@ export default function TodayScreen() {
             <ErrorState description={t('loadScheduleError')} onRetry={refetchAll} />
           ) : (
             <>
-              <TodayHeroCard
-                patientName={patientFirstName}
-                doses={todayDoses}
-                hasPlans={!needsFirstMedication}
-                showFirstDoseHint={needsFirstDoseLog}
-                pending={heroPending}
-                snoozeMinutes={defaultSnoozeMinutes}
-                stateLabel={stateLabel}
-                skipReasons={skipReasons}
-                onTake={(dose) => void runHeroAction('take', dose)}
-                onSkip={(dose, reason) => void runHeroAction('skip', dose, reason)}
-                onSnooze={(dose) => void runHeroAction('snooze', dose)}
-                onAddMedication={() => router.push('/medications/new')}
-              />
+              <Animated.View entering={enter(0)}>
+                <WeekStripPicker
+                  selectedDate={selectedDate}
+                  onSelectDate={(d) => setSelectedDate(d)}
+                  adherenceMap={adherenceMap}
+                  todayLabel={t('today')}
+                />
+              </Animated.View>
 
-              <WeekStripPicker
-                selectedDate={selectedDate}
-                onSelectDate={(d) => setSelectedDate(d)}
-                adherenceMap={adherenceMap}
-                todayLabel={t('today')}
-              />
+              <Animated.View entering={enter(1)}>
+                <TodayHeroCard
+                  patientName={patientFirstName}
+                  doses={todayDoses}
+                  hasPlans={!needsFirstMedication}
+                  showFirstDoseHint={needsFirstDoseLog}
+                  pending={heroPending}
+                  snoozeMinutes={defaultSnoozeMinutes}
+                  stateLabel={stateLabel}
+                  skipReasons={skipReasons}
+                  onTake={(dose) => void runHeroAction('take', dose)}
+                  onSkip={(dose, reason) => void runHeroAction('skip', dose, reason)}
+                  onSnooze={(dose) => void runHeroAction('snooze', dose)}
+                  onAddMedication={() => router.push('/medications/new')}
+                />
+              </Animated.View>
+
+              {/* Bento: today's count, plus supply or rhythm when there is something to say. */}
+              {/* Once everything is taken the hero already says so; the count tile would repeat it. */}
+              {todayTotal > 0 && todayTaken < todayTotal ? (
+                <Animated.View entering={enter(2)} style={styles.bento}>
+                  <Tile
+                    tone="sage"
+                    style={[styles.bentoTile, !hasSecondTile && styles.bentoWide]}
+                    onPress={() => router.push('/history')}
+                    accessibilityLabel={t('takenOfTotal').replace('{taken}', String(todayTaken)).replace('{total}', String(todayTotal))}
+                  >
+                    <View style={styles.bentoHead}>
+                      <Text style={[typography.subhead, { color: INK, fontFamily: font.semibold }]}>{t('todayTakenTile')}</Text>
+                      <ProgressRing progress={todayTaken / todayTotal} size={40} stroke={5} color={c.tones.sage.solid} track="rgba(255,255,255,0.8)" />
+                    </View>
+                    <View style={styles.metricRow}>
+                      <AnimatedNumber value={todayTaken} style={[typography.metric, { color: INK }]} />
+                      <Text style={[typography.title3, { color: c.tones.sage.fg }]}>{` / ${todayTotal}`}</Text>
+                    </View>
+                    <Text style={[typography.subhead, { color: c.tones.sage.fg }]}>
+                      {t('takenOfTotal').replace('{taken}', String(todayTaken)).replace('{total}', String(todayTotal))}
+                    </Text>
+                  </Tile>
+                  {lowSupply ? (
+                    <Tile
+                      tone="butter"
+                      style={styles.bentoTile}
+                      onPress={() => router.push(`/medications/${lowSupply.requestId}` as never)}
+                      accessibilityLabel={`${t('todayRefillTile')}, ${lowSupply.label}, ${t('supplyLeft').replace('{count}', String(lowSupply.count))}`}
+                    >
+                      <View style={styles.bentoHead}>
+                        <Text style={[typography.subhead, { color: INK, fontFamily: font.semibold }]}>{t('todayRefillTile')}</Text>
+                        <TileIcon name="add-circle-outline" />
+                      </View>
+                      <View style={styles.metricRow}>
+                        <AnimatedNumber value={lowSupply.count} style={[typography.metric, { color: INK }]} />
+                      </View>
+                      <Text numberOfLines={1} style={[typography.subhead, { color: c.tones.butter.fg }]}>
+                        {`${lowSupply.label} · ${t('supplyLeft').replace('{count}', String(lowSupply.count))}`}
+                      </Text>
+                    </Tile>
+                  ) : rhythmDays >= 2 ? (
+                    <Tile tone="lilac" style={styles.bentoTile} accessibilityLabel={`${t('todayInRhythmTile')}, ${rhythmDays}`}>
+                      <View style={styles.bentoHead}>
+                        <Text style={[typography.subhead, { color: INK, fontFamily: font.semibold }]}>{t('todayInRhythmTile')}</Text>
+                        <TileIcon name="pulse" />
+                      </View>
+                      <View style={styles.metricRow}>
+                        <AnimatedNumber value={rhythmDays} style={[typography.metric, { color: INK }]} />
+                      </View>
+                      <Text style={[typography.subhead, { color: c.tones.lilac.fg }]}>{t('todayInRhythmHint')}</Text>
+                    </Tile>
+                  ) : nextReminder ? (
+                    <Tile tone="sky" style={styles.bentoTile} accessibilityLabel={`${t('todayNextReminderTile')}, ${formatTime(nextReminder.scheduledAt)}, ${nextReminder.label}`}>
+                      <View style={styles.bentoHead}>
+                        <Text style={[typography.subhead, { color: INK, fontFamily: font.semibold }]}>{t('todayNextReminderTile')}</Text>
+                        <TileIcon name="notifications-outline" />
+                      </View>
+                      <Text style={[typography.metricSm, { color: INK, fontVariant: ['tabular-nums'] }]}>{formatTime(nextReminder.scheduledAt)}</Text>
+                      <Text numberOfLines={1} style={[typography.subhead, { color: c.tones.sky.fg }]}>{nextReminder.label}</Text>
+                    </Tile>
+                  ) : null}
+                </Animated.View>
+              ) : null}
 
               {/* Auto-marked misses are fixable on the rows below, so the notice goes once none is left. */}
               {autoMissedCount > 0 && todayDoses.some((dose) => dose.state === 'missed') ? (
                 <Card>
                   <View style={styles.noticeRow}>
-                    <Ionicons name="information-circle-outline" size={18} color={c.textSecondary} />
-                    <Text style={[typography.footnote, { color: c.textSecondary, flex: 1, minWidth: 0 }]}>
+                    <Ionicons name="information-circle-outline" size={20} color={c.textSecondary} />
+                    <Text style={[typography.subhead, { color: c.textSecondary, flex: 1, minWidth: 0 }]}>
                       {autoMissedCount === 1
                         ? t('autoMissedNoticeOne')
                         : t('autoMissedNoticeMany').replace('{count}', String(autoMissedCount))}
@@ -432,12 +557,13 @@ export default function TodayScreen() {
               ) : null}
 
               {actionError ? (
-                <Text
+                <Animated.Text
+                  entering={FadeInDown.duration(200)}
                   accessibilityRole="alert"
-                  style={[typography.footnote, { color: c.destructive, paddingHorizontal: spacing(1) }]}
+                  style={[typography.subhead, { color: c.destructive, paddingHorizontal: spacing(1) }]}
                 >
                   {actionError}
-                </Text>
+                </Animated.Text>
               ) : null}
 
               <View>
@@ -447,6 +573,13 @@ export default function TodayScreen() {
                       ? t('timeline')
                       : formatDate(selectedDate, { weekday: 'long', month: 'long', day: 'numeric' })
                   }
+                  action={
+                    selectedDoses.length > 0 ? (
+                      <Text style={[typography.subhead, { color: c.textTertiary }]}>
+                        {`${selectedDoses.length} ${selectedDoses.length === 1 ? t('singleDoseLabel') : t('multipleDosesLabel')}`}
+                      </Text>
+                    ) : undefined
+                  }
                 />
 
                 {grouped.length === 0 ? (
@@ -455,7 +588,12 @@ export default function TodayScreen() {
                     description={needsFirstMedication ? t('addMedicationHint') : undefined}
                     action={
                       needsFirstMedication ? (
-                        <Button label={t('addMedication')} onPress={() => router.push('/medications/new')} />
+                        <Button
+                          label={t('addMedication')}
+                          accentIcon="add"
+                          fullWidth={false}
+                          onPress={() => router.push('/medications/new')}
+                        />
                       ) : undefined
                     }
                   />
@@ -463,88 +601,82 @@ export default function TodayScreen() {
                   <View style={styles.groups}>
                     {grouped.map((bucket) => {
                       const timeIcon = getTimeIcon(bucket.doses[0]?.scheduledAt.getHours() ?? 12, c);
-                      const doseCountText = `${bucket.doses.length} ${
-                        bucket.doses.length === 1 ? t('singleDoseLabel') : t('multipleDosesLabel')
-                      }`;
                       const actionable = bucket.doses.filter(isActionable);
 
                       return (
-                        <Animated.View key={bucket.time} layout={LinearTransition}>
-                          <Card>
-                            <View style={{ overflow: 'hidden', borderRadius: radius.xl }}>
-                              <View style={styles.timeHeader}>
-                                <View style={styles.timeHeaderLeft}>
-                                  <Ionicons name={timeIcon.name} size={15} color={timeIcon.color} />
-                                  <Text
-                                    style={[typography.headline, { color: c.textPrimary, fontVariant: ['tabular-nums'] }]}
-                                  >
-                                    {bucket.time}
-                                  </Text>
-                                </View>
-                                {actionable.length >= 2 ? (
-                                  <Button
-                                    size="sm"
-                                    label={t('confirmAllAt').replace('{count}', String(actionable.length))}
-                                    icon={<Ionicons name="checkmark-done" size={16} color={c.surface} />}
-                                    loading={bulkPending}
-                                    disabled={heroPending !== null}
-                                    haptic="success"
-                                    accessibilityLabel={`${t('confirmAllAt').replace('{count}', String(actionable.length))}, ${bucket.time}`}
-                                    onPress={() => void confirmAll(actionable)}
-                                  />
-                                ) : (
-                                  <Text style={[typography.footnote, { color: c.textTertiary }]}>{doseCountText}</Text>
-                                )}
+                        <Animated.View key={bucket.time} layout={LinearTransition.springify().damping(24).stiffness(200)} style={styles.group}>
+                          <View style={styles.timeHeader}>
+                            <View style={styles.timeHeaderLeft}>
+                              <View style={[styles.timeIcon, { backgroundColor: c.surface }]}>
+                                <Ionicons name={timeIcon.name} size={16} color={timeIcon.color} />
                               </View>
-                              {bucket.doses.map((dose, index) => {
-                                const isFocused =
-                                  typeof params.focus === 'string' &&
-                                  params.focus === reminderDoseKey(dose.requestId, dose.scheduledAt);
-                                const entering = firstLoadDone.current ? undefined : enter(rowIndex++);
-
-                                return (
-                                  <Animated.View key={dose.id} entering={entering} layout={LinearTransition}>
-                                    <AnimatedDoseRow
-                                      dose={dose}
-                                      isFirst={index === 0}
-                                      isFocused={isFocused}
-                                      canUndo={canUndo(dose)}
-                                      stateLabel={stateLabel(dose.state)}
-                                      instruction={describeInstruction(dose, t)}
-                                      detail={doseDetail(dose)}
-                                      onTake={() => takeAction(dose, 'taken')}
-                                      onSkip={(reason) => takeAction(dose, 'skipped', reason)}
-                                      skipReasons={skipReasons}
-                                      onSnooze={(minutes) => snoozeDose(dose, minutes)}
-                                      onUndo={async () => {
-                                        try {
-                                          await undoDose.mutateAsync(dose.eventId!);
-                                        } catch {
-                                          setActionError(t('undoDoseError'));
-                                        }
-                                      }}
-                                      busy={heroPending !== null || bulkPending}
-                                      snoozeOptions={SNOOZE_OPTIONS}
-                                      defaultSnoozeMinutes={defaultSnoozeMinutes}
-                                      labels={{
-                                        time: bucket.time,
-                                        confirmTaken: t('confirmTaken'),
-                                        markTaken: t('markTakenFromHistory'),
-                                        takeEarly: t('takeEarly'),
-                                        markSkipped: t('markSkipped'),
-                                        snooze: t('snooze'),
-                                        snoozeRemindIn: t('snoozeRemindIn'),
-                                        skipReasonPrompt: t('skipReasonPrompt'),
-                                        cancel: t('cancel'),
-                                        undo: t('undo'),
-                                        contextBadge: t('reminderContextBadge'),
-                                      }}
-                                    />
-                                  </Animated.View>
-                                );
-                              })}
+                              <Text style={[typography.title3, { color: c.textPrimary, fontVariant: ['tabular-nums'] }]}>
+                                {bucket.time}
+                              </Text>
                             </View>
-                          </Card>
+                            {actionable.length >= 2 ? (
+                              <Button
+                                size="sm"
+                                fullWidth={false}
+                                label={t('confirmAllAt').replace('{count}', String(actionable.length))}
+                                icon={<Ionicons name="checkmark-done" size={18} color={c.onInk} />}
+                                loading={bulkPending}
+                                disabled={heroPending !== null}
+                                haptic="success"
+                                accessibilityLabel={`${t('confirmAllAt').replace('{count}', String(actionable.length))}, ${bucket.time}`}
+                                onPress={() => void confirmAll(actionable)}
+                              />
+                            ) : null}
+                          </View>
+                          {bucket.doses.map((dose, index) => {
+                            const isFocused =
+                              typeof params.focus === 'string' &&
+                              params.focus === reminderDoseKey(dose.requestId, dose.scheduledAt);
+                            const entering = firstLoadDone.current ? undefined : enter(3 + rowIndex++);
+                            const plan = planByRequest.get(dose.requestId);
+
+                            return (
+                              <Animated.View key={dose.id} entering={entering} layout={LinearTransition.springify().damping(24).stiffness(200)}>
+                                <AnimatedDoseRow
+                                  dose={dose}
+                                  isFirst={index === 0}
+                                  isFocused={isFocused}
+                                  canUndo={canUndo(dose)}
+                                  stateLabel={stateLabel(dose.state)}
+                                  instruction={describeInstruction(dose, t)}
+                                  detail={doseDetail(dose)}
+                                  leading={<MedicationGlyph appearance={plan?.appearance} form={plan?.form} size={52} />}
+                                  onTake={() => takeAction(dose, 'taken')}
+                                  onSkip={(reason) => takeAction(dose, 'skipped', reason)}
+                                  skipReasons={skipReasons}
+                                  onSnooze={(minutes) => snoozeDose(dose, minutes)}
+                                  onUndo={async () => {
+                                    try {
+                                      await undoDose.mutateAsync(dose.eventId!);
+                                    } catch {
+                                      setActionError(t('undoDoseError'));
+                                    }
+                                  }}
+                                  busy={heroPending !== null || bulkPending}
+                                  snoozeOptions={SNOOZE_OPTIONS}
+                                  defaultSnoozeMinutes={defaultSnoozeMinutes}
+                                  labels={{
+                                    time: bucket.time,
+                                    confirmTaken: t('confirmTaken'),
+                                    markTaken: t('markTakenFromHistory'),
+                                    takeEarly: t('takeEarly'),
+                                    markSkipped: t('markSkipped'),
+                                    snooze: t('snooze'),
+                                    snoozeRemindIn: t('snoozeRemindIn'),
+                                    skipReasonPrompt: t('skipReasonPrompt'),
+                                    cancel: t('cancel'),
+                                    undo: t('undo'),
+                                    contextBadge: t('reminderContextBadge'),
+                                  }}
+                                />
+                              </Animated.View>
+                            );
+                          })}
                         </Animated.View>
                       );
                     })}
@@ -555,8 +687,8 @@ export default function TodayScreen() {
               {asNeededLog.length > 0 ? (
                 <View>
                   <SectionHeader title={t('cadenceAsNeeded')} />
-                  <Card>
-                    {asNeededLog.map((entry, index) => {
+                  <View style={styles.groups}>
+                    {asNeededLog.map((entry) => {
                       const last = entry.doses[entry.doses.length - 1];
                       const line = last
                         ? t('asNeededTakenToday')
@@ -564,16 +696,17 @@ export default function TodayScreen() {
                             .replace('{time}', formatTime(last.scheduledAt))
                         : t('asNeededNoneToday');
                       return (
-                        <View
+                        <Animated.View
                           key={entry.plan.request.id}
-                          style={[styles.prnRow, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator }]}
+                          layout={LinearTransition}
+                          style={[styles.prnCard, { borderColor: c.separator }]}
                         >
-                          <MedicationGlyph appearance={entry.plan.appearance} form={entry.plan.form} />
+                          <MedicationGlyph appearance={entry.plan.appearance} form={entry.plan.form} size={48} />
                           <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                            <Text numberOfLines={2} style={[typography.headline, { color: c.textPrimary }]}>
+                            <Text numberOfLines={2} style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>
                               {entry.plan.label}
                             </Text>
-                            <Text style={[typography.footnote, { color: c.textSecondary }]}>
+                            <Text style={[typography.subhead, { color: c.textSecondary }]}>
                               {[
                                 entry.plan.strength,
                                 entry.plan.maxPerDay ? t('asNeededUpTo').replace('{count}', String(entry.plan.maxPerDay)) : undefined,
@@ -582,24 +715,29 @@ export default function TodayScreen() {
                                 .filter(Boolean)
                                 .join(' · ')}
                             </Text>
-                            <Text style={[typography.footnote, { color: last ? c.success : c.textSecondary, fontFamily: font.semibold }]}>
+                            <Animated.Text
+                              key={line}
+                              entering={FadeInDown.duration(200)}
+                              style={[typography.subhead, { color: last ? c.success : c.textSecondary, fontFamily: font.semibold }]}
+                            >
                               {entry.atMax ? t('asNeededMaxReached') : line}
-                            </Text>
+                            </Animated.Text>
                           </View>
                           <Button
                             size="sm"
+                            fullWidth={false}
                             label={t('logDoseCta')}
-                            icon={<Ionicons name="add" size={16} color={c.surface} />}
+                            icon={<Ionicons name="add" size={18} color={c.onInk} />}
                             disabled={entry.atMax || !isSelectedToday || prnPending !== null}
                             loading={prnPending === entry.plan.request.id}
                             haptic="success"
                             accessibilityLabel={`${t('logDoseCta')}, ${entry.plan.label}`}
                             onPress={() => void logAsNeeded(entry.plan)}
                           />
-                        </View>
+                        </Animated.View>
                       );
                     })}
-                  </Card>
+                  </View>
                 </View>
               ) : null}
 
@@ -622,32 +760,44 @@ export default function TodayScreen() {
 }
 
 const styles = StyleSheet.create({
-  groups: { gap: spacing(3) },
-  prnRow: {
+  greetingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
+  avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  dateTitle: { marginTop: spacing(5), marginBottom: spacing(5) },
+  bento: { flexDirection: 'row', gap: spacing(3) },
+  bentoTile: { flex: 1, gap: spacing(2), padding: spacing(4.5) },
+  bentoWide: { paddingVertical: spacing(4) },
+  bentoHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing(2), minHeight: 40 },
+  metricRow: { flexDirection: 'row', alignItems: 'baseline' },
+  groups: { gap: spacing(2.5) },
+  group: { gap: spacing(2.5), marginBottom: spacing(2) },
+  prnCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(3),
-    paddingHorizontal: spacing(4),
-    paddingVertical: spacing(3),
+    padding: spacing(3.5),
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
   },
   noticeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing(2.5),
-    paddingHorizontal: spacing(4),
-    paddingVertical: spacing(3),
+    gap: spacing(3),
+    paddingHorizontal: spacing(4.5),
+    paddingVertical: spacing(3.5),
   },
   timeHeader: {
-    paddingHorizontal: spacing(4),
-    paddingTop: spacing(3.5),
-    paddingBottom: spacing(2),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing(2),
+    paddingHorizontal: spacing(1),
+    minHeight: 44,
   },
   timeHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing(2),
+    gap: spacing(2.5),
   },
+  timeIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
 });

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-import { radius, spacing, typography } from '@/theme/tokens';
+import Animated, { FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import { font, radius, spacing, typography } from '@/theme/tokens';
 import { useMotion } from '@/theme/use-motion';
 import { useTokens } from '@/theme/use-tokens';
 import { useLocale } from '@/lib/takt/l10n';
@@ -38,8 +38,10 @@ export function WeekStripPicker({
   adherenceMap = {},
   todayLabel = 'Today',
 }: WeekStripPickerProps) {
-  const { c } = useTokens();
-  const { spring } = useMotion();
+  const { c, isDark } = useTokens();
+  const { spring, reduce } = useMotion();
+  // The selected pill is ink in light mode and paper in dark; its accent text follows suit.
+  const onPill = isDark ? c.onAccentSoft : c.accentSoft;
   const { locale } = useLocale();
   // App locale, not device locale: "both languages complete on every reachable screen".
   const tag = locale === 'de' ? 'de-DE' : 'en-US';
@@ -106,35 +108,51 @@ export function WeekStripPicker({
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
-        <Text style={[typography.subhead, { color: c.textSecondary, fontWeight: '600' }]}>{monthYearLabel}</Text>
+        <Text style={[typography.subhead, { color: c.textSecondary, fontFamily: font.semibold }]}>{monthYearLabel}</Text>
 
         {!isCurrentDayToday ? (
-          <AnimatedPressable
-            onPress={() => onSelectDate(new Date())}
-            accessibilityRole="button"
-            accessibilityLabel={todayLabel}
-            hitSlop={8}
-            style={[styles.todayButton, { backgroundColor: `${c.accent}1A`, borderColor: `${c.accent}33` }]}
-          >
-            <Ionicons name="calendar-outline" size={13} color={c.accent} />
-            <Text style={[typography.caption, { color: c.accent, fontWeight: '700' }]}>{todayLabel}</Text>
-          </AnimatedPressable>
+          <Animated.View entering={reduce ? undefined : FadeIn.duration(180)} exiting={reduce ? undefined : FadeOut.duration(120)}>
+            <AnimatedPressable
+              onPress={() => onSelectDate(new Date())}
+              accessibilityRole="button"
+              accessibilityLabel={todayLabel}
+              hitSlop={8}
+              style={[styles.todayButton, { backgroundColor: c.accentSoft }]}
+            >
+              <Ionicons name="return-down-back" size={15} color={c.onAccentSoft} />
+              <Text style={[typography.subhead, { color: c.onAccentSoft, fontFamily: font.bold }]}>{todayLabel}</Text>
+            </AnimatedPressable>
+          </Animated.View>
         ) : null}
       </View>
 
       <View style={styles.stripRow}>
-        <Animated.View pointerEvents="none" style={[styles.pill, { backgroundColor: c.accent }, pillStyle]} />
+        {/* Layering: white day pills, then the sliding ink pill, then the labels on top. */}
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.stripRow]}>
+          {weekDays.map((item) => (
+            <View
+              key={item.key}
+              style={[
+                styles.dayBackdrop,
+                { backgroundColor: item.date.getTime() <= today.getTime() ? c.surface : 'transparent' },
+              ]}
+            />
+          ))}
+        </View>
+        <Animated.View pointerEvents="none" style={[styles.pill, { backgroundColor: c.ink }, pillStyle]} />
         {weekDays.map((item) => {
-          let dotColor: string | null = null;
+          // Filled sage = every dose taken, rose ring = a missed dose, butter = partly done.
+          let mark: { color: string; ring: boolean } | null = null;
           if (item.adherence && item.adherence.total > 0) {
             if (item.adherence.taken === item.adherence.total) {
-              dotColor = c.success;
+              mark = { color: c.tones.sage.solid, ring: false };
             } else if (item.adherence.missed > 0) {
-              dotColor = c.destructive;
+              mark = { color: c.tones.rose.solid, ring: true };
             } else if (item.adherence.taken > 0) {
-              dotColor = c.warning;
+              mark = { color: c.tones.butter.solid, ring: false };
             }
           }
+          const isPast = item.date.getTime() <= today.getTime();
           const dayLabel = item.date.toLocaleDateString(tag, {
             weekday: 'long',
             month: 'long',
@@ -149,18 +167,19 @@ export function WeekStripPicker({
               accessibilityRole="button"
               accessibilityLabel={item.isToday ? `${todayLabel}, ${dayLabel}` : dayLabel}
               accessibilityState={{ selected: item.isSelected }}
+              scaleTo={0.92}
               style={[
                 styles.dayCell,
-                item.isToday && !item.isSelected && { borderColor: `${c.accent}66` },
+                item.isToday && !item.isSelected && { borderColor: c.textPrimary },
               ]}
             >
               <Text
                 style={[
-                  typography.overline,
+                  typography.caption,
                   styles.dayLabel,
                   {
-                    color: item.isSelected ? c.surface : item.isToday ? c.accent : c.textSecondary,
-                    fontWeight: item.isSelected || item.isToday ? '700' : '500',
+                    color: item.isSelected ? onPill : c.textSecondary,
+                    fontFamily: item.isSelected || item.isToday ? font.bold : font.semibold,
                   },
                 ]}
               >
@@ -169,22 +188,26 @@ export function WeekStripPicker({
 
               <Text
                 style={[
-                  typography.callout,
+                  typography.title3,
                   styles.numberLabel,
-                  {
-                    color: item.isSelected ? c.surface : c.textPrimary,
-                    fontWeight: item.isSelected ? '800' : '600',
-                  },
+                  { color: item.isSelected ? c.onInk : isPast ? c.textPrimary : c.textSecondary },
                 ]}
               >
                 {item.dayNumber}
               </Text>
 
               <View style={styles.dotContainer}>
-                {dotColor && !item.isSelected ? (
-                  <View style={[styles.statusDot, { backgroundColor: dotColor }]} />
-                ) : item.isToday && !item.isSelected ? (
-                  <View style={[styles.todayIndicator, { backgroundColor: c.accent }]} />
+                {mark ? (
+                  <View
+                    style={[
+                      styles.statusDot,
+                      mark.ring
+                        ? { borderWidth: 1.5, borderColor: item.isSelected ? c.onInk : mark.color }
+                        : { backgroundColor: item.isSelected ? onPill : mark.color },
+                    ]}
+                  />
+                ) : item.isToday ? (
+                  <View style={[styles.statusDot, { backgroundColor: item.isSelected ? onPill : c.textPrimary }]} />
                 ) : null}
               </View>
             </AnimatedPressable>
@@ -197,7 +220,7 @@ export function WeekStripPicker({
 
 const styles = StyleSheet.create({
   container: {
-    gap: spacing(2),
+    gap: spacing(3),
   },
   headerRow: {
     flexDirection: 'row',
@@ -209,11 +232,10 @@ const styles = StyleSheet.create({
   todayButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: spacing(2.5),
-    paddingVertical: spacing(1),
+    gap: spacing(1.5),
+    minHeight: 36,
+    paddingHorizontal: spacing(3.5),
     borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
   },
   stripRow: {
     flexDirection: 'row',
@@ -226,17 +248,18 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     left: 0,
-    borderRadius: radius.md,
+    borderRadius: radius.full,
   },
   dayCell: {
     flex: 1,
+    height: 76,
+    maxWidth: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing(1.5),
-    borderRadius: radius.md,
-    borderWidth: 1,
+    borderRadius: radius.full,
+    borderWidth: 1.5,
     borderColor: 'transparent',
-    gap: 2,
+    gap: 1,
   },
   dayLabel: {
     paddingHorizontal: spacing(0.5),
@@ -246,15 +269,16 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   dotContainer: {
-    height: 6,
+    height: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   statusDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
+  dayBackdrop: { flex: 1, height: 76, maxWidth: 52, borderRadius: radius.full },
   todayIndicator: {
     width: 4,
     height: 4,

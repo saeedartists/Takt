@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   FadeIn,
+  FadeInDown,
+  FadeOut,
   LinearTransition,
+  ZoomIn,
   interpolateColor,
   useAnimatedStyle,
   useSharedValue,
@@ -11,10 +14,11 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { Badge } from './badge';
+
+import { Badge, type BadgeTone } from './badge';
 import { AnimatedPressable } from './animated-pressable';
-import { Button } from './controls';
-import { radius, spacing, typography } from '../../theme/tokens';
+import { Button, type IconName } from './controls';
+import { font, radius, spacing, typography } from '../../theme/tokens';
 import { useMotion } from '../../theme/use-motion';
 import { useTokens } from '../../theme/use-tokens';
 import type { DoseOccurrence, DoseState, SkipReason } from '../../lib/takt/types';
@@ -26,6 +30,7 @@ export type SkipReasonOption = { code: SkipReason; label: string };
 
 type AnimatedDoseRowProps = {
   dose: DoseOccurrence;
+  /** Kept for API compatibility; rows are separate cards now. */
   isFirst?: boolean;
   isFocused?: boolean;
   canUndo: boolean;
@@ -34,6 +39,8 @@ type AnimatedDoseRowProps = {
   instruction?: string;
   /** Second line under the strength: "Taken at 08:05" or "Skipped · Forgot". */
   detail?: string;
+  /** Leading visual, normally the MedicationGlyph. */
+  leading?: ReactNode;
   onTake: () => Promise<void>;
   /** Skip with the reason the user picked; undefined when no reason list is offered. */
   onSkip: (reason?: SkipReason) => Promise<void>;
@@ -62,27 +69,31 @@ type AnimatedDoseRowProps = {
   };
 };
 
-const stateTone = (state: DoseState): 'neutral' | 'accent' | 'success' | 'warning' | 'destructive' => {
-  if (state === 'taken') return 'success';
-  if (state === 'due') return 'warning';
-  if (state === 'missed') return 'destructive';
-  if (state === 'skipped') return 'warning';
-  return 'neutral';
+const stateBadge = (state: DoseState): { tone: BadgeTone; icon?: IconName } => {
+  if (state === 'taken') return { tone: 'success', icon: 'checkmark' };
+  if (state === 'due') return { tone: 'accent', icon: 'time-outline' };
+  if (state === 'missed') return { tone: 'destructive', icon: 'close' };
+  if (state === 'skipped') return { tone: 'warning', icon: 'play-skip-forward' };
+  return { tone: 'neutral' };
 };
 
 /*
- * Every state carries its own visible action: due → Take / Skip / Snooze,
- * missed → Mark as taken / Skip, scheduled → Take early, taken or
- * skipped → Undo for ten minutes. Nothing hides behind a tap on the row.
+ * One dose, one card. Every state carries its own visible action:
+ * due → Taken / Snooze / Skip, missed → Mark as taken / Skip, scheduled →
+ * Take early, taken or skipped → Undo for ten minutes.
+ *
+ * Confirming: the card washes to a soft sage, the badge swaps with a
+ * small zoom and the name eases back, all under 200 ms and without
+ * bounce (Calm UX C.19).
  */
 export function AnimatedDoseRow({
   dose,
-  isFirst = false,
   isFocused = false,
   canUndo,
   stateLabel,
   instruction,
   detail,
+  leading,
   onTake,
   onSkip,
   onSnooze,
@@ -93,23 +104,23 @@ export function AnimatedDoseRow({
   skipReasons = [],
   labels,
 }: AnimatedDoseRowProps) {
-  const { c } = useTokens();
-  const { spring, duration } = useMotion();
+  const { c, isDark } = useTokens();
+  const { duration, reduce } = useMotion();
   const [pending, setPending] = useState<Pending>(null);
   const [panel, setPanel] = useState<Panel>(null);
   const [snoozeMinutes, setSnoozeMinutes] = useState(defaultSnoozeMinutes);
 
   useEffect(() => setSnoozeMinutes(defaultSnoozeMinutes), [defaultSnoozeMinutes]);
 
-  const checkScale = useSharedValue(1);
-  // 0 → 1 while taken (success tint), 0 → 1 while skipped (dimmed). Undo reverses both.
+  const pressScale = useSharedValue(1);
+  // 0 → 1 while taken (sage wash), 0 → 1 while skipped (dimmed). Undo reverses both.
   const takenT = useSharedValue(dose.state === 'taken' ? 1 : 0);
   const skippedT = useSharedValue(dose.state === 'skipped' ? 1 : 0);
 
   useEffect(() => {
-    takenT.value = withTiming(dose.state === 'taken' ? 1 : 0, { duration: duration.base });
+    takenT.value = withTiming(dose.state === 'taken' ? 1 : 0, { duration: duration.slow });
     skippedT.value = withTiming(dose.state === 'skipped' ? 1 : 0, { duration: duration.base });
-  }, [dose.state, duration.base, skippedT, takenT]);
+  }, [dose.state, duration.base, duration.slow, skippedT, takenT]);
 
   const run = async (kind: Exclude<Pending, null>, action: () => Promise<void>) => {
     setPending(kind);
@@ -121,7 +132,8 @@ export function AnimatedDoseRow({
   };
 
   const handleTake = () => {
-    checkScale.value = withSequence(withSpring(1.2, spring.snappy), withSpring(1, spring.gentle));
+    // A single soft "press down and settle" on the whole card; no overshoot.
+    pressScale.value = withSequence(withTiming(0.985, { duration: 90 }), withSpring(1, { damping: 26, stiffness: 300 }));
     void run('take', onTake);
   };
 
@@ -143,202 +155,175 @@ export function AnimatedDoseRow({
     setPanel(null);
   };
 
-  const checkAnimStyle = useAnimatedStyle(() => ({ transform: [{ scale: checkScale.value }] }));
-  const rowAnimStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(takenT.value, [0, 1], [`${c.success}00`, `${c.success}14`]),
-    opacity: 1 - skippedT.value * 0.4,
+  const washed = isDark ? '#1C2922' : '#EDF6EE';
+  const cardStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(takenT.value, [0, 1], [c.surface, washed]),
+    opacity: 1 - skippedT.value * 0.35,
+    transform: [{ scale: pressScale.value }],
   }));
-  const titleAnimStyle = useAnimatedStyle(() => ({ opacity: 1 - takenT.value * 0.35 }));
+  const titleStyle = useAnimatedStyle(() => ({ opacity: 1 - takenT.value * 0.3 }));
 
-  const railBg =
-    dose.state === 'taken'
-      ? c.success
-      : dose.state === 'due'
-        ? c.warning
-        : dose.state === 'missed'
-          ? c.destructive
-          : dose.state === 'skipped'
-            ? c.warning
-            : c.separator;
   const detailColor = dose.state === 'taken' ? c.success : dose.state === 'skipped' ? c.warning : c.textSecondary;
-
   const locked = busy || pending !== null;
   const who = `${dose.label}, ${labels.time}`;
   const actionable = dose.state === 'due' || dose.state === 'missed';
   const primaryLabel = dose.state === 'missed' ? labels.markTaken : labels.confirmTaken;
+  const badge = stateBadge(dose.state);
+  const layout = reduce ? undefined : LinearTransition.springify().damping(24).stiffness(220);
+  const panelIn = reduce ? undefined : FadeInDown.duration(220);
+  const panelOut = reduce ? undefined : FadeOut.duration(120);
 
   return (
     <Animated.View
-      layout={LinearTransition}
+      layout={layout}
       style={[
-        styles.row,
-        isFocused && { backgroundColor: c.surfaceRaised },
-        !isFirst && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator },
-        rowAnimStyle,
+        styles.card,
+        {
+          borderColor: isFocused ? c.accent : dose.state === 'due' ? c.textPrimary : 'transparent',
+          borderWidth: isFocused || dose.state === 'due' ? 2 : 0,
+        },
+        cardStyle,
       ]}
     >
-      <View style={[styles.rail, { backgroundColor: railBg }]} />
-
-      <View style={styles.contentCol}>
-        <View style={styles.titleRow}>
-          <Animated.View style={[{ flex: 1, minWidth: 0, gap: 2 }, titleAnimStyle]}>
-            <Text numberOfLines={2} style={[typography.headline, { color: c.textPrimary }]}>
-              {dose.label}
+      <View style={styles.titleRow}>
+        {leading}
+        <Animated.View style={[styles.textCol, titleStyle]}>
+          <Text numberOfLines={2} style={[typography.headline, styles.name, { color: c.textPrimary }]}>
+            {dose.label}
+          </Text>
+          {[dose.strength, instruction].filter(Boolean).length ? (
+            <Text style={[typography.subhead, { color: c.textSecondary }]}>
+              {[dose.strength, instruction].filter(Boolean).join(' · ')}
             </Text>
-            {dose.strength ? (
-              <Text style={[typography.footnote, { color: c.textSecondary }]}>{dose.strength}</Text>
-            ) : null}
-            {instruction ? (
-              <Text style={[typography.footnote, { color: c.textSecondary }]}>{instruction}</Text>
-            ) : null}
-            {detail ? (
-              <Text style={[typography.footnote, { color: detailColor, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>
-                {detail}
-              </Text>
-            ) : null}
-          </Animated.View>
-
-          <View style={styles.badgesWrap}>
-            <Badge label={stateLabel} tone={stateTone(dose.state)} />
-            {isFocused && labels.contextBadge ? (
-              <Badge label={labels.contextBadge} tone="accent" />
-            ) : null}
-          </View>
-        </View>
-
-        {actionable ? (
-          <View style={styles.dueActionsCol}>
-            <AnimatedPressable
-              onPress={handleTake}
-              disabled={locked}
-              haptic="success"
-              accessibilityRole="button"
-              accessibilityLabel={`${primaryLabel}, ${who}`}
-              accessibilityState={{ disabled: locked, busy: pending === 'take' }}
-              style={[styles.primaryAction, { backgroundColor: c.accent }]}
+          ) : null}
+          {detail ? (
+            <Animated.Text
+              key={detail}
+              entering={reduce ? undefined : FadeIn.duration(220)}
+              style={[typography.subhead, { color: detailColor, fontFamily: font.semibold, fontVariant: ['tabular-nums'] }]}
             >
-              <Animated.View style={[styles.actionInner, checkAnimStyle]}>
-                {pending === 'take' ? (
-                  <ActivityIndicator color={c.surface} />
-                ) : (
-                  <Ionicons name="checkmark" size={18} color={c.surface} />
-                )}
-                <Text style={[typography.headline, { color: c.surface, fontWeight: '600' }]}>{primaryLabel}</Text>
-              </Animated.View>
-            </AnimatedPressable>
+              {detail}
+            </Animated.Text>
+          ) : null}
+        </Animated.View>
 
-            <View style={styles.pillActionsRow}>
-              <AnimatedPressable
-                onPress={handleSkipPress}
+        <View style={styles.badgesWrap}>
+          {/* Keyed by state so a change swaps the badge with a small zoom. */}
+          <Animated.View key={dose.state} entering={reduce ? undefined : ZoomIn.duration(180)}>
+            {dose.state === 'scheduled' ? (
+              <View style={[styles.timePill, { borderColor: c.separator }]}>
+                <Text style={[typography.subhead, { color: c.textSecondary, fontFamily: font.semibold, fontVariant: ['tabular-nums'] }]}>
+                  {labels.time}
+                </Text>
+              </View>
+            ) : (
+              <Badge label={stateLabel} tone={badge.tone} icon={badge.icon} size="sm" />
+            )}
+          </Animated.View>
+          {isFocused && labels.contextBadge ? <Badge label={labels.contextBadge} tone="accent" size="sm" /> : null}
+        </View>
+      </View>
+
+      {actionable ? (
+        <Animated.View entering={panelIn} style={styles.actionsCol}>
+          <Button
+            label={primaryLabel}
+            accentIcon="checkmark"
+            loading={pending === 'take'}
+            disabled={locked}
+            haptic="success"
+            accessibilityLabel={`${primaryLabel}, ${who}`}
+            onPress={handleTake}
+          />
+          <View style={styles.pillRow}>
+            {dose.state === 'due' ? (
+              <View style={{ flex: 1 }}>
+                <Button
+                  kind="secondary"
+                  size="sm"
+                  label={labels.snooze}
+                  icon={<Ionicons name="alarm-outline" size={18} color={c.textPrimary} />}
+                  disabled={locked}
+                  accessibilityLabel={`${labels.snooze}, ${who}`}
+                  onPress={() => setPanel((current) => (current === 'snooze' ? null : 'snooze'))}
+                />
+              </View>
+            ) : null}
+            <View style={{ flex: 1 }}>
+              <Button
+                kind="outline"
+                size="sm"
+                label={labels.markSkipped}
+                loading={pending === 'skip'}
                 disabled={locked}
                 haptic="warning"
-                hitSlop={4}
-                accessibilityRole="button"
                 accessibilityLabel={`${labels.markSkipped}, ${who}`}
-                accessibilityState={{ disabled: locked, busy: pending === 'skip', expanded: panel === 'skip' }}
-                style={[
-                  styles.secondaryPill,
-                  { backgroundColor: `${c.warning}1A`, borderColor: panel === 'skip' ? c.warning : `${c.warning}44` },
-                ]}
-              >
-                {pending === 'skip' ? (
-                  <ActivityIndicator size="small" color={c.warning} />
-                ) : (
-                  <Ionicons name="close-circle-outline" size={15} color={c.warning} />
-                )}
-                <Text style={[typography.footnote, { color: c.warning, fontWeight: '600' }]}>
-                  {labels.markSkipped}
-                </Text>
-              </AnimatedPressable>
-
-              {dose.state === 'due' ? (
-                <AnimatedPressable
-                  onPress={() => setPanel((current) => (current === 'snooze' ? null : 'snooze'))}
-                  disabled={locked}
-                  hitSlop={4}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${labels.snooze}, ${who}`}
-                  accessibilityState={{ disabled: locked, expanded: panel === 'snooze' }}
-                  style={[
-                    styles.secondaryPill,
-                    { backgroundColor: `${c.accent}1A`, borderColor: panel === 'snooze' ? c.accent : `${c.accent}44` },
-                  ]}
-                >
-                  <Ionicons name="alarm-outline" size={15} color={c.accent} />
-                  <Text style={[typography.footnote, { color: c.accent, fontWeight: '600' }]}>
-                    {labels.snooze}
-                  </Text>
-                </AnimatedPressable>
-              ) : null}
+                onPress={handleSkipPress}
+              />
             </View>
+          </View>
 
-            {panel === 'skip' ? (
-              <Animated.View entering={FadeIn.duration(duration.fast)} style={styles.panel}>
-                {labels.skipReasonPrompt ? (
-                  <Text style={[typography.footnote, { color: c.textSecondary }]}>{labels.skipReasonPrompt}</Text>
-                ) : null}
-                <View style={styles.pillActionsRow}>
-                  {skipReasons.map((reason) => (
+          {panel === 'skip' ? (
+            <Animated.View entering={panelIn} exiting={panelOut} style={styles.panel}>
+              {labels.skipReasonPrompt ? (
+                <Text style={[typography.subhead, { color: c.textSecondary }]}>{labels.skipReasonPrompt}</Text>
+              ) : null}
+              <View style={styles.chipRow}>
+                {skipReasons.map((reason, i) => (
+                  <Animated.View key={reason.code} entering={reduce ? undefined : FadeIn.delay(35 * i).duration(160)}>
                     <AnimatedPressable
-                      key={reason.code}
                       onPress={() => void skipWith(reason.code)}
                       disabled={locked}
                       accessibilityRole="button"
                       accessibilityLabel={`${labels.markSkipped}: ${reason.label}, ${who}`}
-                      style={[styles.chip, { backgroundColor: c.surfaceRaised, borderColor: c.separator }]}
+                      style={[styles.chip, { backgroundColor: c.surfaceRaised }]}
                     >
-                      <Text style={[typography.subhead, { color: c.textPrimary, fontWeight: '600' }]}>
-                        {reason.label}
-                      </Text>
+                      <Text style={[typography.subhead, { color: c.textPrimary, fontFamily: font.semibold }]}>{reason.label}</Text>
                     </AnimatedPressable>
-                  ))}
-                </View>
-                <View style={styles.pillActionsRow}>
-                  <Button
-                    size="sm"
-                    kind="secondary"
-                    label={labels.cancel}
-                    disabled={pending === 'skip'}
-                    accessibilityLabel={`${labels.cancel} ${labels.markSkipped}, ${who}`}
-                    onPress={() => setPanel(null)}
-                  />
-                </View>
-              </Animated.View>
-            ) : null}
+                  </Animated.View>
+                ))}
+              </View>
+              <Button
+                size="sm"
+                kind="ghost"
+                fullWidth={false}
+                label={labels.cancel}
+                disabled={pending === 'skip'}
+                accessibilityLabel={`${labels.cancel} ${labels.markSkipped}, ${who}`}
+                onPress={() => setPanel(null)}
+              />
+            </Animated.View>
+          ) : null}
 
-            {panel === 'snooze' ? (
-              <Animated.View entering={FadeIn.duration(duration.fast)} style={styles.panel}>
-                <Text style={[typography.footnote, { color: c.textSecondary }]}>{labels.snoozeRemindIn}</Text>
-                <View style={styles.pillActionsRow}>
-                  {snoozeOptions.map((minutes) => {
-                    const selected = minutes === snoozeMinutes;
-                    return (
-                      <AnimatedPressable
-                        key={minutes}
-                        onPress={() => setSnoozeMinutes(minutes)}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected }}
-                        accessibilityLabel={`${labels.snooze} ${minutes} min, ${who}`}
+          {panel === 'snooze' ? (
+            <Animated.View entering={panelIn} exiting={panelOut} style={styles.panel}>
+              <Text style={[typography.subhead, { color: c.textSecondary }]}>{labels.snoozeRemindIn}</Text>
+              <View style={styles.chipRow}>
+                {snoozeOptions.map((minutes) => {
+                  const selected = minutes === snoozeMinutes;
+                  return (
+                    <AnimatedPressable
+                      key={minutes}
+                      onPress={() => setSnoozeMinutes(minutes)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`${labels.snooze} ${minutes} min, ${who}`}
+                      style={[styles.chip, { backgroundColor: selected ? c.ink : c.surfaceRaised }]}
+                    >
+                      <Text
                         style={[
-                          styles.chip,
-                          selected
-                            ? { backgroundColor: c.accent, borderColor: c.accent }
-                            : { backgroundColor: c.surfaceRaised, borderColor: c.separator },
+                          typography.subhead,
+                          { color: selected ? c.onInk : c.textPrimary, fontFamily: selected ? font.bold : font.semibold },
                         ]}
                       >
-                        <Text
-                          style={[
-                            typography.subhead,
-                            { color: selected ? c.surface : c.textPrimary, fontWeight: '600' },
-                          ]}
-                        >
-                          {`${minutes} min`}
-                        </Text>
-                      </AnimatedPressable>
-                    );
-                  })}
-                </View>
-                <View style={styles.pillActionsRow}>
+                        {`${minutes} min`}
+                      </Text>
+                    </AnimatedPressable>
+                  );
+                })}
+              </View>
+              <View style={styles.pillRow}>
+                <View style={{ flex: 1 }}>
                   <Button
                     size="sm"
                     label={labels.snooze}
@@ -347,6 +332,8 @@ export function AnimatedDoseRow({
                     accessibilityLabel={`${labels.snooze} ${snoozeMinutes} min, ${who}`}
                     onPress={() => void confirmSnooze()}
                   />
+                </View>
+                <View style={{ flex: 1 }}>
                   <Button
                     size="sm"
                     kind="secondary"
@@ -356,135 +343,97 @@ export function AnimatedDoseRow({
                     onPress={() => setPanel(null)}
                   />
                 </View>
-              </Animated.View>
-            ) : null}
-          </View>
-        ) : dose.state === 'scheduled' ? (
-          <View style={styles.pillActionsRow}>
+              </View>
+            </Animated.View>
+          ) : null}
+        </Animated.View>
+      ) : null}
+
+      {dose.state === 'scheduled' || canUndo ? (
+        <View style={styles.quietRow}>
+          {dose.state === 'scheduled' ? (
             <AnimatedPressable
               onPress={handleTake}
               disabled={locked}
               haptic="success"
-              hitSlop={4}
               accessibilityRole="button"
               accessibilityLabel={`${labels.takeEarly}, ${who}`}
               accessibilityState={{ disabled: locked, busy: pending === 'take' }}
-              style={[styles.secondaryPill, { backgroundColor: `${c.accent}14`, borderColor: `${c.accent}33` }]}
+              style={[styles.quietPill, { backgroundColor: c.surfaceRaised }]}
             >
               {pending === 'take' ? (
-                <ActivityIndicator size="small" color={c.accent} />
+                <ActivityIndicator size="small" color={c.textPrimary} />
               ) : (
-                <Ionicons name="checkmark-circle-outline" size={15} color={c.accent} />
+                <Ionicons name="checkmark" size={18} color={c.textPrimary} />
               )}
-              <Text style={[typography.footnote, { color: c.accent, fontWeight: '600' }]}>{labels.takeEarly}</Text>
+              <Text style={[typography.subhead, { color: c.textPrimary, fontFamily: font.semibold }]}>{labels.takeEarly}</Text>
             </AnimatedPressable>
-          </View>
-        ) : null}
-
-        {canUndo ? (
-          <View style={styles.undoRow}>
-            <AnimatedPressable
-              onPress={() => void run('undo', onUndo)}
-              disabled={locked}
-              hitSlop={4}
-              accessibilityRole="button"
-              accessibilityLabel={`${labels.undo}, ${who}`}
-              accessibilityState={{ disabled: locked, busy: pending === 'undo' }}
-              style={[
-                styles.secondaryPill,
-                { backgroundColor: `${c.accent}14`, borderColor: `${c.accent}33` },
-              ]}
-            >
-              {pending === 'undo' ? (
-                <ActivityIndicator size="small" color={c.accent} />
-              ) : (
-                <Ionicons name="arrow-undo" size={14} color={c.accent} />
-              )}
-              <Text style={[typography.footnote, { color: c.accent, fontWeight: '600' }]}>
-                {labels.undo}
-              </Text>
-            </AnimatedPressable>
-          </View>
-        ) : null}
-      </View>
+          ) : null}
+          {canUndo ? (
+            <Animated.View entering={reduce ? undefined : FadeIn.delay(200).duration(200)}>
+              <AnimatedPressable
+                onPress={() => void run('undo', onUndo)}
+                disabled={locked}
+                accessibilityRole="button"
+                accessibilityLabel={`${labels.undo}, ${who}`}
+                accessibilityState={{ disabled: locked, busy: pending === 'undo' }}
+                style={[styles.quietPill, { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: c.separator }]}
+              >
+                {pending === 'undo' ? (
+                  <ActivityIndicator size="small" color={c.textSecondary} />
+                ) : (
+                  <Ionicons name="arrow-undo" size={16} color={c.textSecondary} />
+                )}
+                <Text style={[typography.subhead, { color: c.textSecondary, fontFamily: font.semibold }]}>{labels.undo}</Text>
+              </AnimatedPressable>
+            </Animated.View>
+          ) : null}
+        </View>
+      ) : null}
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingHorizontal: spacing(4),
-    paddingVertical: spacing(3.5),
+  card: {
+    borderRadius: radius.lg,
+    padding: spacing(3.5),
     gap: spacing(3),
-  },
-  rail: {
-    width: 4,
-    borderRadius: radius.full,
-    minHeight: 46,
-    alignSelf: 'stretch',
-  },
-  contentCol: {
-    flex: 1,
-    minWidth: 0,
-    gap: spacing(2.5),
   },
   titleRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing(2),
-  },
-  badgesWrap: {
-    flexDirection: 'row',
-    gap: spacing(1.5),
     alignItems: 'center',
+    gap: spacing(3),
   },
-  dueActionsCol: {
-    gap: spacing(2),
-    marginTop: spacing(1),
-  },
-  primaryAction: {
-    minHeight: 44,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing(4),
-  },
-  actionInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(2),
-  },
-  pillActionsRow: {
-    flexDirection: 'row',
-    gap: spacing(2),
-    flexWrap: 'wrap',
-  },
-  secondaryPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(1.5),
-    minHeight: 40,
+  textCol: { flex: 1, minWidth: 0, gap: 2 },
+  name: { fontFamily: font.bold, fontSize: 18 },
+  badgesWrap: { alignItems: 'flex-end', gap: spacing(1.5) },
+  timePill: {
+    minHeight: 32,
     paddingHorizontal: spacing(3),
     borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  panel: {
-    gap: spacing(2),
-    paddingTop: spacing(1),
-  },
-  chip: {
-    minHeight: 40,
-    paddingHorizontal: spacing(3.5),
-    borderRadius: radius.full,
-    borderWidth: 1,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  undoRow: {
+  actionsCol: { gap: spacing(2.5) },
+  pillRow: { flexDirection: 'row', gap: spacing(2.5) },
+  panel: { gap: spacing(2.5), paddingTop: spacing(1) },
+  chipRow: { flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' },
+  chip: {
+    minHeight: 44,
+    paddingHorizontal: spacing(4),
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quietRow: { flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' },
+  quietPill: {
     flexDirection: 'row',
-    marginTop: spacing(1),
+    alignItems: 'center',
+    gap: spacing(1.5),
+    minHeight: 44,
+    paddingHorizontal: spacing(4),
+    borderRadius: radius.full,
   },
 });

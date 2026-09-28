@@ -1,69 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
+  Easing,
   FadeIn,
+  FadeInDown,
+  FadeOut,
   LinearTransition,
   ZoomIn,
-  useAnimatedProps,
+  useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withSpring,
+  withTiming,
 } from 'react-native-reanimated';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Path, Rect } from 'react-native-svg';
+
 import { useLocale } from '../../lib/takt/l10n';
 import { describeInstruction } from '../../lib/takt/medication-form';
 import type { DoseOccurrence, DoseState, SkipReason } from '../../lib/takt/types';
-import { motion, radius, spacing, typography } from '../../theme/tokens';
+import { INK, font, radius, spacing, typography } from '../../theme/tokens';
 import { useMotion } from '../../theme/use-motion';
 import { useTokens } from '../../theme/use-tokens';
 import { AnimatedPressable } from './animated-pressable';
 import type { SkipReasonOption } from './animated-dose-row';
-import { Badge } from './badge';
-import { Card } from './card';
+import { Tile } from './card';
 import { Button } from './controls';
 
 export type HeroPending = 'take' | 'skip' | 'snooze' | null;
-
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-const RING_SIZE = 56;
-const RING_STROKE = 6;
-const RING_R = (RING_SIZE - RING_STROKE) / 2;
-const RING_C = 2 * Math.PI * RING_R;
-
-/** 56px completion ring; the dash offset springs to the new value. */
-const ProgressRing = ({ pct }: { pct: number }) => {
-  const { c } = useTokens();
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    progress.value = withSpring(Math.max(0, Math.min(100, pct)) / 100, motion.spring.gentle);
-  }, [pct, progress]);
-
-  const animatedProps = useAnimatedProps(() => ({
-    strokeDashoffset: RING_C * (1 - progress.value),
-  }));
-
-  return (
-    <View style={styles.ring} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <Svg width={RING_SIZE} height={RING_SIZE}>
-        <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_R} stroke={c.surfaceRaised} strokeWidth={RING_STROKE} fill="none" />
-        <AnimatedCircle
-          cx={RING_SIZE / 2}
-          cy={RING_SIZE / 2}
-          r={RING_R}
-          stroke={pct >= 100 ? c.success : c.accent}
-          strokeWidth={RING_STROKE}
-          strokeLinecap="round"
-          fill="none"
-          strokeDasharray={`${RING_C} ${RING_C}`}
-          animatedProps={animatedProps}
-          transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
-        />
-      </Svg>
-      <Text style={[typography.caption, styles.ringLabel, { color: c.textSecondary }]}>{`${Math.round(pct)}%`}</Text>
-    </View>
-  );
-};
 
 type TodayHeroCardProps = {
   patientName?: string;
@@ -84,14 +48,59 @@ type TodayHeroCardProps = {
 };
 
 /*
- * TodayHeroCard — greeting, today's count and the one thing to do right
- * now, in a single card so the timeline starts above the fold.
- * Due → Take / Skip / Snooze always visible; next → "Take early";
- * all taken → calm check; no plans → onboarding CTA. No countdown
- * (Calm UX B.13).
+ * The big translucent capsule behind the hero. It rolls in when the card
+ * first appears and turns half a revolution each time the next dose
+ * changes, a small "on to the next one" beat. No looping motion.
+ */
+const HeroCapsule = ({ turnKey }: { turnKey: string }) => {
+  const { reduce } = useMotion();
+  const rotation = useSharedValue(reduce ? -36 : -70);
+  const shift = useSharedValue(reduce ? 0 : 40);
+  const first = useRef(true);
+
+  useEffect(() => {
+    if (reduce) return;
+    if (first.current) {
+      first.current = false;
+      rotation.value = withDelay(120, withSpring(-36, { damping: 20, stiffness: 90 }));
+      shift.value = withDelay(120, withSpring(0, { damping: 22, stiffness: 110 }));
+      return;
+    }
+    rotation.value = withTiming(rotation.value + 180, { duration: 900, easing: Easing.inOut(Easing.cubic) });
+  }, [reduce, rotation, shift, turnKey]);
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateX: shift.value }, { rotate: `${rotation.value}deg` }],
+  }));
+
+  return (
+    <Animated.View pointerEvents="none" style={[styles.capsule, style]}>
+      <Svg width={170} height={170} viewBox="0 0 170 170">
+        <Rect x={25} y={59} width={120} height={52} rx={26} fill="#FFFFFF" opacity={0.5} />
+        <Path d="M85 59v52" stroke="#FFFFFF" strokeWidth={3} opacity={0.6} />
+      </Svg>
+    </Animated.View>
+  );
+};
+
+/** Small chip on the hero: ink for "due now", white glass for "next". */
+const HeroChip = ({ label, icon, strong }: { label: string; icon: React.ComponentProps<typeof Ionicons>['name']; strong: boolean }) => (
+  <View style={[styles.chip, { backgroundColor: strong ? INK : 'rgba(255,255,255,0.72)' }]}>
+    <Ionicons name={icon} size={16} color={strong ? '#FAD6B4' : INK} />
+    <Text style={[typography.subhead, { color: strong ? '#F5F2ED' : INK, fontFamily: font.bold, fontVariant: ['tabular-nums'] }]}>
+      {label}
+    </Text>
+  </View>
+);
+
+/*
+ * TodayHeroCard — the one thing to do right now, on the palette's pastel
+ * tile. Due → Taken (ink, action dot) / Snooze / Skip; next → "Take
+ * early"; all taken → a calm sage "all done"; no plans → the first step.
+ * Content crossfades when the dose changes; the tile height glides.
+ * No countdown, no pulsing (Calm UX B.13).
  */
 export function TodayHeroCard({
-  patientName,
   doses,
   hasPlans,
   showFirstDoseHint,
@@ -106,26 +115,18 @@ export function TodayHeroCard({
 }: TodayHeroCardProps) {
   const { c } = useTokens();
   const { t, formatTime } = useLocale();
-  const { duration, reduce } = useMotion();
+  const { reduce } = useMotion();
   const [skipOpen, setSkipOpen] = useState(false);
-
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? t('greetingMorning') : hour < 18 ? t('greetingAfternoon') : t('greetingEvening');
-  const greetingText = patientName ? `${greeting}, ${patientName}` : greeting;
 
   const total = doses.length;
   const taken = doses.filter((d) => d.state === 'taken').length;
-  const pct = total > 0 ? Math.round((taken / total) * 100) : 0;
   const due = doses.find((d) => d.state === 'due');
   const next = doses.find((d) => d.state === 'scheduled');
   const allTaken = total > 0 && taken === total;
   const dose = due ?? next;
   const time = dose ? formatTime(dose.scheduledAt) : '';
-  const summary = !hasPlans
-    ? null
-    : total === 0
-      ? t('noDosesToday')
-      : t('takenOfTotal').replace('{taken}', String(taken)).replace('{total}', String(total));
+
+  useEffect(() => setSkipOpen(false), [dose?.id]);
 
   const handleSkip = () => {
     if (!due) return;
@@ -136,100 +137,139 @@ export function TodayHeroCard({
     setSkipOpen((open) => !open);
   };
 
-  return (
-    <Card>
-      <Animated.View layout={LinearTransition} style={styles.body}>
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryText}>
-            <Text numberOfLines={1} style={[typography.subhead, { color: c.textSecondary }]}>
-              {greetingText}
-            </Text>
-            {summary ? (
-              <Text style={[typography.headline, { color: c.textPrimary, fontVariant: ['tabular-nums'] }]}>{summary}</Text>
-            ) : null}
-          </View>
-          {total > 0 ? <ProgressRing pct={pct} /> : null}
-        </View>
+  const layout = reduce ? undefined : LinearTransition.springify().damping(24).stiffness(200);
+  const swapIn = reduce ? undefined : FadeInDown.duration(320);
+  const swapOut = reduce ? undefined : FadeOut.duration(140);
 
-        <View style={[styles.divider, { backgroundColor: c.separator }]} />
-
-        {!hasPlans ? (
+  if (!hasPlans) {
+    return (
+      <Animated.View layout={layout}>
+        <Tile tone="accent" style={styles.tile}>
+          <HeroCapsule turnKey="onboarding" />
           <View style={styles.block}>
-            <Badge label={t('journeyStepOneLabel')} tone="accent" />
-            <Text style={[typography.headline, { color: c.textPrimary }]}>{t('journeyCardTitle')}</Text>
-            <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('journeyCardNeedMedication')}</Text>
-            <Button label={t('journeyAddMedicationCta')} onPress={onAddMedication} />
+            <View style={[styles.chip, { backgroundColor: INK }]}>
+              <Text style={[typography.subhead, { color: '#F5F2ED', fontFamily: font.bold }]}>{t('journeyStepOneLabel')}</Text>
+            </View>
+            <Text style={[typography.largeTitle, styles.onTile]}>{t('journeyCardTitle')}</Text>
+            <Text style={[typography.body, { color: c.onAccentSoft }]}>{t('journeyCardNeedMedication')}</Text>
+            <Button label={t('journeyAddMedicationCta')} accentIcon="add" size="lg" onTone onPress={onAddMedication} />
           </View>
-        ) : allTaken ? (
-          <View style={styles.celebrateRow}>
+        </Tile>
+      </Animated.View>
+    );
+  }
+
+  if (allTaken) {
+    return (
+      <Animated.View layout={layout} entering={swapIn}>
+        <Tile tone="sage" style={styles.tile}>
+          <View pointerEvents="none" style={styles.rings}>
+            <View style={[styles.ring, { width: 200, height: 200, borderRadius: 100 }]} />
+            <View style={[styles.ring, { width: 124, height: 124, borderRadius: 62, top: 38, left: 38 }]} />
+          </View>
+          <View style={styles.block}>
             <Animated.View
-              entering={reduce ? undefined : ZoomIn.springify().damping(14)}
-              style={[styles.celebrateIcon, { backgroundColor: `${c.success}1A` }]}
+              entering={reduce ? undefined : ZoomIn.delay(120).springify().damping(16).stiffness(180)}
+              style={[styles.doneBadge, { backgroundColor: c.tones.sage.solid }]}
             >
-              <Ionicons name="checkmark-circle" size={30} color={c.success} />
+              <Ionicons name="checkmark" size={32} color="#FFFFFF" />
             </Animated.View>
-            <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-              <Text style={[typography.headline, { color: c.textPrimary }]}>{t('allDoneToday')}</Text>
-              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('allDoneSubtitle')}</Text>
-            </View>
+            <Text accessibilityRole="header" style={[typography.largeTitle, styles.onTile]}>
+              {t('allDoneToday')}
+            </Text>
+            <Text style={[typography.body, { color: c.tones.sage.fg }]}>{t('allDoneSubtitle')}</Text>
           </View>
-        ) : dose ? (
-          <View style={styles.block}>
-            <View style={styles.labelRow}>
-              <Text style={[typography.overline, { color: c.textSecondary }]}>{t('nextDose')}</Text>
-              <Badge label={stateLabel(dose.state)} tone={due ? 'warning' : 'neutral'} />
-            </View>
-            <View>
-              <Text style={[typography.title2, { color: c.textPrimary }]}>{dose.label}</Text>
-              <Text style={[typography.subhead, { color: c.textSecondary, marginTop: 2, fontVariant: ['tabular-nums'] }]}>
-                {[time, dose.strength].filter(Boolean).join(' · ')}
-              </Text>
-              {describeInstruction(dose, t) ? (
-                <Text style={[typography.footnote, { color: c.textSecondary, marginTop: 2 }]}>{describeInstruction(dose, t)}</Text>
-              ) : null}
-            </View>
+        </Tile>
+      </Animated.View>
+    );
+  }
 
-            {due ? (
-              <>
-                <Button
-                  label={t('confirmTaken')}
-                  icon={<Ionicons name="checkmark" size={18} color={c.surface} />}
-                  loading={pending === 'take'}
-                  disabled={pending !== null}
-                  haptic="success"
-                  accessibilityLabel={`${t('confirmTaken')}, ${due.label}, ${time}`}
-                  onPress={() => onTake(due)}
-                />
-                <View style={styles.secondaryRow}>
-                  <View style={{ flex: 1 }}>
-                    <Button
-                      kind="secondary"
-                      label={t('markSkipped')}
-                      loading={pending === 'skip'}
-                      disabled={pending !== null}
-                      haptic="warning"
-                      accessibilityLabel={`${t('markSkipped')}, ${due.label}, ${time}`}
-                      onPress={handleSkip}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Button
-                      kind="secondary"
-                      label={`${t('snooze')} ${snoozeMinutes} min`}
-                      loading={pending === 'snooze'}
-                      disabled={pending !== null}
-                      accessibilityLabel={`${t('snooze')} ${snoozeMinutes} min, ${due.label}, ${time}`}
-                      onPress={() => onSnooze(due)}
-                    />
-                  </View>
+  if (!dose) {
+    return (
+      <Animated.View layout={layout} entering={swapIn}>
+        <Tile tone="surface" style={styles.tile}>
+          <View style={styles.row}>
+            <Ionicons name="moon-outline" size={22} color={c.textSecondary} />
+            <Text style={[typography.headline, { color: c.textPrimary, flex: 1 }]}>{t('noMoreDosesToday')}</Text>
+          </View>
+        </Tile>
+      </Animated.View>
+    );
+  }
+
+  const instruction = describeInstruction(dose, t);
+
+  return (
+    <Animated.View layout={layout}>
+      <Tile tone="accent" style={styles.tile}>
+        <HeroCapsule turnKey={dose.id} />
+        <Animated.View key={dose.id} entering={swapIn} exiting={swapOut} style={styles.block}>
+          <View style={styles.labelRow}>
+            <Text style={[typography.overline, { color: c.onAccentSoft }]}>{t('nextDose')}</Text>
+          </View>
+          <HeroChip
+            label={`${stateLabel(dose.state)} · ${time}`}
+            icon={due ? 'time' : 'time-outline'}
+            strong={Boolean(due)}
+          />
+          <View>
+            <Text numberOfLines={2} style={[typography.display, styles.onTile]}>
+              {dose.label}
+            </Text>
+            <Text style={[typography.body, { color: c.onAccentSoft, marginTop: spacing(1.5) }]}>
+              {[dose.strength, instruction].filter(Boolean).join(' · ')}
+            </Text>
+          </View>
+
+          {due ? (
+            <View style={styles.actions}>
+              <Button
+                label={t('confirmTaken')}
+                accentIcon="checkmark"
+                size="lg"
+                onTone
+                loading={pending === 'take'}
+                disabled={pending !== null}
+                haptic="success"
+                accessibilityLabel={`${t('confirmTaken')}, ${due.label}, ${time}`}
+                onPress={() => onTake(due)}
+              />
+              <View style={styles.secondaryRow}>
+                <View style={{ flex: 1 }}>
+                  <Button
+                    kind="secondary"
+                    onTone
+                    label={`${t('snooze')} ${snoozeMinutes} min`}
+                    loading={pending === 'snooze'}
+                    disabled={pending !== null}
+                    accessibilityLabel={`${t('snooze')} ${snoozeMinutes} min, ${due.label}, ${time}`}
+                    onPress={() => onSnooze(due)}
+                  />
                 </View>
-                {skipOpen ? (
-                  <Animated.View entering={FadeIn.duration(duration.fast)} style={styles.reasonPanel}>
-                    <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('skipReasonPrompt')}</Text>
-                    <View style={styles.chipRow}>
-                      {skipReasons.map((reason) => (
+                <View style={{ flex: 0.7 }}>
+                  <Button
+                    kind="outline"
+                    onTone
+                    label={t('markSkipped')}
+                    loading={pending === 'skip'}
+                    disabled={pending !== null}
+                    haptic="warning"
+                    accessibilityLabel={`${t('markSkipped')}, ${due.label}, ${time}`}
+                    onPress={handleSkip}
+                  />
+                </View>
+              </View>
+              {skipOpen ? (
+                <Animated.View
+                  entering={reduce ? undefined : FadeInDown.duration(220)}
+                  exiting={reduce ? undefined : FadeOut.duration(120)}
+                  style={styles.reasonPanel}
+                >
+                  <Text style={[typography.subhead, { color: c.onAccentSoft }]}>{t('skipReasonPrompt')}</Text>
+                  <View style={styles.chipRow}>
+                    {skipReasons.map((reason, i) => (
+                      <Animated.View key={reason.code} entering={reduce ? undefined : FadeIn.delay(40 * i).duration(180)}>
                         <AnimatedPressable
-                          key={reason.code}
                           disabled={pending !== null}
                           accessibilityRole="button"
                           accessibilityLabel={`${t('markSkipped')}: ${reason.label}, ${due.label}, ${time}`}
@@ -237,71 +277,70 @@ export function TodayHeroCard({
                             setSkipOpen(false);
                             onSkip(due, reason.code);
                           }}
-                          style={[styles.chip, { backgroundColor: c.surfaceRaised, borderColor: c.separator }]}
+                          style={styles.reasonChip}
                         >
-                          <Text style={[typography.subhead, { color: c.textPrimary, fontWeight: '600' }]}>{reason.label}</Text>
+                          <Text style={[typography.subhead, { color: INK, fontFamily: font.semibold }]}>{reason.label}</Text>
                         </AnimatedPressable>
-                      ))}
-                    </View>
-                  </Animated.View>
-                ) : null}
-                {showFirstDoseHint ? (
-                  <Text style={[typography.footnote, { color: c.textTertiary }]}>{t('journeyCardNeedDose')}</Text>
-                ) : null}
-              </>
-            ) : (
+                      </Animated.View>
+                    ))}
+                  </View>
+                </Animated.View>
+              ) : null}
+              {showFirstDoseHint ? (
+                <Text style={[typography.subhead, { color: c.onAccentSoft }]}>{t('journeyCardNeedDose')}</Text>
+              ) : null}
+            </View>
+          ) : (
+            <View style={styles.actions}>
               <Button
                 kind="secondary"
+                onTone
                 label={t('takeEarly')}
-                icon={<Ionicons name="checkmark" size={18} color={c.textPrimary} />}
+                icon={<Ionicons name="checkmark" size={20} color={INK} />}
                 loading={pending === 'take'}
                 disabled={pending !== null}
                 haptic="success"
                 accessibilityLabel={`${t('takeEarly')}, ${dose.label}, ${time}`}
                 onPress={() => onTake(dose)}
               />
-            )}
-          </View>
-        ) : (
-          <Text style={[typography.headline, { color: c.textPrimary }]}>{t('noMoreDosesToday')}</Text>
-        )}
-      </Animated.View>
-    </Card>
+            </View>
+          )}
+        </Animated.View>
+      </Tile>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  body: { padding: spacing(4), gap: spacing(3) },
-  summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing(3) },
-  summaryText: { flex: 1, minWidth: 0, gap: 2 },
-  divider: { height: StyleSheet.hairlineWidth, alignSelf: 'stretch' },
-  block: { gap: spacing(3) },
-  labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing(2) },
-  secondaryRow: { flexDirection: 'row', gap: spacing(2) },
-  reasonPanel: { gap: spacing(2) },
-  chipRow: { flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' },
+  tile: { borderRadius: radius.xxl, padding: spacing(5.5) },
+  onTile: { color: INK },
+  block: { gap: spacing(3.5) },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
+  labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: -spacing(1.5) },
   chip: {
-    minHeight: 40,
-    paddingHorizontal: spacing(3.5),
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(1.5),
+    minHeight: 36,
+    paddingLeft: spacing(2.5),
+    paddingRight: spacing(3.5),
     borderRadius: radius.full,
-    borderWidth: 1,
+  },
+  actions: { gap: spacing(2.5), marginTop: spacing(1) },
+  secondaryRow: { flexDirection: 'row', gap: spacing(2.5) },
+  reasonPanel: { gap: spacing(2.5), paddingTop: spacing(1) },
+  chipRow: { flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' },
+  reasonChip: {
+    minHeight: 44,
+    paddingHorizontal: spacing(4),
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.74)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  celebrateRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
-  celebrateIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ring: {
-    width: RING_SIZE,
-    height: RING_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.full,
-  },
-  ringLabel: { position: 'absolute', fontWeight: '600', fontVariant: ['tabular-nums'] },
+  capsule: { position: 'absolute', right: -34, top: -30 },
+  rings: { position: 'absolute', right: -56, top: -48, width: 200, height: 200 },
+  ring: { position: 'absolute', borderWidth: 18, borderColor: 'rgba(255,255,255,0.4)' },
+  doneBadge: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
 });
