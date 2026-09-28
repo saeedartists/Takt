@@ -568,12 +568,15 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
                     ) : null}
                   </View>
                   {addingTime ? (
-                    <Animated.View entering={FadeIn.duration(duration.fast)} exiting={FadeOut.duration(duration.fast)} style={styles.addRow}>
-                      <View style={styles.grow}>
-                        <TimeField mode="time" value={draftTime} onChange={setDraftTime} accessibilityLabel={t('selectTimeLabel')} autoFocus />
+                    <Animated.View entering={FadeIn.duration(duration.fast)} exiting={FadeOut.duration(duration.fast)} style={styles.addColumn}>
+                      {/* Full width so the iOS time wheel has room to turn. */}
+                      <TimeField mode="time" value={draftTime} onChange={setDraftTime} accessibilityLabel={t('selectTimeLabel')} autoFocus />
+                      <View style={styles.addRow}>
+                        <View style={styles.grow}>
+                          <Button onTone size="sm" label={t('addTimeConfirm')} onPress={commitDraft} disabled={!isClockTime(draftTime)} />
+                        </View>
+                        <IconButton icon="close" accessibilityLabel={t('cancel')} onPress={() => setAddingTime(false)} />
                       </View>
-                      <Button onTone size="sm" fullWidth={false} label={t('addTimeConfirm')} onPress={commitDraft} disabled={!isClockTime(draftTime)} />
-                      <IconButton icon="close" accessibilityLabel={t('cancel')} onPress={() => setAddingTime(false)} />
                     </Animated.View>
                   ) : null}
                 </FormField>
@@ -752,6 +755,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: 'rgba(21,23,28,0.35)',
   },
+  addColumn: { gap: spacing(2.5) },
   addRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(2) },
   grow: { flex: 1, minWidth: 0 },
   smallInput: { width: 104 },

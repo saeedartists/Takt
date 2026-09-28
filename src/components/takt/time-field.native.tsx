@@ -2,7 +2,7 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Platform, StyleSheet, Text } from 'react-native';
-import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
 
 import {
   AnimatedPressable,
@@ -98,13 +98,20 @@ export const TimeField = ({
       </AnimatedPressable>
 
       {open && Platform.OS === 'ios' ? (
-        <Animated.View entering={FadeIn.duration(duration.fast)}>
+        // The iOS wheel (it ticks as it turns) sits on its own card so it keeps contrast on any tile.
+        <Animated.View
+          entering={FadeInDown.duration(duration.base)}
+          exiting={FadeOut.duration(duration.fast)}
+          style={[styles.wheelCard, { backgroundColor: c.surface }]}
+        >
           <DateTimePicker
             value={toDate(mode, value)}
             mode={mode}
             display="spinner"
             themeVariant={isDark ? 'dark' : 'light'}
+            textColor={c.textPrimary}
             onChange={handleChange}
+            style={styles.wheel}
           />
         </Animated.View>
       ) : null}
@@ -117,6 +124,8 @@ export const TimeField = ({
 
 const styles = StyleSheet.create({
   wrap: { gap: spacing(2) },
+  wheelCard: { borderRadius: radius.lg, overflow: 'hidden', alignItems: 'center' },
+  wheel: { alignSelf: 'stretch' },
   field: {
     minHeight: 56,
     flexDirection: 'row',
