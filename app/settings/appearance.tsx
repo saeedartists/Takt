@@ -88,7 +88,7 @@ const CheckBadge = () => {
       exiting={FadeOut.duration(120)}
       style={styles.check}
     >
-      <Ionicons name="checkmark" size={18} color={PAPER} />
+      <Ionicons name="checkmark" size={16} color={PAPER} />
     </Animated.View>
   );
 };
@@ -142,7 +142,7 @@ function PalettePreview() {
             <Text style={[typography.subhead, { color: INK }]}>Ramipril · 5 mg</Text>
           </View>
           <View style={styles.previewIcon}>
-            <PillIcon size={26} color={INK} />
+            <PillIcon size={22} color={INK} />
           </View>
         </Animated.View>
         <View style={styles.previewRow}>
@@ -174,7 +174,7 @@ export default function AppearanceSettingsScreen() {
     <PageShell>
       <Stack>
         <Animated.View entering={enter(0)}>
-          <Text accessibilityRole="header" style={[typography.largeTitle, { color: c.textPrimary }]}>
+          <Text accessibilityRole="header" style={[typography.title2, { color: c.textPrimary }]}>
             {t('appearanceLead')}
           </Text>
         </Animated.View>
@@ -261,23 +261,23 @@ const styles = StyleSheet.create({
   group: { gap: spacing(3) },
   groupLabel: { paddingHorizontal: spacing(1) },
   paletteGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3) },
-  paletteCard: { flexBasis: '46%', flexGrow: 1, padding: spacing(4), gap: spacing(3.5), minHeight: 132 },
+  paletteCard: { flexBasis: '46%', flexGrow: 1, padding: spacing(3.5), gap: spacing(2.5) },
   paletteTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  paletteDot: { width: 36, height: 36, borderRadius: 18 },
+  paletteDot: { width: 28, height: 28, borderRadius: 14 },
   check: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: INK,
     alignItems: 'center',
     justifyContent: 'center',
   },
   preview: { padding: spacing(4), gap: spacing(3) },
-  previewTile: { flexDirection: 'row', alignItems: 'center', borderRadius: radius.lg, padding: spacing(4), gap: spacing(3) },
+  previewTile: { flexDirection: 'row', alignItems: 'center', borderRadius: radius.lg, paddingVertical: spacing(3), paddingHorizontal: spacing(4), gap: spacing(3) },
   previewIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.72)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -305,13 +305,13 @@ const styles = StyleSheet.create({
   modeCard: { flex: 1, padding: spacing(2.5), gap: spacing(2), alignItems: 'center', minHeight: 48 },
   swatch: {
     alignSelf: 'stretch',
-    height: 64,
-    borderRadius: 14,
+    height: 52,
+    borderRadius: 12,
     overflow: 'hidden',
     flexDirection: 'row',
     borderWidth: StyleSheet.hairlineWidth,
   },
   swatchHalf: { flex: 1, padding: spacing(1.5), gap: spacing(1) },
-  swatchCard: { height: 18, borderRadius: 6 },
-  swatchTile: { height: 18, width: '70%', borderRadius: 6 },
+  swatchCard: { height: 14, borderRadius: 5 },
+  swatchTile: { height: 14, width: '70%', borderRadius: 5 },
 });

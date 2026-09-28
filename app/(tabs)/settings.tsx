@@ -33,6 +33,8 @@ import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { ovokClient } from '@/lib/ovok-client';
 import { useLocale } from '@/lib/takt/l10n';
 import { useReminderPreferences } from '@/lib/takt/preferences';
+import { splitAppointments, useCare } from '@/lib/takt/care';
+import { formatVisitWhen } from '@/components/takt/next-visit-card';
 import { readReminderPermissionStatus } from '@/lib/takt/reminders';
 import { env } from '@/lib/env';
 
@@ -95,7 +97,7 @@ function SettingsTile({
   return (
     <Animated.View entering={enter(index)} style={styles.tileCell}>
       <Tile tone={tone} onPress={onPress} accessibilityLabel={`${title}, ${value}`} style={styles.tile}>
-        <TileIcon name={icon} size={44} />
+        <TileIcon name={icon} size={40} />
         <View style={styles.tileText}>
           <Text style={[typography.headline, styles.tileTitle]}>{title}</Text>
           <Text style={[typography.subhead, { color: fg }]}>{value}</Text>
@@ -116,13 +118,16 @@ export default function SettingsTabScreen() {
   const { c } = useTokens();
   const { enter } = useMotion();
   const { themeMode } = useTheme();
-  const { locale, t, formatDate } = useLocale();
+  const localeApi = useLocale();
+  const { locale, t, formatDate } = localeApi;
   const patient = usePrimaryPatient();
   const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
   const email = useAccountEmail();
   const grants = useFamilySharingGrants(patientRef);
   const consent = useConsentStatus(patientRef);
   const prefs = useReminderPreferences();
+  const care = useCare();
+  const nextVisit = splitAppointments(care.appointments).upcoming[0];
   const [permission, setPermission] = useState<PermissionStatus>('unavailable');
   const [confirmSignOut, setConfirmSignOut] = useState(false);
 
@@ -180,6 +185,10 @@ export default function SettingsTabScreen() {
       : t('consentStatusActive')
     : t('consentStatusInactive');
 
+  const careSummary = nextVisit
+    ? t('careSettingsNext').replace('{date}', formatVisitWhen(nextVisit, localeApi))
+    : t('careSettingsEmpty');
+
   const showDeveloper = __DEV__;
   const version = Constants.expoConfig?.version ?? '0.0.0';
   const runtimeVersion = Constants.expoConfig?.runtimeVersion;
@@ -194,7 +203,7 @@ export default function SettingsTabScreen() {
         <Animated.View entering={enter(0)}>
           <Tile tone="lilac" style={styles.profile}>
             <View style={styles.avatar}>
-              <Text style={[typography.title2, { color: INK }]}>{initials || '·'}</Text>
+              <Text style={[typography.title3, { color: INK }]}>{initials || '·'}</Text>
             </View>
             <View style={styles.profileText}>
               <Text numberOfLines={1} style={[typography.title3, { color: INK }]}>
@@ -253,9 +262,29 @@ export default function SettingsTabScreen() {
               onPress={() => router.push('/report')}
             />
           </View>
+        {/* Care team: people and visits, one wide tile closing the grid. */}
+        <Animated.View entering={enter(5)}>
+          <Tile
+            tone="lilac"
+            onPress={() => router.push('/care' as never)}
+            accessibilityLabel={`${t('careRouteTitle')}, ${careSummary}`}
+            style={styles.wide}
+          >
+            <TileIcon name="medkit-outline" size={40} />
+            <View style={styles.wideText}>
+              <Text numberOfLines={1} style={[typography.headline, styles.tileTitle]}>
+                {t('careRouteTitle')}
+              </Text>
+              <Text numberOfLines={1} style={[typography.subhead, { color: c.tones.lilac.fg, fontVariant: ['tabular-nums'] }]}>
+                {careSummary}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={c.tones.lilac.fg} />
+          </Tile>
+        </Animated.View>
         </View>
 
-        <Section index={5} title={t('legal')}>
+        <Section index={6} title={t('legal')}>
           <ListGroup>
             <ListRow
               isFirst
@@ -278,7 +307,7 @@ export default function SettingsTabScreen() {
         </Section>
 
         {env.ovokMockEnabled ? null : (
-          <Section index={6}>
+          <Section index={7}>
             <ConfirmExpander
               open={confirmSignOut}
               onOpen={() => setConfirmSignOut(true)}
@@ -292,7 +321,7 @@ export default function SettingsTabScreen() {
         )}
 
         {showDeveloper ? (
-          <Section index={7} title={t('developerSection')}>
+          <Section index={8} title={t('developerSection')}>
             <ListGroup>
               {DEVELOPER_BOARDS.map((board, index) => (
                 <ListRow
@@ -323,10 +352,10 @@ export default function SettingsTabScreen() {
 }
 
 const styles = StyleSheet.create({
-  profile: { flexDirection: 'row', alignItems: 'center', gap: spacing(3.5), borderRadius: radius.xxl },
+  profile: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), borderRadius: radius.xxl, paddingVertical: spacing(3.5) },
   avatar: {
-    width: 60,
-    height: 60,
+    width: 52,
+    height: 52,
     borderRadius: radius.full,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
@@ -336,10 +365,12 @@ const styles = StyleSheet.create({
   grid: { gap: spacing(3) },
   gridRow: { flexDirection: 'row', gap: spacing(3) },
   tileCell: { flex: 1, minWidth: 0 },
-  tile: { flex: 1, gap: spacing(5), minHeight: 168, justifyContent: 'space-between' },
+  tile: { flex: 1, gap: spacing(3), minHeight: 132, justifyContent: 'space-between' },
   tileText: { gap: 2 },
   tileTitle: { color: INK, fontFamily: font.bold, fontSize: 18 },
   tileBadge: { marginTop: spacing(2) },
+  wide: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), paddingVertical: spacing(3.5) },
+  wideText: { flex: 1, minWidth: 0, gap: 2 },
   rowIcon: {
     width: 40,
     height: 40,

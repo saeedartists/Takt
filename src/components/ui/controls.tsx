@@ -51,7 +51,7 @@ export const Field = ({
 };
 
 // Browsers draw their own blue focus ring; we draw ours with the ink border.
-const webInputReset = Platform.OS === 'web' ? ({ outlineWidth: 0 } as const) : null;
+const webInputReset = Platform.OS === 'web' ? ({ outlineWidth: 0, outlineStyle: 'none' } as object) : null;
 
 const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
 

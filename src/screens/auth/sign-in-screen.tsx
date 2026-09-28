@@ -120,6 +120,6 @@ export default function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
-  page: { gap: spacing(7) },
+  page: { gap: spacing(6) },
   actions: { gap: spacing(3) },
 });

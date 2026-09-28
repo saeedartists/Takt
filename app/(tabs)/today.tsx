@@ -34,6 +34,8 @@ import { MedicationGlyph } from '@/components/takt/medication-glyph';
 import { INK } from '@/theme/tokens';
 import { LOW_SUPPLY_THRESHOLD, getSupplySnapshot } from '@/lib/takt/supply-tracker';
 import { SharedWithMeCard } from '@/components/takt/shared-with-me-card';
+import { DailyCheckInCard } from '@/components/takt/daily-check-in-card';
+import { NextVisitCard } from '@/components/takt/next-visit-card';
 import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
@@ -561,6 +563,15 @@ export default function TodayScreen() {
                       <Text numberOfLines={1} style={[typography.subhead, { color: c.tones.sky.fg }]}>{nextReminder.label}</Text>
                     </Tile>
                   ) : null}
+                </Animated.View>
+              ) : null}
+
+              {isSelectedToday ? <NextVisitCard /> : null}
+
+              {/* A ten-second "how are you" check-in; only on today, never on a browsed day. */}
+              {isSelectedToday && !needsFirstMedication ? (
+                <Animated.View entering={enter(3)}>
+                  <DailyCheckInCard />
                 </Animated.View>
               ) : null}
 

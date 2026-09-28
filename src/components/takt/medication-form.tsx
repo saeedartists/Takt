@@ -383,7 +383,7 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
               <View style={[styles.divider, { backgroundColor: c.separator }]} />
 
               <View style={styles.previewRow}>
-                <MedicationGlyph appearance={{ shape: values.shape, color: values.color }} size={64} />
+                <MedicationGlyph appearance={{ shape: values.shape, color: values.color }} size={56} />
                 <View style={styles.grow}>
                   <Text style={[typography.subhead, { color: c.textPrimary, fontFamily: font.semibold }]}>{t('appearance')}</Text>
                   <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('appearanceHint')}</Text>
@@ -681,7 +681,7 @@ const isPaleSwatch = (hex: string): boolean => {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  section: { padding: spacing(5), gap: spacing(4.5) },
+  section: { padding: spacing(4), gap: spacing(4) },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), alignItems: 'center' },
   chip: {
     minHeight: MIN_TOUCH_TARGET,
@@ -695,12 +695,12 @@ const styles = StyleSheet.create({
   choice: {
     flexBasis: '31%',
     flexGrow: 1,
-    minHeight: 80,
-    borderRadius: 20,
+    minHeight: 68,
+    borderRadius: radius.md,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing(1.5),
+    gap: spacing(1),
     paddingHorizontal: spacing(1),
   },
   choiceCheck: { position: 'absolute', top: spacing(2), right: spacing(2) },
@@ -715,10 +715,10 @@ const styles = StyleSheet.create({
     paddingRight: spacing(3.5),
     borderRadius: radius.full,
   },
-  swatchRing: { width: 52, height: 52, borderRadius: radius.full, borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
+  swatchRing: { width: 48, height: 48, borderRadius: radius.full, borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
   swatch: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     borderRadius: radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
@@ -726,7 +726,7 @@ const styles = StyleSheet.create({
   },
   expander: { marginTop: spacing(1) },
   timeChip: {
-    minHeight: 52,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(2),
@@ -737,7 +737,7 @@ const styles = StyleSheet.create({
   },
   timeText: { color: INK, fontVariant: ['tabular-nums'] },
   timeSuggestion: {
-    minHeight: 52,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(1),
@@ -747,7 +747,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.5)',
   },
   addTime: {
-    minHeight: 52,
+    minHeight: 48,
     justifyContent: 'center',
     paddingHorizontal: spacing(4),
     borderRadius: radius.full,

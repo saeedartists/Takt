@@ -2,8 +2,9 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
+import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn, FadeInLeft, FadeInRight, LinearTransition } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
   AnimatedNumber,
@@ -11,6 +12,7 @@ import {
   AnimatedSegmentedControl,
   Badge,
   Button,
+  CONTENT_MAX_WIDTH,
   Card,
   EmptyState,
   ErrorState,
@@ -42,8 +44,8 @@ import { TimeField } from '@/components/takt/time-field';
 import { buildHistoryCsv } from '@/lib/takt/history-csv';
 import { useLocale } from '@/lib/takt/l10n';
 import { useReminderPreferences } from '@/lib/takt/preferences';
-import { buildHistory } from '@/lib/takt/schedule';
-import { atClockTime, isoDateKey } from '@/lib/takt/time';
+import { buildHistory, type HistoryDay } from '@/lib/takt/schedule';
+import { addDays, atClockTime, isoDateKey, startOfDay } from '@/lib/takt/time';
 import type { DoseOccurrence, MedicationPlan, SkipReason } from '@/lib/takt/types';
 import { semantic } from '@/theme/tokens';
 
@@ -78,6 +80,9 @@ const STATE_META: Record<CorrectionAction, { badge: BadgeTone; icon: IconName; t
   missed: { badge: 'destructive', icon: 'close', thumb: semantic.light.tones.rose.solid },
 };
 
+/** Missed doses shown before "Show all": the newest few are the ones worth fixing. */
+const MISSED_PREVIEW = 4;
+
 const layoutGlide = LinearTransition.springify()
   .damping(motion.spring.settle.damping)
   .stiffness(motion.spring.settle.stiffness);
@@ -100,6 +105,11 @@ export default function HistoryScreen() {
   const [pendingDoseId, setPendingDoseId] = useState<string | null>(null);
   const [exportingCsv, setExportingCsv] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Calendar: first of the shown month, the slide direction of the last change, and the opened day.
+  const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [monthDir, setMonthDir] = useState<-1 | 0 | 1>(0);
+  const [openDay, setOpenDay] = useState<HistoryDay | null>(null);
+  const [allMissed, setAllMissed] = useState(false);
 
   const prefs = useReminderPreferences();
   const graceHours = prefs.data?.graceHours;
@@ -149,6 +159,23 @@ export default function HistoryScreen() {
     return totals.adherencePct - Math.round((prev.taken / prev.total) * 100);
   }, [events.data?.entry, graceHours, plans.plans, totals.adherencePct, totals.denominator, windowDays]);
 
+  // The shown month up to today (or its last day), built the same way as the chart.
+  const monthDays = useMemo(() => {
+    const today = startOfDay(new Date());
+    const last = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+    const end = last < today ? last : today;
+    if (end < month) return [];
+    return buildHistory(plans.plans, (events.data?.entry ?? []).map((x) => x.resource), end.getDate(), {
+      today: end,
+      graceHours,
+    });
+  }, [events.data?.entry, graceHours, month, plans.plans]);
+
+  const shiftMonth = (dir: -1 | 1) => {
+    setMonthDir(dir);
+    setMonth((current) => new Date(current.getFullYear(), current.getMonth() + dir, 1));
+  };
+
   const planById = useMemo(() => new Map(plans.plans.map((plan) => [plan.request.id, plan])), [plans.plans]);
 
   const barDays = useMemo<AdherenceBarDay[]>(() => {
@@ -191,6 +218,7 @@ export default function HistoryScreen() {
               eventId: dose.eventId,
             })),
         )
+        .reverse()
         .slice(0, 30),
     [formatDate, formatTime, history],
   );
@@ -491,6 +519,16 @@ export default function HistoryScreen() {
               </View>
 
               <Animated.View entering={enter(4)}>
+                <MonthCalendar
+                  month={month}
+                  days={monthDays}
+                  dir={monthDir}
+                  onShift={shiftMonth}
+                  onOpenDay={setOpenDay}
+                />
+              </Animated.View>
+
+              <Animated.View entering={enter(5)}>
                 <Card style={styles.weekCard}>
                   <Text style={[typography.headline, { color: c.textSecondary }]}>{t('weeklySummaryTitle')}</Text>
                   <Text style={[typography.title3, { color: c.textPrimary, fontVariant: ['tabular-nums'] }]}>
@@ -506,7 +544,7 @@ export default function HistoryScreen() {
                 </Card>
               </Animated.View>
 
-              <Animated.View entering={enter(5)} style={{ gap: spacing(2) }}>
+              <Animated.View entering={enter(6)} style={{ gap: spacing(2) }}>
                 <Button
                   kind="secondary"
                   label={t('exportCsv')}
@@ -579,29 +617,49 @@ export default function HistoryScreen() {
                 {missed.length === 0 ? (
                   <EmptyState title={t('allCaughtUp')} description={t('greatRhythm')} />
                 ) : (
-                  <View style={{ gap: spacing(2.5) }}>
-                    {missed.map((item, i) => (
-                      <Animated.View key={item.id} entering={enter(i)}>
-                        <Card style={styles.missedCard}>
-                          <View style={styles.rowHead}>
-                            <View style={[styles.stateGlyph, { backgroundColor: c.tones.rose.bg }]}>
-                              <Ionicons name="close" size={22} color={c.tones.rose.fg} />
-                            </View>
-                            <View style={{ flex: 1, minWidth: 0 }}>
-                              <Text style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>{item.title}</Text>
-                              <Text style={[typography.subhead, { color: c.textSecondary }]}>{item.subtitle}</Text>
-                            </View>
+                  <Card style={styles.missedList}>
+                    {(allMissed ? missed : missed.slice(0, MISSED_PREVIEW)).map((item, i) => (
+                      <Animated.View
+                        key={item.id}
+                        entering={enter(i)}
+                        layout={layoutGlide}
+                        style={[styles.missedRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator }]}
+                      >
+                        <View style={[styles.stateGlyph, { backgroundColor: c.tones.rose.bg }]}>
+                          <Ionicons name="close" size={20} color={c.tones.rose.fg} />
+                        </View>
+                        <View style={styles.missedBody}>
+                          <View>
+                            <Text numberOfLines={1} style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>
+                              {item.title}
+                            </Text>
+                            <Text style={[typography.subhead, { color: c.textSecondary, fontVariant: ['tabular-nums'] }]}>{item.subtitle}</Text>
                           </View>
                           <Button
                             kind="secondary"
+                            size="sm"
+                            fullWidth={false}
+                            icon={<Ionicons name="checkmark" size={16} color={c.textPrimary} />}
                             label={t('markTakenFromHistory')}
                             onPress={() => void markTaken(item)}
                             disabled={recordDose.isPending || undoDose.isPending}
                           />
-                        </Card>
+                        </View>
                       </Animated.View>
                     ))}
-                  </View>
+                    {!allMissed && missed.length > MISSED_PREVIEW ? (
+                      <AnimatedPressable
+                        onPress={() => setAllMissed(true)}
+                        accessibilityRole="button"
+                        style={[styles.showAll, { borderTopColor: c.separator }]}
+                      >
+                        <Text style={[typography.callout, { color: c.textPrimary, fontFamily: font.semibold }]}>
+                          {t('historyShowAllMissed').replace('{count}', String(missed.length))}
+                        </Text>
+                        <Ionicons name="chevron-down" size={18} color={c.textSecondary} />
+                      </AnimatedPressable>
+                    ) : null}
+                  </Card>
                 )}
               </View>
             )}
@@ -614,9 +672,253 @@ export default function HistoryScreen() {
           </>
         )}
       </Stack>
+
+      <DaySheet day={openDay} planById={planById} onClose={() => setOpenDay(null)} />
     </PageShell>
   );
 }
+
+type DayMark = 'all' | 'partly' | 'missed' | 'planned' | 'none' | 'future';
+
+const dayMark = (day: HistoryDay | undefined): DayMark => {
+  if (!day) return 'future';
+  if (day.doses.length === 0) return 'none';
+  if (day.missed > 0) return 'missed';
+  if (day.taken === day.doses.length) return 'all';
+  if (day.taken + day.skipped > 0) return 'partly';
+  return 'planned';
+};
+
+// Any Monday: the weekday header runs Monday to Sunday in the user's language.
+const MONDAY = new Date(2024, 0, 1);
+
+/*
+ * Month grid: sage = every dose taken, butter = some, rose ring = a dose
+ * was missed, ink ring = today, faint = still ahead. Each day says the
+ * same in words for screen readers; the legend spells it out on screen.
+ */
+const MonthCalendar = ({
+  month,
+  days,
+  dir,
+  onShift,
+  onOpenDay,
+}: {
+  month: Date;
+  days: HistoryDay[];
+  dir: -1 | 0 | 1;
+  onShift: (dir: -1 | 1) => void;
+  onOpenDay: (day: HistoryDay) => void;
+}) => {
+  const { c } = useTokens();
+  const { t, formatDate } = useLocale();
+  const { reduce, duration } = useMotion();
+  const todayKey = isoDateKey(new Date());
+  const now = new Date();
+  const isCurrent = month.getFullYear() === now.getFullYear() && month.getMonth() === now.getMonth();
+  const lead = (month.getDay() + 6) % 7;
+  const length = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+  const cells: (number | null)[] = [...Array<null>(lead).fill(null), ...Array.from({ length }, (_, i) => i + 1)];
+  while (cells.length % 7) cells.push(null);
+
+  const slide = reduce || dir === 0 ? undefined : (dir > 0 ? FadeInRight : FadeInLeft).duration(duration.slow);
+
+  const label = (date: Date, day: HistoryDay | undefined, mark: DayMark): string => {
+    const name = formatDate(date, { weekday: 'long', day: 'numeric', month: 'long' });
+    const at = isoDateKey(date) === todayKey ? `${t('today')}, ${name}` : name;
+    const total = String(day?.doses.length ?? 0);
+    const taken = String(day?.taken ?? 0);
+    if (mark === 'all') return t('calendarDayAllTaken').replace('{date}', at).replace('{total}', total);
+    if (mark === 'missed')
+      return t('calendarDayMissed')
+        .replace('{date}', at)
+        .replace('{taken}', taken)
+        .replace('{total}', total)
+        .replace('{missed}', String(day?.missed ?? 0));
+    if (mark === 'partly') return t('calendarDayPartly').replace('{date}', at).replace('{taken}', taken).replace('{total}', total);
+    if (mark === 'planned') return t('calendarDayPlanned').replace('{date}', at).replace('{total}', total);
+    return t('calendarDayNone').replace('{date}', at);
+  };
+
+  const arrow = (to: -1 | 1) => {
+    const enabled = to < 0 || !isCurrent;
+    return (
+      <AnimatedPressable
+        onPress={() => onShift(to)}
+        disabled={!enabled}
+        haptic="light"
+        scaleTo={0.9}
+        accessibilityRole="button"
+        accessibilityLabel={t(to < 0 ? 'calendarPrevMonth' : 'calendarNextMonth')}
+        accessibilityState={{ disabled: !enabled }}
+        style={[styles.monthArrow, { backgroundColor: c.surfaceRaised, opacity: enabled ? 1 : 0.35 }]}
+      >
+        <Ionicons name={to < 0 ? 'chevron-back' : 'chevron-forward'} size={20} color={c.textPrimary} />
+      </AnimatedPressable>
+    );
+  };
+
+  const legend = [
+    { key: 'all', label: t('calendarAllTaken'), style: { backgroundColor: c.tones.sage.bg } },
+    { key: 'partly', label: t('calendarPartly'), style: { backgroundColor: c.tones.butter.bg } },
+    { key: 'missed', label: t('statusMissed'), style: { borderWidth: 2, borderColor: c.tones.rose.solid } },
+  ];
+
+  return (
+    <Card style={styles.calendar}>
+      <View style={styles.monthHead}>
+        <Text accessibilityRole="header" style={[typography.title3, { color: c.textPrimary, flex: 1 }]}>
+          {formatDate(month, { month: 'long', year: 'numeric' })}
+        </Text>
+        {arrow(-1)}
+        {arrow(1)}
+      </View>
+
+      <View style={styles.weekRow} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+        {Array.from({ length: 7 }, (_, i) => (
+          <Text key={i} style={[typography.caption, styles.weekday, { color: c.textTertiary }]}>
+            {formatDate(addDays(MONDAY, i), { weekday: 'narrow' })}
+          </Text>
+        ))}
+      </View>
+
+      <Animated.View key={isoDateKey(month)} entering={slide} style={styles.grid}>
+        {cells.map((dayOfMonth, index) => {
+          if (dayOfMonth === null) return <View key={`blank-${index}`} style={styles.dayCell} />;
+          const date = new Date(month.getFullYear(), month.getMonth(), dayOfMonth);
+          const day = days[dayOfMonth - 1];
+          const mark = dayMark(day);
+          const isToday = isoDateKey(date) === todayKey;
+          const fill = mark === 'all' ? c.tones.sage.bg : mark === 'partly' ? c.tones.butter.bg : 'transparent';
+          const ring = mark === 'missed' ? c.tones.rose.solid : isToday ? c.textPrimary : 'transparent';
+          const onTone = mark === 'all' || mark === 'partly';
+          const text =
+            mark === 'future' ? c.textTertiary : onTone ? INK : mark === 'none' ? c.textSecondary : c.textPrimary;
+          const circle = (
+            <View style={[styles.dayCircle, { backgroundColor: fill, borderColor: ring }]}>
+              <Text
+                style={[
+                  typography.subhead,
+                  styles.dayNumber,
+                  { color: text, fontFamily: isToday || onTone || mark === 'missed' ? font.bold : font.medium },
+                  mark === 'future' && styles.future,
+                ]}
+              >
+                {dayOfMonth}
+              </Text>
+            </View>
+          );
+          if (!day || day.doses.length === 0) {
+            return (
+              <View key={dayOfMonth} style={styles.dayCell} accessible accessibilityLabel={label(date, day, mark)}>
+                {circle}
+              </View>
+            );
+          }
+          return (
+            <AnimatedPressable
+              key={dayOfMonth}
+              onPress={() => onOpenDay(day)}
+              scaleTo={0.88}
+              accessibilityRole="button"
+              accessibilityLabel={label(date, day, mark)}
+              accessibilityHint={t('calendarDayHint')}
+              style={styles.dayCell}
+            >
+              {circle}
+            </AnimatedPressable>
+          );
+        })}
+      </Animated.View>
+
+      <View style={styles.legend} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+        {legend.map((item) => (
+          <View key={item.key} style={styles.legendItem}>
+            <View style={[styles.legendDot, item.style]} />
+            <Text style={[typography.caption, { color: c.textSecondary }]}>{item.label}</Text>
+          </View>
+        ))}
+      </View>
+    </Card>
+  );
+};
+
+/** One day's doses, read-only; corrections stay in "Fix a logged dose". */
+const DaySheet = ({
+  day,
+  planById,
+  onClose,
+}: {
+  day: HistoryDay | null;
+  planById: Map<string, MedicationPlan>;
+  onClose: () => void;
+}) => {
+  const { c } = useTokens();
+  const { t, formatDate, formatTime } = useLocale();
+  const insets = useSafeAreaInsets();
+  if (!day) return null;
+
+  const status = (state: DoseOccurrence['state']): { label: string; tone: BadgeTone; icon: IconName } =>
+    state === 'taken' || state === 'skipped' || state === 'missed'
+      ? {
+          label: state === 'taken' ? t('statusTaken') : state === 'skipped' ? t('statusSkipped') : t('statusMissed'),
+          tone: STATE_META[state].badge,
+          icon: STATE_META[state].icon,
+        }
+      : state === 'due'
+        ? { label: t('statusDue'), tone: 'accent', icon: 'alarm-outline' }
+        : { label: t('statusScheduled'), tone: 'info', icon: 'time-outline' };
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+      <View style={styles.sheetWrap}>
+        <Pressable
+          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(21,23,28,0.45)' }]}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel={t('calendarClose')}
+        />
+        <View style={[styles.sheet, { backgroundColor: c.surface, paddingBottom: spacing(4) + insets.bottom }]}>
+          <View style={[styles.handle, { backgroundColor: c.separator }]} />
+          <Text accessibilityRole="header" style={[typography.title2, { color: c.textPrimary }]}>
+            {formatDate(day.date, { weekday: 'long', day: 'numeric', month: 'long' })}
+          </Text>
+          <Text style={[typography.subhead, { color: c.textSecondary, fontVariant: ['tabular-nums'] }]}>
+            {t('takenOfTotal').replace('{taken}', String(day.taken)).replace('{total}', String(day.doses.length))}
+          </Text>
+          <View style={styles.sheetList}>
+            {day.doses.map((dose, index) => {
+              const plan = planById.get(dose.requestId);
+              const meta = status(dose.state);
+              return (
+                <View
+                  key={dose.id}
+                  accessible
+                  accessibilityLabel={`${dose.label}, ${formatTime(dose.scheduledAt)}, ${meta.label}`}
+                  style={[styles.sheetRow, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator }]}
+                >
+                  <MedicationGlyph appearance={plan?.appearance} form={plan?.form} size={36} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text numberOfLines={1} style={[typography.headline, { color: c.textPrimary }]}>
+                      {dose.label}
+                    </Text>
+                    <Text style={[typography.subhead, { color: c.textSecondary, fontVariant: ['tabular-nums'] }]}>
+                      {formatTime(dose.scheduledAt)}
+                    </Text>
+                  </View>
+                  <View>
+                    <Badge label={meta.label} tone={meta.tone} icon={meta.icon} size="sm" />
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+          <Button kind="secondary" label={t('calendarClose')} onPress={onClose} />
+        </View>
+      </View>
+    </Modal>
+  );
+};
 
 /*
  * One logged dose. Collapsed: glyph, name · time, status badge. Tapping
@@ -778,6 +1080,43 @@ const styles = StyleSheet.create({
   chevron: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   editor: { gap: spacing(3.5) },
   takenAt: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
-  stateGlyph: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  missedCard: { padding: spacing(4), gap: spacing(3) },
+  stateGlyph: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  missedList: { paddingHorizontal: spacing(4) },
+  missedRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing(3), paddingVertical: spacing(3.5) },
+  missedBody: { flex: 1, minWidth: 0, gap: spacing(2.5), alignItems: 'flex-start' },
+  showAll: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing(1.5),
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  calendar: { padding: spacing(4), gap: spacing(2) },
+  monthHead: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingLeft: spacing(1) },
+  monthArrow: { width: 44, height: 44, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  weekRow: { flexDirection: 'row' },
+  weekday: { width: `${100 / 7}%`, textAlign: 'center' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  dayCell: { width: `${100 / 7}%`, height: 44, alignItems: 'center', justifyContent: 'center' },
+  dayCircle: { width: 38, height: 38, borderRadius: 19, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  dayNumber: { fontVariant: ['tabular-nums'] },
+  future: { opacity: 0.55 },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: spacing(4), rowGap: spacing(1.5), paddingHorizontal: spacing(1), paddingTop: spacing(1) },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing(1.5) },
+  legendDot: { width: 12, height: 12, borderRadius: 6 },
+  sheetWrap: { flex: 1, justifyContent: 'flex-end' },
+  sheet: {
+    width: '100%',
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: 'center',
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    paddingHorizontal: spacing(5),
+    paddingTop: spacing(2),
+    gap: spacing(1),
+  },
+  handle: { width: 36, height: 4, borderRadius: radius.full, alignSelf: 'center', marginBottom: spacing(3) },
+  sheetList: { marginTop: spacing(2), marginBottom: spacing(4) },
+  sheetRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), minHeight: 60, paddingVertical: spacing(2) },
 });

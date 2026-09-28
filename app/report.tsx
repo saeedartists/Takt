@@ -37,6 +37,8 @@ import { useReminderPreferences } from '@/lib/takt/preferences';
 import { buildReportSummary } from '@/lib/takt/report-summary';
 import { describeCadence, describeInstruction } from '@/lib/takt/medication-form';
 import { buildAsNeededLogForDay, buildHistory } from '@/lib/takt/schedule';
+import { MoodStrip, moodLabel, symptomLabel } from '@/components/takt/daily-check-in-card';
+import { summarizeDiary, useDiary, type Mood } from '@/lib/takt/diary';
 
 const esc = (value: string): string =>
   value
@@ -66,6 +68,19 @@ export default function ReportScreen() {
   const [windowDays, setWindowDays] = useState<7 | 14 | 30>(14);
   const prefs = useReminderPreferences();
   const graceHours = prefs.data?.graceHours;
+  const diary = useDiary();
+  const felt = useMemo(() => summarizeDiary(diary.map, windowDays), [diary.map, windowDays]);
+  const feltAverage =
+    felt.average === null
+      ? ''
+      : t('reportDiaryAverage')
+          .replace('{avg}', felt.average.toFixed(1))
+          .replace('{label}', moodLabel(Math.round(felt.average) as Mood, t));
+  const feltLogged = t('diaryDaysLogged').replace('{count}', String(felt.logged)).replace('{total}', String(windowDays));
+  const feltSymptoms = felt.topSymptoms
+    .slice(0, 4)
+    .map((s) => `${symptomLabel(s.code, t)} (${s.days === 1 ? t('diarySymptomOneDay') : t('diarySymptomDays').replace('{count}', String(s.days))})`)
+    .join(', ');
   const windowText = t('adherenceWindowDays').replace('{days}', windowDays.toString());
 
   const history = useMemo(
@@ -287,6 +302,16 @@ export default function ReportScreen() {
       ${hiddenMissed > 0 ? `<div class=\"muted\">${esc(t('reportExtraMissedRows').replace('{count}', hiddenMissed.toString()))}</div>` : ''}
     </div>
 
+    ${
+      felt.logged > 0
+        ? `<div class="compact">
+      <h2>${esc(t('reportDiaryTitle'))}</h2>
+      <div class="muted">${esc(t('reportDiaryPatientReported'))}</div>
+      <ul class="notes"><li>${esc(feltLogged)} · ${esc(feltAverage)}</li><li>${esc(t('reportDiarySymptoms'))}: ${esc(feltSymptoms || t('reportDiaryNoSymptoms'))}</li></ul>
+    </div>`
+        : ''
+    }
+
     <div class="small">${esc(t('reportPdfDisclaimer'))}</div>
   </body>
 </html>`;
@@ -480,6 +505,32 @@ export default function ReportScreen() {
               ) : null}
             </Card>
           </Animated.View>
+
+          {felt.logged > 0 ? (
+            <Animated.View entering={enter(4)}>
+              <Tile tone="lilac" style={styles.section}>
+                <View>
+                  <Text accessibilityRole="header" style={[typography.title3, { color: INK }]}>
+                    {t('reportDiaryTitle')}
+                  </Text>
+                  <Text style={[typography.footnote, { color: c.tones.lilac.fg }]}>{t('reportDiaryPatientReported')}</Text>
+                </View>
+                <View accessible accessibilityRole="image" accessibilityLabel={`${feltLogged}. ${feltAverage}`}>
+                  <MoodStrip days={felt.days} color={c.tones.lilac.fg} track="rgba(21,23,28,0.24)" height={48} />
+                </View>
+                <View style={{ gap: spacing(1) }}>
+                  <Text style={[typography.subhead, { color: INK, fontFamily: font.semibold, fontVariant: ['tabular-nums'] }]}>
+                    {feltAverage}
+                  </Text>
+                  <Text style={[typography.subhead, { color: c.tones.lilac.fg, fontVariant: ['tabular-nums'] }]}>{feltLogged}</Text>
+                  <Text style={[typography.subhead, { color: INK }]}>
+                    <Text style={{ fontFamily: font.semibold }}>{t('reportDiarySymptoms')}: </Text>
+                    {feltSymptoms || t('reportDiaryNoSymptoms')}
+                  </Text>
+                </View>
+              </Tile>
+            </Animated.View>
+          ) : null}
 
           <Animated.View entering={enter(4)}>
             <SectionHeader title={t('reportClinicianSummaryTitle')} />

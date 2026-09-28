@@ -78,7 +78,7 @@ export const SharedWithMeCard = () => {
                   <View style={[styles.avatar, { backgroundColor: '#FFFFFF' }]}>
                     <Text style={[typography.title3, { color: INK }]}>{initial(share.patientLabel)}</Text>
                   </View>
-                  <Text style={[typography.body, styles.flex, { color: INK }]}>
+                  <Text style={[typography.callout, styles.flex, { color: INK }]}>
                     {t('sharedWithMeInviteBody').replace('{name}', share.patientLabel)}
                   </Text>
                 </View>
@@ -142,8 +142,8 @@ export const SharedWithMeCard = () => {
 const styles = StyleSheet.create({
   list: { gap: spacing(3) },
   flex: { flex: 1, minWidth: 0 },
-  invite: { gap: spacing(4) },
-  inviteHead: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing(3) },
-  avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  invite: { gap: spacing(3) },
+  inviteHead: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
+  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   error: { flexDirection: 'row', alignItems: 'center', gap: spacing(2) },
 });

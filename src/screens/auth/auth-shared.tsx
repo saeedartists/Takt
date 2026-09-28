@@ -30,15 +30,15 @@ export const AuthHero = ({ title, description }: { title: string; description: s
   return (
     <Animated.View entering={reduce ? undefined : FadeInDown.duration(420)} style={styles.hero}>
       <View style={styles.brand}>
-        <TaktMark size={44} />
+        <TaktMark size={36} />
         <Text style={[styles.wordmark, { color: c.textPrimary }]}>
           takt<Text style={{ color: c.accent }}>.</Text>
         </Text>
       </View>
-      <Text accessibilityRole="header" style={[typography.display, { color: c.textPrimary }]}>
+      <Text accessibilityRole="header" style={[typography.largeTitle, { color: c.textPrimary }]}>
         {title}
       </Text>
-      <Text style={[typography.body, { color: c.textSecondary, fontSize: 18, lineHeight: 26 }]}>{description}</Text>
+      <Text style={[typography.body, { color: c.textSecondary }]}>{description}</Text>
     </Animated.View>
   );
 };
@@ -117,9 +117,9 @@ export const AuthLinkRow = ({
 };
 
 const styles = StyleSheet.create({
-  hero: { gap: spacing(3), paddingTop: spacing(2) },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: spacing(2.5), marginBottom: spacing(3) },
-  wordmark: { fontFamily: font.displayHeavy, fontSize: 28, lineHeight: 32, letterSpacing: -1 },
+  hero: { gap: spacing(2), paddingTop: spacing(1) },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginBottom: spacing(3) },
+  wordmark: { fontFamily: font.displayHeavy, fontSize: 24, lineHeight: 28, letterSpacing: -0.8 },
   block: { gap: spacing(4) },
   eye: {
     position: 'absolute',

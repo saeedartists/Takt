@@ -1,3 +1,6 @@
+import { CARE_STORAGE_KEY } from '@/lib/takt/care';
+import { DIARY_STORAGE_KEY } from '@/lib/takt/diary';
+import { queryClient } from '@/lib/query-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -46,7 +49,10 @@ export default function ConsentSettingsScreen() {
     setError(null);
     try {
       if (patientRef) await withdrawConsent.mutateAsync(patientRef);
-      await AsyncStorage.removeItem(CONSENT_STORAGE_KEY);
+      // Withdrawal ends processing: on-device health data (diary, care team) goes too.
+      await AsyncStorage.multiRemove([CONSENT_STORAGE_KEY, DIARY_STORAGE_KEY, CARE_STORAGE_KEY]);
+      queryClient.removeQueries({ queryKey: ['takt', 'diary'] });
+      queryClient.removeQueries({ queryKey: ['takt', 'care'] });
       router.replace('/consent');
     } catch {
       setError(t('withdrawConsentError'));
@@ -66,7 +72,7 @@ export default function ConsentSettingsScreen() {
           <Animated.View entering={enter(0)}>
             <Tile tone={consent.isActive ? 'sage' : 'surface'} style={styles.hero}>
               <View style={styles.titleRow}>
-                <TileIcon name={consent.isActive ? 'shield-checkmark' : 'shield-outline'} size={48} color={consent.isActive ? INK : c.textPrimary} />
+                <TileIcon name={consent.isActive ? 'shield-checkmark' : 'shield-outline'} size={40} color={consent.isActive ? INK : c.textPrimary} />
                 <Badge
                   label={consent.isActive ? t('consentStatusActive') : t('consentStatusInactive')}
                   tone={consent.isActive ? 'ink' : 'neutral'}
@@ -83,7 +89,7 @@ export default function ConsentSettingsScreen() {
                   </Text>
                 ) : null}
               </View>
-              <Text style={[typography.body, { color: consent.isActive ? INK : c.textSecondary }]}>{t('consentBody')}</Text>
+              <Text style={[typography.callout, { color: consent.isActive ? INK : c.textSecondary }]}>{t('consentBody')}</Text>
               <Text style={[typography.footnote, { color: consent.isActive ? c.tones.sage.fg : c.textTertiary }]}>
                 {t('consentVersionLabel').replace('{version}', TAKT_CONSENT_VERSION)}
               </Text>
@@ -108,7 +114,7 @@ export default function ConsentSettingsScreen() {
           <SectionHeader title={t('withdrawConsent')} />
           <Card>
             <View style={styles.cardBody}>
-              <Text style={[typography.body, { color: c.textSecondary }]}>{t('withdrawConsentHint')}</Text>
+              <Text style={[typography.callout, { color: c.textSecondary }]}>{t('withdrawConsentHint')}</Text>
               <ConfirmExpander
                 open={confirm}
                 onOpen={() => setConfirm(true)}
@@ -136,8 +142,8 @@ export default function ConsentSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  cardBody: { padding: spacing(4.5), gap: spacing(3.5) },
-  hero: { gap: spacing(3.5), padding: spacing(5.5), borderRadius: radius.xxl },
+  cardBody: { padding: spacing(4), gap: spacing(3) },
+  hero: { gap: spacing(3), padding: spacing(4.5), borderRadius: radius.xxl },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing(3) },
   rowIcon: { width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(2) },

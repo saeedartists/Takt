@@ -29,11 +29,11 @@ export default function ImprintScreen() {
         <Animated.View entering={enter(0)}>
           <Card>
             <View style={styles.body}>
-              <Text accessibilityRole="header" style={[typography.title2, { color: c.textPrimary }]}>
+              <Text accessibilityRole="header" style={[typography.title3, { color: c.textPrimary }]}>
                 {t('imprintCompany')}
               </Text>
               {LINES.map((key) => (
-                <Text key={key} style={[typography.body, { color: c.textSecondary }]}>
+                <Text key={key} style={[typography.callout, { color: c.textSecondary }]}>
                   {t(key)}
                 </Text>
               ))}
@@ -55,8 +55,8 @@ export default function ImprintScreen() {
 }
 
 const styles = StyleSheet.create({
-  body: { padding: spacing(4.5), gap: spacing(2) },
+  body: { padding: spacing(4), gap: spacing(1.5) },
   note: { flexDirection: 'row', gap: spacing(3), alignItems: 'flex-start', paddingHorizontal: spacing(1) },
   flex: { flex: 1, minWidth: 0 },
-  draft: { flexDirection: 'row', gap: spacing(2), alignItems: 'flex-start', padding: spacing(3), borderRadius: 18, marginTop: spacing(1) },
+  draft: { flexDirection: 'row', gap: spacing(2), alignItems: 'flex-start', padding: spacing(3), borderRadius: 16, marginTop: spacing(1.5) },
 });

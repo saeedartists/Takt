@@ -11,7 +11,6 @@ import {
   ErrorState,
   ListGroup,
   ListRow,
-  PageHeader,
   PageShell,
   SectionHeader,
   SkeletonRow,
@@ -124,7 +123,7 @@ export default function RelativeViewScreen() {
   if (isLoading) {
     return (
       <PageShell>
-        <PageHeader title={title} subtitle={t('familySharingRelativeSubtitle')} />
+        <InnerTitle title={title} subtitle={t('familySharingRelativeSubtitle')} />
         <Card>
           <SkeletonRow isFirst />
           <SkeletonRow />
@@ -172,14 +171,14 @@ export default function RelativeViewScreen() {
 
   return (
     <PageShell>
-      <PageHeader title={title} subtitle={t('familySharingRelativeSubtitle')} />
+      <InnerTitle title={title} subtitle={t('familySharingRelativeSubtitle')} />
       <Stack>
         {isPreview ? (
           <Animated.View entering={enter(0)}>
             <Tile tone="sage" style={styles.guard}>
               <View style={styles.guardRow}>
-                <TileIcon name="eye-outline" size={44} />
-                <Text style={[typography.body, styles.flex, { color: INK }]}>{t('familySharingRelativeGuardrail')}</Text>
+                <TileIcon name="eye-outline" size={40} />
+                <Text style={[typography.callout, styles.flex, { color: INK }]}>{t('familySharingRelativeGuardrail')}</Text>
               </View>
               {previewGrant ? (
                 <Text style={[typography.subhead, { color: c.tones.sage.fg, fontFamily: font.semibold }]}>
@@ -210,7 +209,17 @@ export default function RelativeViewScreen() {
               }
             />
             {today.doses.length === 0 ? (
-              <EmptyState title={t('noDosesToday')} description={t('familySharingRelativeNoDosesHint')} />
+              <Card>
+                <View style={styles.emptyRow}>
+                  <View style={[styles.emptyIcon, { backgroundColor: c.surfaceRaised }]}>
+                    <Ionicons name="calendar-clear-outline" size={20} color={c.textPrimary} />
+                  </View>
+                  <View style={styles.flex}>
+                    <Text style={[typography.headline, { color: c.textPrimary }]}>{t('noDosesToday')}</Text>
+                    <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('familySharingRelativeNoDosesHint')}</Text>
+                  </View>
+                </View>
+              </Card>
             ) : (
               <ListGroup>
                 {today.doses.map((dose, index) => {
@@ -250,7 +259,7 @@ export default function RelativeViewScreen() {
                   <View style={[styles.lockIcon, { backgroundColor: c.surfaceRaised }]}>
                     <Ionicons name="lock-closed-outline" size={16} color={c.textSecondary} />
                   </View>
-                  <Text style={[typography.body, styles.flex, { color: c.textSecondary }]}>{line}</Text>
+                  <Text style={[typography.callout, styles.flex, { color: c.textSecondary }]}>{line}</Text>
                 </View>
               ))}
             </View>
@@ -264,8 +273,24 @@ export default function RelativeViewScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   guard: { gap: spacing(3) },
-  guardRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3.5) },
-  locked: { padding: spacing(4.5), gap: spacing(3) },
+  guardRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
+  locked: { padding: spacing(4), gap: spacing(2.5) },
+  header: { gap: spacing(1), marginBottom: spacing(4), paddingHorizontal: spacing(1) },
+  emptyRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing(3), padding: spacing(4) },
+  emptyIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   lockedLine: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
-  lockIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  lockIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 });
+
+/** Inner-page title: title2, not the tab-root display size. */
+function InnerTitle({ title, subtitle }: { title: string; subtitle: string }) {
+  const { c } = useTokens();
+  return (
+    <View style={styles.header}>
+      <Text accessibilityRole="header" style={[typography.title2, { color: c.textPrimary }]}>
+        {title}
+      </Text>
+      <Text style={[typography.subhead, { color: c.textSecondary }]}>{subtitle}</Text>
+    </View>
+  );
+}

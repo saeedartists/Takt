@@ -9,7 +9,6 @@ import {
   Badge,
   Button,
   Card,
-  EmptyState,
   ErrorState,
   Field,
   INK,
@@ -183,15 +182,17 @@ export default function FamilySharingScreen() {
               ))}
               <Animated.View
                 entering={FadeIn.delay(stagger(activeGrants.slice(0, 2).length + 1) + 120)}
-                style={[styles.avatar, styles.avatarOverlap, styles.avatarOpen, { borderColor: c.tones.sage.solid }]}
+                style={[styles.avatar, styles.avatarOverlap, styles.avatarOpen, { borderColor: c.tones.sage.fg }]}
               >
-                <Ionicons name="add" size={24} color={c.tones.sage.fg} />
+                <Ionicons name="add" size={20} color={c.tones.sage.fg} />
               </Animated.View>
             </View>
-            <Text accessibilityRole="header" style={[typography.title1, { color: INK }]}>
-              {t('familySharingHeroTitle')}
-            </Text>
-            <Text style={[typography.body, { color: c.tones.sage.fg }]}>{t('familySharingSubtitle')}</Text>
+            <View style={styles.heroText}>
+              <Text accessibilityRole="header" style={[typography.title2, { color: INK }]}>
+                {t('familySharingHeroTitle')}
+              </Text>
+              <Text style={[typography.subhead, { color: c.tones.sage.fg }]}>{t('familySharingSubtitle')}</Text>
+            </View>
           </Tile>
         </Animated.View>
 
@@ -213,7 +214,17 @@ export default function FamilySharingScreen() {
         <Animated.View entering={enter(2)}>
           <SectionHeader title={t('familySharingActiveListTitle').replace('{count}', activeGrants.length.toString())} />
           {activeGrants.length === 0 ? (
-            <EmptyState title={t('familySharingNoGrants')} description={t('familySharingNoGrantsHint')} />
+            <Card>
+              <View style={styles.emptyRow}>
+                <View style={[styles.scopeIcon, styles.emptyIcon, { backgroundColor: c.surfaceRaised }]}>
+                  <Ionicons name="people-outline" size={20} color={c.textPrimary} />
+                </View>
+                <View style={styles.flex}>
+                  <Text style={[typography.headline, { color: c.textPrimary }]}>{t('familySharingNoGrants')}</Text>
+                  <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('familySharingNoGrantsHint')}</Text>
+                </View>
+              </View>
+            </Card>
           ) : (
             <View style={styles.list}>
               {activeGrants.map((grant) => {
@@ -238,13 +249,16 @@ export default function FamilySharingScreen() {
                               {`${grant.relatedPersonLabel} · ${relationLabel(grant.relationshipCode)}`}
                             </Text>
                             <Text style={[typography.subhead, { color: c.textSecondary }]}>{subtitle}</Text>
+                            <View style={styles.grantBadge}>
+                              <Badge
+                                size="sm"
+                                label={accepted ? t('statusActive') : t('familySharingStatusInvited')}
+                                tone={accepted ? 'success' : 'warning'}
+                                icon={accepted ? 'checkmark-circle' : 'time-outline'}
+                              />
+                            </View>
                           </View>
                         </View>
-                        <Badge
-                          label={accepted ? t('statusActive') : t('familySharingStatusInvited')}
-                          tone={accepted ? 'success' : 'warning'}
-                          icon={accepted ? 'checkmark-circle' : 'time-outline'}
-                        />
                         <View style={styles.grantActions}>
                           <View>
                             <Button
@@ -354,7 +368,7 @@ export default function FamilySharingScreen() {
               <Button
                 size="lg"
                 label={t('familySharingGrantCta')}
-                icon={<Ionicons name="mail-outline" size={20} color={c.onInk} />}
+                icon={<Ionicons name="mail-outline" size={20} color={canSubmit ? c.onInk : c.textTertiary} />}
                 loading={grantMutation.isPending}
                 disabled={!canSubmit || revokeMutation.isPending}
                 onPress={() => void submitGrant()}
@@ -396,7 +410,7 @@ function Avatar({ letter, bg, ring, index }: { letter: string; bg: string; ring:
       entering={reduce ? undefined : ZoomIn.delay(stagger(index) + 120).duration(260)}
       style={[styles.avatar, styles.avatarLg, index > 0 && styles.avatarOverlap, { backgroundColor: bg, borderColor: ring }]}
     >
-      <Text style={[typography.title2, { color: INK }]}>{letter}</Text>
+      <Text style={[typography.title3, { color: INK }]}>{letter}</Text>
     </Animated.View>
   );
 }
@@ -407,37 +421,41 @@ function ScopeLine({ label, allowed = false }: { label: string; allowed?: boolea
   return (
     <View style={styles.scopeLine}>
       <View style={[styles.scopeIcon, { backgroundColor: allowed ? c.tones.sage.bg : c.surfaceRaised }]}>
-        <Ionicons name={allowed ? 'checkmark' : 'close'} size={18} color={allowed ? c.tones.sage.fg : c.textSecondary} />
+        <Ionicons name={allowed ? 'checkmark' : 'close'} size={16} color={allowed ? c.tones.sage.fg : c.textSecondary} />
       </View>
-      <Text style={[typography.body, styles.flex, { color: allowed ? c.textPrimary : c.textSecondary }]}>{label}</Text>
+      <Text style={[typography.callout, styles.flex, { color: allowed ? c.textPrimary : c.textSecondary }]}>{label}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
-  hero: { gap: spacing(3.5), padding: spacing(5.5), borderRadius: radius.xxl },
+  hero: { gap: spacing(3), padding: spacing(4.5), borderRadius: radius.xxl },
+  heroText: { gap: spacing(1) },
   cluster: { flexDirection: 'row' },
-  avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  avatarLg: { width: 60, height: 60, borderRadius: 30, borderWidth: 3 },
-  avatarOverlap: { marginLeft: -14 },
+  avatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  avatarLg: { width: 48, height: 48, borderRadius: 24, borderWidth: 3 },
+  avatarOverlap: { marginLeft: -12 },
   avatarOpen: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 2.5,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
     borderStyle: 'dashed',
     backgroundColor: 'rgba(255,255,255,0.6)',
   },
-  scope: { padding: spacing(4.5), gap: spacing(3) },
+  scope: { padding: spacing(4), gap: spacing(2.5) },
   scopeLine: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
-  scopeIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  scopeIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   divider: { height: StyleSheet.hairlineWidth, marginVertical: spacing(1) },
   list: { gap: spacing(3) },
-  grantBody: { padding: spacing(4.5), gap: spacing(3) },
-  grantHead: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
+  grantBody: { padding: spacing(4), gap: spacing(3) },
+  emptyRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing(3), padding: spacing(4) },
+  emptyIcon: { width: 40, height: 40, borderRadius: 20 },
+  grantHead: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing(3) },
+  grantBadge: { marginTop: spacing(1.5) },
   grantActions: { gap: spacing(2) },
-  form: { padding: spacing(4.5), gap: spacing(4) },
+  form: { padding: spacing(4), gap: spacing(4) },
   consentRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',

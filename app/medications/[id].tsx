@@ -205,7 +205,7 @@ export default function MedicationDetailsScreen() {
         {/* Hero: what it is, in its own colour */}
         <Animated.View entering={enter(0)} layout={expand} style={[styles.hero, { backgroundColor: heroBg }]}>
           <Animated.View entering={reduce ? undefined : heroGlyphIn} style={styles.heroGlyph}>
-            <MedicationGlyph appearance={plan.appearance} form={plan.form} size={112} />
+            <MedicationGlyph appearance={plan.appearance} form={plan.form} size={72} />
           </Animated.View>
           <Badge
             label={
@@ -217,10 +217,10 @@ export default function MedicationDetailsScreen() {
             icon={status === 'active' ? 'checkmark-circle' : status === 'on-hold' ? 'pause-circle' : 'archive'}
           />
           <View style={styles.heroText}>
-            <Text style={[typography.metric, { color: heroInk }]} numberOfLines={2} accessibilityRole="header">
+            <Text style={[typography.title1, { color: heroInk }]} numberOfLines={2} accessibilityRole="header">
               {plan.label}
             </Text>
-            <Text style={[typography.body, styles.heroSub, { color: heroSub }]}>
+            <Text style={[typography.callout, styles.heroSub, { color: heroSub }]}>
               {[plan.form || t('formNotSet'), plan.strength].filter(Boolean).join(' · ')}
             </Text>
           </View>
@@ -246,7 +246,7 @@ export default function MedicationDetailsScreen() {
               <View style={styles.wrapRow} accessibilityLabel={`${t('medicationTimes')}: ${plan.times.join(', ')}`}>
                 {plan.times.map((time) => (
                   <View key={time} style={styles.timeChip}>
-                    <Ionicons name={timeIcon(time)} size={20} color={sky.fg} />
+                    <Ionicons name={timeIcon(time)} size={18} color={sky.fg} />
                     <Text style={[typography.title3, styles.timeText]}>{time}</Text>
                   </View>
                 ))}
@@ -265,7 +265,7 @@ export default function MedicationDetailsScreen() {
         {adherence && adherence.denominator > 0 ? (
           <Animated.View entering={enter(2)} layout={expand}>
             <Tile tone="lilac" style={styles.adherence}>
-              <AnimatedNumber value={adherence.pct} suffix="%" style={[typography.metric, { color: INK }]} delay={200} />
+              <AnimatedNumber value={adherence.pct} suffix="%" style={[typography.metricSm, { color: INK }]} delay={200} />
               <View style={styles.grow}>
                 <Text style={[typography.headline, { color: INK }]}>{t('takenOnSchedule')}</Text>
                 <Text style={[typography.subhead, { color: lilac.fg }]}>{t('adherenceWindow')}</Text>
@@ -282,7 +282,7 @@ export default function MedicationDetailsScreen() {
               <>
                 <View>
                   <View style={styles.spaceBetween}>
-                    <AnimatedNumber value={supply.count} style={[typography.metric, { color: INK }]} delay={150} />
+                    <AnimatedNumber value={supply.count} style={[typography.metricSm, { color: INK }]} delay={150} />
                     <View style={styles.glassPill}>
                       <Ionicons name={low ? 'alert-circle' : 'time-outline'} size={16} color={butter.fg} />
                       <Text style={[typography.subhead, { color: butter.fg, fontFamily: font.bold }]}>
@@ -298,7 +298,7 @@ export default function MedicationDetailsScreen() {
                   progress={Math.max(0.02, Math.min(1, supply.count / supply.capacity))}
                   color={butter.fg}
                   backgroundColor="rgba(255,255,255,0.75)"
-                  height={12}
+                  height={8}
                 />
                 <Text style={[typography.subhead, { color: butter.fg }]}>
                   {t('supplyLastRefilled')}:{' '}
@@ -341,7 +341,7 @@ export default function MedicationDetailsScreen() {
                     style={[styles.doseRow, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator }]}
                   >
                     <View style={[styles.doseDot, { backgroundColor: tone.bg }]}>
-                      <Ionicons name={icon} size={20} color={tone.fg} />
+                      <Ionicons name={icon} size={18} color={tone.fg} />
                     </View>
                     <View style={styles.grow}>
                       <Text style={[typography.headline, { color: c.textPrimary }]}>
@@ -448,31 +448,29 @@ export default function MedicationDetailsScreen() {
 
 const styles = StyleSheet.create({
   hero: {
-    borderRadius: 36,
-    padding: spacing(6),
-    minHeight: 240,
+    borderRadius: radius.xxl,
+    padding: spacing(5),
     overflow: 'hidden',
-    justifyContent: 'space-between',
-    gap: spacing(4),
+    gap: spacing(3),
   },
-  heroGlyph: { position: 'absolute', top: spacing(2), right: spacing(2) },
-  heroText: { marginTop: spacing(10) },
-  heroSub: { fontSize: 18, marginTop: spacing(1.5) },
-  tileBody: { gap: spacing(3), padding: spacing(5) },
-  adherence: { flexDirection: 'row', alignItems: 'center', gap: spacing(4), padding: spacing(5) },
+  heroGlyph: { position: 'absolute', top: spacing(4), right: spacing(4) },
+  heroText: { marginTop: spacing(4), paddingRight: 72 },
+  heroSub: { marginTop: spacing(0.5) },
+  tileBody: { gap: spacing(3), padding: spacing(4) },
+  adherence: { flexDirection: 'row', alignItems: 'center', gap: spacing(4), padding: spacing(4) },
   grow: { flex: 1, minWidth: 0 },
   wrapRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing(2.5) },
   timeChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(2),
-    minHeight: 52,
+    minHeight: 44,
     paddingLeft: spacing(3),
-    paddingRight: spacing(4.5),
+    paddingRight: spacing(4),
     borderRadius: radius.full,
     backgroundColor: '#FFFFFF',
   },
-  timeText: { color: INK, fontSize: 22, fontVariant: ['tabular-nums'] },
+  timeText: { color: INK, fontVariant: ['tabular-nums'] },
   glassPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -483,16 +481,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.8)',
   },
   spaceBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing(3) },
-  recent: { paddingHorizontal: spacing(4.5), paddingVertical: spacing(1.5) },
-  doseRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), minHeight: 64, paddingVertical: spacing(2) },
-  doseDot: { width: 36, height: 36, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  recent: { paddingHorizontal: spacing(4), paddingVertical: spacing(1) },
+  doseRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), minHeight: 56, paddingVertical: spacing(2) },
+  doseDot: { width: 32, height: 32, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   actionRow: { flexDirection: 'row', gap: spacing(2.5) },
   destructiveRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(3),
-    minHeight: 56,
-    paddingHorizontal: spacing(4.5),
+    minHeight: 52,
+    paddingHorizontal: spacing(4),
     borderTopWidth: StyleSheet.hairlineWidth,
   },
 });

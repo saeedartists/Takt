@@ -182,13 +182,13 @@ export default function MedicationsScreen() {
             style={styles.cardPress}
           >
             <View style={styles.glass}>
-              <MedicationGlyph appearance={plan.appearance} form={plan.form} size={52} />
+              <MedicationGlyph appearance={plan.appearance} form={plan.form} size={40} />
             </View>
             <View style={styles.grow}>
-              <Text numberOfLines={2} style={[typography.title2, { color: INK }]}>
+              <Text numberOfLines={2} style={[typography.headline, styles.name, { color: INK }]}>
                 {plan.label}
               </Text>
-              <Text style={[typography.callout, { color: butter.fg }]}>{subtitle(plan)}</Text>
+              <Text style={[typography.subhead, { color: butter.fg }]}>{subtitle(plan)}</Text>
             </View>
           </AnimatedPressable>
           {moreButton(plan, true)}
@@ -197,7 +197,7 @@ export default function MedicationsScreen() {
           <View style={styles.grow}>
             <AnimatedProgressBar
               progress={supply ? Math.max(0.02, count / supply.capacity) : 0}
-              height={10}
+              height={8}
               color={butter.fg}
               backgroundColor="rgba(255,255,255,0.7)"
             />
@@ -224,7 +224,7 @@ export default function MedicationsScreen() {
             style={styles.cardPress}
           >
             <View style={archived ? styles.dim : null}>
-              <MedicationGlyph appearance={plan.appearance} form={plan.form} size={56} />
+              <MedicationGlyph appearance={plan.appearance} form={plan.form} size={48} />
             </View>
             <View style={styles.grow}>
               <Text numberOfLines={2} style={[typography.headline, styles.name, { color: c.textPrimary }]}>
@@ -264,6 +264,10 @@ export default function MedicationsScreen() {
   // Low-supply medications float to the top of the active list.
   const activeSorted = [...activePlans.filter(isLow), ...activePlans.filter((plan) => !isLow(plan))];
   const onlyActive = pausedPlans.length === 0 && archivedPlans.length === 0;
+  // ponytail: a long label ("Hinzufügen") beside the display title breaks the title on phones; the pill drops to its + then.
+  const addLabel = t('addCta').length <= 6 ? t('addCta') : null;
+  const lowCount = plans.plans.filter(isLow).length;
+  const refillLine = lowCount ? t('refillsStripLow').replace('{count}', String(lowCount)) : t('refillsStripOk');
 
   return (
     <PageShell>
@@ -276,12 +280,12 @@ export default function MedicationsScreen() {
             scaleTo={0.96}
             accessibilityRole="button"
             accessibilityLabel={t('addMedication')}
-            style={[styles.add, { backgroundColor: c.ink }]}
+            style={[styles.add, !addLabel && styles.addIconOnly, { backgroundColor: c.ink }]}
           >
             <View style={[styles.addDot, { backgroundColor: c.accentSoft }]}>
               <Ionicons name="add" size={20} color={INK} />
             </View>
-            <Text style={[typography.headline, { color: c.onInk, fontFamily: font.bold }]}>{t('addCta')}</Text>
+            {addLabel ? <Text style={[typography.headline, { color: c.onInk, fontFamily: font.bold }]}>{addLabel}</Text> : null}
           </AnimatedPressable>
         }
       />
@@ -339,6 +343,30 @@ export default function MedicationsScreen() {
             <EmptyState title={t('noMedsMatchFilter')} description={t('addMedicationCadenceHint')} />
           ) : (
             <Stack>
+              {activePlans.length > 0 && !searchTerm ? (
+                <Animated.View entering={firstLoad.current ? enter(0) : undefined}>
+                  <AnimatedPressable
+                    onPress={() => router.push('/refills' as never)}
+                    haptic="light"
+                    scaleTo={0.98}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t('refillsRouteTitle')}, ${refillLine}`}
+                    style={[styles.card, styles.strip, { backgroundColor: c.surface, borderColor: c.cardBorder, borderWidth: isDark ? StyleSheet.hairlineWidth : 0 }]}
+                  >
+                    <View style={[styles.stripIcon, { backgroundColor: c.tones.butter.bg }]}>
+                      <Ionicons name="bag-add-outline" size={20} color={INK} />
+                    </View>
+                    <View style={styles.grow}>
+                      <Text style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>{t('refillsRouteTitle')}</Text>
+                      <Text numberOfLines={1} style={[typography.subhead, { color: lowCount ? c.warning : c.textSecondary }]}>
+                        {refillLine}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={c.textTertiary} />
+                  </AnimatedPressable>
+                </Animated.View>
+              ) : null}
+
               {activePlans.length > 0 ? (
                 <View>
                   {onlyActive ? null : <SectionHeader title={t('statusActive')} />}
@@ -381,8 +409,9 @@ export default function MedicationsScreen() {
 }
 
 const styles = StyleSheet.create({
+  addIconOnly: { paddingRight: spacing(2) },
   add: {
-    minHeight: 52,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(2),
@@ -390,28 +419,30 @@ const styles = StyleSheet.create({
     paddingRight: spacing(4),
     borderRadius: radius.full,
   },
-  addDot: { width: 36, height: 36, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  addDot: { width: 34, height: 34, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   list: { gap: spacing(2.5) },
   card: { borderRadius: radius.xl, padding: spacing(4) },
-  lowCard: { borderRadius: radius.xxl, padding: spacing(5), gap: spacing(3.5) },
+  lowCard: { gap: spacing(3) },
+  strip: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), paddingVertical: spacing(3) },
+  stripIcon: { width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   cardRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(2) },
-  cardPress: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing(3.5) },
+  cardPress: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
   glass: {
-    width: 60,
-    height: 60,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 17,
     backgroundColor: 'rgba(255,255,255,0.75)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   grow: { flex: 1, minWidth: 0 },
-  name: { fontSize: 19, lineHeight: 25, fontFamily: font.bold },
+  name: { fontFamily: font.bold },
   meta: { marginTop: 2, alignSelf: 'flex-start' },
   dim: { opacity: 0.55 },
   supplyRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(2) },
   more: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',

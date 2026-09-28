@@ -84,7 +84,7 @@ export default function RegisterScreen() {
 
   return (
     <PageShell>
-      <View style={{ gap: spacing(7) }}>
+      <View style={{ gap: spacing(6) }}>
         <AuthHero title={t('authRegisterHeaderTitle')} description={t('authRegisterDescription')} />
 
         <AuthBlock index={2}>

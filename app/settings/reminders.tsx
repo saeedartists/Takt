@@ -75,7 +75,7 @@ function NotificationPreview({ hideNames }: { hideNames: boolean }) {
       accessible
       accessibilityLabel={`${t('reminderNotificationTitle')}, ${hideNames ? bodyPrivate : bodyNamed}`}
     >
-      <TaktMark size={40} />
+      <TaktMark size={36} />
       <View style={styles.bannerText}>
         <View style={styles.bannerHead}>
           <Text style={[typography.subhead, { color: INK, fontFamily: font.bold }]}>{t('appName')}</Text>
@@ -216,7 +216,7 @@ export default function RemindersSettingsScreen() {
         {/* Hero: sky = reminders. The banner shows what the lock screen will say. */}
         <Animated.View entering={enter(0)}>
           <Tile tone="sky" style={styles.hero}>
-            <Text accessibilityRole="header" style={[typography.title1, { color: INK }]}>
+            <Text accessibilityRole="header" style={[typography.title2, { color: INK }]}>
               {t('remindersLead')}
             </Text>
             <NotificationPreview hideNames={Boolean(prefs.data?.hideNamesInReminders)} />
@@ -232,7 +232,7 @@ export default function RemindersSettingsScreen() {
                   <Ionicons name={status.icon} size={22} color={c.textPrimary} />
                 </View>
               ) : (
-                <TileIcon name={status.icon} size={44} />
+                <TileIcon name={status.icon} size={40} />
               )}
               <View style={styles.flex}>
                 <Text style={[typography.headline, { color: status.tone === 'surface' ? c.textPrimary : INK }]}>
@@ -395,7 +395,7 @@ export default function RemindersSettingsScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
-  hero: { gap: spacing(3.5), padding: spacing(5.5), borderRadius: radius.xxl },
+  hero: { gap: spacing(3), padding: spacing(4.5), borderRadius: radius.xxl },
   banner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -408,13 +408,13 @@ const styles = StyleSheet.create({
   bannerHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   overlay: { position: 'absolute', left: 0, right: 0, top: 0 },
   statusTile: { gap: spacing(3) },
-  quietIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3.5) },
-  pref: { paddingHorizontal: spacing(4.5), paddingVertical: spacing(4), gap: spacing(2.5) },
+  quietIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
+  pref: { paddingHorizontal: spacing(4), paddingVertical: spacing(3.5), gap: spacing(2.5) },
   chips: { flexDirection: 'row', gap: spacing(2) },
   chip: {
     flex: 1,
-    minHeight: 48,
+    minHeight: 44,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',

@@ -15,6 +15,7 @@ const SECTIONS: { title: MessageKey; body: MessageKey }[] = [
   { title: 'privacyWhoTitle', body: 'privacyWhoBody' },
   { title: 'privacyWhatTitle', body: 'privacyWhatBody' },
   { title: 'privacyWhereTitle', body: 'privacyWhereBody' },
+  { title: 'privacyOnDeviceTitle', body: 'privacyOnDeviceBody' },
   { title: 'privacyWhyTitle', body: 'privacyWhyBody' },
   { title: 'privacyNotTitle', body: 'privacyNotBody' },
   { title: 'privacyRightsTitle', body: 'privacyRightsBody' },
@@ -40,7 +41,7 @@ export default function PrivacyNoticeScreen() {
                   index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator },
                 ]}
               >
-                <Text accessibilityRole="header" style={[typography.title3, { color: c.textPrimary }]}>
+                <Text accessibilityRole="header" style={[typography.headline, { color: c.textPrimary }]}>
                   {t(section.title)}
                 </Text>
                 <Text style={[typography.body, { color: c.textSecondary }]}>{t(section.body)}</Text>
@@ -59,7 +60,7 @@ export default function PrivacyNoticeScreen() {
 }
 
 const styles = StyleSheet.create({
-  section: { padding: spacing(4.5), gap: spacing(2) },
+  section: { padding: spacing(4), gap: spacing(1.5) },
   note: { flexDirection: 'row', gap: spacing(3), alignItems: 'flex-start', paddingHorizontal: spacing(1) },
   flex: { flex: 1, minWidth: 0 },
 });

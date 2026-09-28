@@ -85,31 +85,31 @@ export default function ConsentScreen() {
     <PageShell>
       <View style={styles.page}>
         <Animated.View entering={reduce ? undefined : FadeInDown.duration(420)} style={styles.lead}>
-          <TaktMark size={56} />
-          <Text style={[typography.headline, { color: c.textSecondary }]}>{t('consentTitle')}</Text>
-          <Text accessibilityRole="header" style={[typography.largeTitle, { color: c.textPrimary }]}>
+          <TaktMark size={44} />
+          <Text style={[typography.overline, styles.eyebrow, { color: c.textSecondary }]}>{t('consentTitle')}</Text>
+          <Text accessibilityRole="header" style={[typography.title1, { color: c.textPrimary }]}>
             {t('consentHeadline')}
           </Text>
           <Text style={[typography.body, { color: c.textSecondary }]}>{t('consentBody')}</Text>
         </Animated.View>
 
-        <View style={styles.points}>
+        <Card>
           {trustPoints.map((point, index) => (
-            <Animated.View key={point.icon} entering={enter(index + 2)}>
-              <Card>
-                <View style={styles.point}>
-                  <View style={[styles.pointIcon, { backgroundColor: c.tones[point.tone].bg }]}>
-                    <Ionicons name={point.icon} size={20} color={INK} />
-                  </View>
-                  <View style={styles.flex}>
-                    <Text style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>{point.title}</Text>
-                    <Text style={[typography.subhead, { color: c.textSecondary }]}>{point.description}</Text>
-                  </View>
-                </View>
-              </Card>
+            <Animated.View
+              key={point.icon}
+              entering={enter(index + 2)}
+              style={[styles.point, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator }]}
+            >
+              <View style={[styles.pointIcon, { backgroundColor: c.tones[point.tone].bg }]}>
+                <Ionicons name={point.icon} size={18} color={INK} />
+              </View>
+              <View style={[styles.flex, { gap: 2 }]}>
+                <Text style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>{point.title}</Text>
+                <Text style={[typography.subhead, { color: c.textSecondary }]}>{point.description}</Text>
+              </View>
             </Animated.View>
           ))}
-        </View>
+        </Card>
 
         <Animated.View entering={enter(5)} style={styles.note}>
           <Ionicons name="information-circle-outline" size={20} color={c.textSecondary} />
@@ -137,10 +137,10 @@ export default function ConsentScreen() {
 
 const styles = StyleSheet.create({
   page: { gap: spacing(5) },
-  lead: { gap: spacing(2.5) },
-  points: { gap: spacing(2.5) },
-  point: { padding: spacing(4), flexDirection: 'row', gap: spacing(3.5), alignItems: 'flex-start' },
-  pointIcon: { width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  lead: { gap: spacing(2) },
+  eyebrow: { marginTop: spacing(2) },
+  point: { paddingHorizontal: spacing(4), paddingVertical: spacing(3.5), flexDirection: 'row', gap: spacing(3), alignItems: 'flex-start' },
+  pointIcon: { width: 36, height: 36, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   flex: { flex: 1, minWidth: 0 },
   note: { flexDirection: 'row', gap: spacing(3), alignItems: 'flex-start', paddingHorizontal: spacing(1) },
   error: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), padding: spacing(3.5), borderRadius: radius.md },

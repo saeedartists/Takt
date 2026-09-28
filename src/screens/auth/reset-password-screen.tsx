@@ -52,7 +52,7 @@ export default function ResetPasswordScreen() {
 
   return (
     <PageShell>
-      <View style={{ gap: spacing(7) }}>
+      <View style={{ gap: spacing(6) }}>
         <AuthHero title={t('authResetHeaderTitle')} description={t('authResetDescription')} />
 
         <AuthBlock index={2}>
