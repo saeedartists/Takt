@@ -213,7 +213,7 @@ export function TodayHeroCard({
             strong={Boolean(due)}
           />
           <View>
-            <Text numberOfLines={2} style={[typography.display, styles.onTile]}>
+            <Text numberOfLines={2} style={[typography.largeTitle, styles.onTile]}>
               {dose.label}
             </Text>
             <Text style={[typography.body, { color: c.onAccentSoft, marginTop: spacing(1.5) }]}>

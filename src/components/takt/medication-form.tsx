@@ -773,8 +773,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: INK,
     fontFamily: font.display,
-    fontSize: 32,
-    lineHeight: 38,
+    fontSize: 28,
+    lineHeight: 34,
   },
   bar: {
     borderTopWidth: StyleSheet.hairlineWidth,

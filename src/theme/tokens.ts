@@ -318,11 +318,11 @@ export const weight = (w: '400' | '500' | '600' | '700' | '800' | 'normal' | 'bo
  * primary user is 65+); 13 is the floor for any caption.
  */
 export const typography = {
-  display: { fontFamily: font.display, fontSize: 40, lineHeight: 44, letterSpacing: -1.2 },
-  largeTitle: { fontFamily: font.display, fontSize: 34, lineHeight: 40, letterSpacing: -0.9 },
-  title1: { fontFamily: font.display, fontSize: 28, lineHeight: 34, letterSpacing: -0.6 },
-  title2: { fontFamily: font.display, fontSize: 24, lineHeight: 30, letterSpacing: -0.4 },
-  title3: { fontFamily: font.display, fontSize: 20, lineHeight: 26, letterSpacing: -0.25 },
+  display: { fontFamily: font.display, fontSize: 34, lineHeight: 40, letterSpacing: -0.9 },
+  largeTitle: { fontFamily: font.display, fontSize: 29, lineHeight: 35, letterSpacing: -0.6 },
+  title1: { fontFamily: font.display, fontSize: 25, lineHeight: 31, letterSpacing: -0.45 },
+  title2: { fontFamily: font.display, fontSize: 21, lineHeight: 27, letterSpacing: -0.3 },
+  title3: { fontFamily: font.display, fontSize: 18, lineHeight: 24, letterSpacing: -0.15 },
   headline: { fontFamily: font.semibold, fontSize: 17, lineHeight: 24, letterSpacing: 0 },
   body: { fontFamily: font.regular, fontSize: 17, lineHeight: 24, letterSpacing: 0 },
   callout: { fontFamily: font.regular, fontSize: 16, lineHeight: 22, letterSpacing: 0 },
@@ -332,8 +332,8 @@ export const typography = {
   caption2: { fontFamily: font.semibold, fontSize: 12, lineHeight: 16, letterSpacing: 0 },
   /** Uppercase eyebrow: small, bold, letter-spaced. */
   overline: { fontFamily: font.bold, fontSize: 13, lineHeight: 16, letterSpacing: 0.9, textTransform: 'uppercase' },
-  metric: { fontFamily: font.display, fontSize: 44, lineHeight: 48, letterSpacing: -1.4 },
-  metricSm: { fontFamily: font.display, fontSize: 30, lineHeight: 34, letterSpacing: -0.8 },
+  metric: { fontFamily: font.display, fontSize: 36, lineHeight: 42, letterSpacing: -1 },
+  metricSm: { fontFamily: font.display, fontSize: 26, lineHeight: 31, letterSpacing: -0.6 },
 } as const;
 
 /** spacing(n) = n * 4. Screen margin 20, tile gap 12, section gap 32. */
