@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { AnimatedPressable, radius, spacing, typography, useTokens } from '@/components/ui';
+import { AnimatedPressable, radius, spacing, typography, useTokens, font } from '@/components/ui';
 import type { WeekdayCode } from '@/lib/takt/types';
 
 export const WeekdayPicker = ({
@@ -39,7 +39,7 @@ export const WeekdayPicker = ({
             <Text
               style={[
                 typography.subhead,
-                { color: active ? c.accent : c.textSecondary, fontWeight: active ? '600' : '400' },
+                { color: active ? c.accent : c.textSecondary, fontFamily: active ? font.semibold : font.regular },
               ]}
             >
               {label}

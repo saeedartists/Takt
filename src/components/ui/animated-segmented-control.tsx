@@ -1,19 +1,10 @@
 import { useEffect, useState } from 'react';
-import {
-  LayoutChangeEvent,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  type ViewStyle,
-} from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated';
-import { MIN_TOUCH_TARGET, radius, spacing, typography } from '../../theme/tokens';
+import { LayoutChangeEvent, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+
+import { font, radius, spacing, typography } from '../../theme/tokens';
 import { useTokens } from '../../theme/use-tokens';
+import { triggerHaptic } from './animated-pressable';
 
 type SegmentOption = {
   value: string;
@@ -25,37 +16,37 @@ type AnimatedSegmentedControlProps = {
   options: SegmentOption[];
   onChange: (next: string) => void;
   style?: ViewStyle;
+  /** Track colour: `raised` on white cards, `surface` on the paper ground. */
+  track?: 'raised' | 'surface';
+  /** Thumb colour for a selected value that carries meaning (e.g. Taken = success). */
+  thumbColor?: string;
 };
+
+// A glide with no overshoot: the ink thumb should land, not wobble.
+const GLIDE = { damping: 26, stiffness: 300, mass: 0.8, overshootClamping: true } as const;
 
 export function AnimatedSegmentedControl({
   value,
   options,
   onChange,
   style,
+  track = 'raised',
+  thumbColor,
 }: AnimatedSegmentedControlProps) {
-  const { c, scheme } = useTokens();
+  const { c } = useTokens();
   const [containerWidth, setContainerWidth] = useState(0);
 
   const activeIndex = Math.max(
     0,
     options.findIndex((opt) => opt.value === value),
   );
-
-  const segmentWidth =
-    containerWidth > 0 && options.length > 0
-      ? (containerWidth - spacing(2)) / options.length
-      : 0;
+  const pad = spacing(1);
+  const segmentWidth = containerWidth > 0 && options.length > 0 ? (containerWidth - pad * 2) / options.length : 0;
 
   const translateX = useSharedValue(0);
 
   useEffect(() => {
-    if (segmentWidth > 0) {
-      translateX.value = withSpring(activeIndex * segmentWidth, {
-        damping: 22,
-        stiffness: 240,
-        mass: 0.7,
-      });
-    }
+    if (segmentWidth > 0) translateX.value = withSpring(activeIndex * segmentWidth, GLIDE);
   }, [activeIndex, segmentWidth, translateX]);
 
   const indicatorStyle = useAnimatedStyle(() => ({
@@ -67,34 +58,21 @@ export function AnimatedSegmentedControl({
     const width = e.nativeEvent.layout.width;
     if (width > 0 && width !== containerWidth) {
       setContainerWidth(width);
-      translateX.value = activeIndex * ((width - spacing(2)) / options.length);
+      translateX.value = activeIndex * ((width - pad * 2) / options.length);
     }
   };
+
+  const thumb = thumbColor ?? c.ink;
+  const onThumb = thumbColor ? '#FFFFFF' : c.onInk;
 
   return (
     <View
       onLayout={handleLayout}
-      style={[
-        styles.wrap,
-        {
-          backgroundColor: c.surfaceRaised,
-          borderColor: c.separator,
-        },
-        style,
-      ]}
+      accessibilityRole="tablist"
+      style={[styles.wrap, { backgroundColor: track === 'surface' ? c.surface : c.surfaceRaised }, style]}
     >
       {segmentWidth > 0 ? (
-        <Animated.View
-          style={[
-            styles.indicator,
-            {
-              backgroundColor: c.surface,
-              borderColor: c.separator,
-            },
-            scheme === 'light' && styles.lightShadow,
-            indicatorStyle,
-          ]}
-        />
+        <Animated.View style={[styles.indicator, { backgroundColor: thumb }, indicatorStyle]} />
       ) : null}
 
       {options.map((option, index) => {
@@ -102,19 +80,19 @@ export function AnimatedSegmentedControl({
         return (
           <Pressable
             key={option.value}
-            onPress={() => onChange(option.value)}
-            accessibilityRole="button"
+            onPress={() => {
+              if (!active) triggerHaptic('light');
+              onChange(option.value);
+            }}
+            accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             style={styles.segment}
           >
             <Text
               numberOfLines={1}
               style={[
-                typography.subhead,
-                {
-                  color: active ? c.textPrimary : c.textSecondary,
-                  fontWeight: active ? '600' : '400',
-                },
+                typography.callout,
+                { color: active ? onThumb : c.textSecondary, fontFamily: active ? font.bold : font.semibold },
               ]}
             >
               {option.label}
@@ -130,8 +108,7 @@ const styles = StyleSheet.create({
   wrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.full,
     padding: spacing(1),
     position: 'relative',
   },
@@ -140,22 +117,14 @@ const styles = StyleSheet.create({
     top: spacing(1),
     left: spacing(1),
     bottom: spacing(1),
-    borderRadius: radius.sm,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.full,
   },
   segment: {
     flex: 1,
-    minHeight: MIN_TOUCH_TARGET - 6,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing(2),
     zIndex: 1,
-  },
-  lightShadow: {
-    shadowColor: '#000000',
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
   },
 });

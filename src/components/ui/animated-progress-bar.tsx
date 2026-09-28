@@ -5,7 +5,7 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
-import { radius, spacing } from '../../theme/tokens';
+import { radius } from '../../theme/tokens';
 import { useTokens } from '../../theme/use-tokens';
 
 type AnimatedProgressBarProps = {
@@ -36,11 +36,8 @@ export function AnimatedProgressBar({
   useEffect(() => {
     const norm = progress <= 1 && progress > 0 ? progress * 100 : progress;
     const clamp = Math.max(0, Math.min(100, norm));
-    animatedWidth.value = withSpring(clamp, {
-      damping: 22,
-      stiffness: 140,
-      mass: 0.8,
-    });
+    // Fills glide in without overshoot: progress should read as calm, not bouncy.
+    animatedWidth.value = withSpring(clamp, { damping: 24, stiffness: 120, mass: 0.9, overshootClamping: true });
   }, [progress, animatedWidth]);
 
   const fillStyle = useAnimatedStyle(() => ({
@@ -54,7 +51,6 @@ export function AnimatedProgressBar({
         {
           height,
           backgroundColor: trackColor,
-          borderColor: c.separator,
         },
         style,
       ]}
@@ -77,10 +73,10 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: radius.full,
     overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
   },
   fill: {
     height: '100%',
+    minWidth: 8,
     borderRadius: radius.full,
   },
 });

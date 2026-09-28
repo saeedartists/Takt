@@ -11,6 +11,7 @@ import {
   typography,
   useMotion,
   useTokens,
+  font,
 } from '@/components/ui';
 import { useLocale } from '@/lib/takt/l10n';
 
@@ -84,7 +85,7 @@ export const AuthLinkRow = ({ prompt, label, onPress }: { prompt?: string; label
     <View style={styles.linkRow}>
       {prompt ? <Text style={[typography.subhead, { color: c.textSecondary }]}>{prompt}</Text> : null}
       <AnimatedPressable accessibilityRole="link" accessibilityLabel={label} onPress={onPress} style={styles.link}>
-        <Text style={[typography.subhead, { color: c.accent, fontWeight: '600' }]}>{label}</Text>
+        <Text style={[typography.subhead, { color: c.accent, fontFamily: font.semibold }]}>{label}</Text>
       </AnimatedPressable>
     </View>
   );

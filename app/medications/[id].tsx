@@ -24,6 +24,7 @@ import {
   typography,
   useMotion,
   useTokens,
+  font,
 } from '@/components/ui';
 import {
   MedicationActionSheet,
@@ -244,7 +245,7 @@ export default function MedicationDetailsScreen() {
                   {plan.times.map((time) => (
                     <View key={time} style={[styles.timeChip, { backgroundColor: c.surfaceRaised, borderColor: c.separator }]}>
                       <Ionicons name="time-outline" size={14} color={c.accent} />
-                      <Text style={[typography.subhead, { color: c.textPrimary, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>
+                      <Text style={[typography.subhead, { color: c.textPrimary, fontFamily: font.semibold, fontVariant: ['tabular-nums'] }]}>
                         {time}
                       </Text>
                     </View>

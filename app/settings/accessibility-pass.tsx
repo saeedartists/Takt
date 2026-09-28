@@ -17,6 +17,7 @@ import {
   spacing,
   typography,
   useTokens,
+  font,
 } from '@/components/ui';
 import { type A11yCaseId, useAccessibilityPass } from '@/lib/takt/accessibility-pass';
 import { useLocale } from '@/lib/takt/l10n';
@@ -108,7 +109,7 @@ export default function AccessibilityPassScreen() {
             <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={[typography.headline, { color: c.textPrimary }]}>{t('a11yCaseProgress')}</Text>
-                <Text style={[typography.subhead, { color: c.accent, fontWeight: '700' }]}>
+                <Text style={[typography.subhead, { color: c.accent, fontFamily: font.bold }]}>
                   {matrix.completionPct}%
                 </Text>
               </View>

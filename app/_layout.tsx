@@ -1,7 +1,20 @@
 import { polyfillMedplumWebAPIs } from '@medplum/expo-polyfills';
 import { OvokProvider } from '@ovok/core';
 import { QueryClientProvider } from '@tanstack/react-query';
+import {
+  BricolageGrotesque_600SemiBold,
+  BricolageGrotesque_700Bold,
+  BricolageGrotesque_800ExtraBold,
+} from '@expo-google-fonts/bricolage-grotesque';
+import {
+  Figtree_400Regular,
+  Figtree_500Medium,
+  Figtree_600SemiBold,
+  Figtree_700Bold,
+} from '@expo-google-fonts/figtree';
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
@@ -14,10 +27,13 @@ import { ovokClient } from '@/lib/ovok-client';
 import { queryClient } from '@/lib/query-client';
 import { LocaleProvider, useLocale } from '@/lib/takt/l10n';
 
+import { StackHeader } from '@/components/ui/stack-header';
 import { ThemeProvider, useTheme } from '@/theme/theme-context';
 
 polyfillMedplumWebAPIs();
 installOvokMocks();
+// Hold the splash until the brand faces are in, so no screen flashes system type.
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 function AppStack() {
   const { t } = useLocale();
@@ -26,11 +42,9 @@ function AppStack() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: c.surface },
-        headerTintColor: c.accent,
-        headerTitleStyle: { color: c.textPrimary, fontWeight: '600' },
-        headerShadowVisible: false,
+        header: (props) => <StackHeader {...props} />,
         contentStyle: { backgroundColor: c.background },
+        animation: 'slide_from_right',
       }}
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -40,7 +54,7 @@ function AppStack() {
       <Stack.Screen name="auth/reset-password" options={{ title: t('authResetPasswordTitle') }} />
       <Stack.Screen name="consent" options={{ title: t('consentRouteTitle') }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="medications/new" options={{ title: t('addMedicationRouteTitle') }} />
+      <Stack.Screen name="medications/new" options={{ title: t('addMedicationRouteTitle'), animation: 'slide_from_bottom' }} />
       <Stack.Screen name="medications/[id]" options={{ title: t('medicationDetailsRouteTitle') }} />
       <Stack.Screen name="medications/[id]/edit" options={{ title: t('editMedicationRouteTitle') }} />
       <Stack.Screen name="report" options={{ title: t('reportRouteTitle') }} />
@@ -81,7 +95,7 @@ function ThemedAppContainer() {
     style.id = 'takt-web-chrome';
     style.textContent = [
       `html, body { background: ${c.background}; }`,
-      `@media (prefers-color-scheme: dark) { html, body { background: #0B0F15; } }`,
+      `@media (prefers-color-scheme: dark) { html, body { background: #0F1115; } }`,
       `body, div, span, p, h1, h2, h3, input, textarea, button, label { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }`,
     ].join('\n');
     document.head.appendChild(style);
@@ -99,6 +113,24 @@ function ThemedAppContainer() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    Figtree_400Regular,
+    Figtree_500Medium,
+    Figtree_600SemiBold,
+    Figtree_700Bold,
+    BricolageGrotesque_600SemiBold,
+    BricolageGrotesque_700Bold,
+    BricolageGrotesque_800ExtraBold,
+  });
+  const ready = fontsLoaded || Boolean(fontError);
+
+  useEffect(() => {
+    if (ready) void SplashScreen.hideAsync().catch(() => undefined);
+  }, [ready]);
+
+  // A font failure falls back to system type rather than blocking the app.
+  if (!ready) return null;
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>

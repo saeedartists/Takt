@@ -23,6 +23,7 @@ import {
   typography,
   useMotion,
   useTokens,
+  font,
 } from '@/components/ui';
 import { AdherenceBars, type AdherenceBarDay } from '@/components/ui/sparkline';
 import { useDoseEvents } from '@/lib/hooks/use-dose-events';
@@ -370,7 +371,7 @@ export default function HistoryScreen() {
             onPress={() => router.push('/report')}
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, minHeight: 44, justifyContent: 'center' })}
           >
-            <Text style={[typography.subhead, { color: c.accent, fontWeight: '600' }]}>{t('report')}</Text>
+            <Text style={[typography.subhead, { color: c.accent, fontFamily: font.semibold }]}>{t('report')}</Text>
           </Pressable>
         }
       />

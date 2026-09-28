@@ -21,6 +21,7 @@ import {
   typography,
   useMotion,
   useTokens,
+  font,
 } from '@/components/ui';
 import { MedicationGlyph } from '@/components/takt/medication-glyph';
 import { TimeField } from '@/components/takt/time-field';
@@ -93,7 +94,7 @@ export const Chip = ({
       <Text
         style={[
           typography.subhead,
-          { color: selected ? c.accent : c.textSecondary, fontWeight: selected ? '600' : '500', fontVariant: ['tabular-nums'] },
+          { color: selected ? c.accent : c.textSecondary, fontFamily: selected ? font.semibold : font.medium, fontVariant: ['tabular-nums'] },
         ]}
       >
         {label}

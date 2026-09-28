@@ -1,17 +1,21 @@
 /*
- * Design tokens — Apple Health visual language, mobile mirror.
+ * Design tokens — Takt brand v2 ("your medicines, in rhythm").
  *
- * Deliberately hand-mirrored from the web scaffold's app/globals.css
- * rather than shared: scaffolds are standalone (no workspace deps), and
- * RN has no CSS custom properties. The VALUES must stay in sync with
- * the web copy — same iOS system palette, same Health category
- * colours — so a chat that builds both surfaces gets one product, not
- * two that merely rhyme.
+ * Paper ground, ink text and actions, and six pastel tones that each
+ * carry exactly one meaning:
+ *   apricot  now / next dose (the brand tone)
+ *   sage     taken, done
+ *   sky      schedule, reminders
+ *   lilac    insights, profile
+ *   butter   supply, refills
+ *   rose     missed — History and the doctor report only
  *
- * Palette values are iOS system colours. Do not invent new hexes; pick
- * from here, and if a tenant rebrands, override `semantic` only.
+ * Text on any tone is always ink (or the tone's own deep `fg`), so every
+ * pair clears WCAG AA. Tones stay light in dark mode; only the ground and
+ * cards go dark. Source of truth: the "Takt Brand & Screens" design canvas.
  */
 
+/** Kept for sparkline/legacy callers; not part of the brand palette. */
 export const iosPalette = {
   light: {
     red: '#FF3B30',
@@ -53,20 +57,52 @@ export const iosPalette = {
   },
 } as const;
 
+/** Ink that never inverts — for text and buttons sitting on a pastel tone. */
+export const INK = '#15171C';
+export const PAPER = '#F5F2ED';
+
+export type ToneName = 'apricot' | 'sage' | 'sky' | 'lilac' | 'butter' | 'rose';
+export type Tone = {
+  /** Tile / chip fill. */
+  bg: string;
+  /** Deep companion: icons, numbers and secondary text on `bg`. */
+  fg: string;
+  /** Solid mark (dots, bars, progress) readable on `bg` and on paper. */
+  solid: string;
+};
+
+const tonesLight: Record<ToneName, Tone> = {
+  apricot: { bg: '#FAD6B4', fg: '#5C3309', solid: '#B4611C' },
+  sage: { bg: '#CDE6D0', fg: '#17573A', solid: '#1F6F4A' },
+  sky: { bg: '#CFE2F3', fg: '#1B3A55', solid: '#245C8A' },
+  lilac: { bg: '#DDD7F6', fg: '#3D3470', solid: '#4B3F99' },
+  butter: { bg: '#F7E8A4', fg: '#4F3D00', solid: '#7A5B00' },
+  rose: { bg: '#F6D0CB', fg: '#8E2A21', solid: '#A8342A' },
+};
+
+const tonesDark: Record<ToneName, Tone> = {
+  apricot: { bg: '#F4C9A0', fg: '#4A2807', solid: '#F0A36D' },
+  sage: { bg: '#B8DDBF', fg: '#123F2A', solid: '#7BD19B' },
+  sky: { bg: '#BDD6EC', fg: '#15314A', solid: '#8EC0EC' },
+  lilac: { bg: '#C9C0F0', fg: '#2F2760', solid: '#B3A8F2' },
+  butter: { bg: '#F2DC86', fg: '#3F3100', solid: '#F2DC86' },
+  rose: { bg: '#F0BDB6', fg: '#6E1E17', solid: '#F08A80' },
+};
+
 /*
- * Health category colours. Same values in both schemes — the whole
- * point is that "heart data is this red" is a stable association.
+ * Legacy category colours (sparkline tints). Mapped onto the brand
+ * solids so older charts land in-palette.
  */
 export const categoryColors = {
-  heart: '#FF375F',
-  activity: '#FF9500',
-  sleep: '#40C8E0',
-  nutrition: '#34C759',
-  medication: '#B4611C',
-  mindfulness: '#5E5CE6',
-  body: '#AF52DE',
-  respiratory: '#64D2FF',
-  lab: '#007AFF',
+  heart: tonesLight.rose.solid,
+  activity: tonesLight.apricot.solid,
+  sleep: tonesLight.sky.solid,
+  nutrition: tonesLight.sage.solid,
+  medication: tonesLight.apricot.solid,
+  mindfulness: tonesLight.lilac.solid,
+  body: tonesLight.lilac.solid,
+  respiratory: tonesLight.sky.solid,
+  lab: tonesLight.sky.solid,
 };
 
 export type HealthCategory =
@@ -95,6 +131,11 @@ type PaletteMessageKey =
   | 'themePlumName'
   | 'themePlumDesc';
 
+/*
+ * A palette recolours only the "now" layer: the next-dose tile, the
+ * active tab and text links. Taken stays sage and missed stays rose in
+ * every palette, so meaning never shifts.
+ */
 export const paletteConfigs: Record<
   ThemePalette,
   {
@@ -105,152 +146,214 @@ export const paletteConfigs: Record<
     descriptionKey: PaletteMessageKey;
     accentLight: string;
     accentDark: string;
+    softLight: string;
+    softDark: string;
+    onSoft: string;
     medicationLight: string;
     medicationDark: string;
     previewColor: string;
   }
 > = {
   amber: {
-    name: 'Takt Amber',
-    description: 'Warm terracotta & sunlit calm',
+    name: 'Apricot',
+    description: 'Warm and sunlit',
     nameKey: 'themeAmberName',
     descriptionKey: 'themeAmberDesc',
     accentLight: '#B4611C',
-    accentDark: '#E07D2C',
+    accentDark: '#F0A36D',
+    softLight: '#FAD6B4',
+    softDark: '#F4C9A0',
+    onSoft: '#5C3309',
     medicationLight: '#B4611C',
-    medicationDark: '#E07D2C',
+    medicationDark: '#F0A36D',
     previewColor: '#B4611C',
   },
   sage: {
-    name: 'Nordic Sage',
-    description: 'Serene forest & restorative calm',
+    name: 'Sage',
+    description: 'Calm and restful',
     nameKey: 'themeSageName',
     descriptionKey: 'themeSageDesc',
     accentLight: '#23704B',
-    accentDark: '#3DB87E',
+    accentDark: '#7BD19B',
+    softLight: '#CDE6D0',
+    softDark: '#B8DDBF',
+    onSoft: '#17573A',
     medicationLight: '#23704B',
-    medicationDark: '#3DB87E',
+    medicationDark: '#7BD19B',
     previewColor: '#23704B',
   },
   indigo: {
-    name: 'Ocean Slate',
-    description: 'Crisp medical indigo & clarity',
+    name: 'Sky',
+    description: 'Crisp and clear',
     nameKey: 'themeIndigoName',
     descriptionKey: 'themeIndigoDesc',
-    accentLight: '#1D63D8',
-    accentDark: '#4D90FE',
-    medicationLight: '#1D63D8',
-    medicationDark: '#4D90FE',
-    previewColor: '#1D63D8',
+    accentLight: '#1D5FA8',
+    accentDark: '#8EC0EC',
+    softLight: '#CFE2F3',
+    softDark: '#BDD6EC',
+    onSoft: '#1B3A55',
+    medicationLight: '#1D5FA8',
+    medicationDark: '#8EC0EC',
+    previewColor: '#1D5FA8',
   },
   plum: {
-    name: 'Velvet Plum',
-    description: 'Gentle berry & mindful presence',
+    name: 'Plum',
+    description: 'Gentle and mindful',
     nameKey: 'themePlumName',
     descriptionKey: 'themePlumDesc',
     accentLight: '#853982',
-    accentDark: '#BF66B9',
+    accentDark: '#DDA8D9',
+    softLight: '#EBD5EA',
+    softDark: '#DDBFDB',
+    onSoft: '#4F2350',
     medicationLight: '#853982',
-    medicationDark: '#BF66B9',
+    medicationDark: '#DDA8D9',
     previewColor: '#853982',
   },
 };
 
 export const getSemanticColors = (scheme: 'light' | 'dark', palette: ThemePalette = 'amber') => {
   const p = paletteConfigs[palette] ?? paletteConfigs.amber;
-  const accent = scheme === 'light' ? p.accentLight : p.accentDark;
 
   if (scheme === 'light') {
     return {
-      // Brand system (product brief §10): Paper, Ground, Slate, Taken green, Missed red, Amber lift.
-      background: '#FAFAF9',
+      background: PAPER,
       surface: '#FFFFFF',
-      surfaceRaised: '#F1EFEB',
-      surfaceSubtle: '#FAF9F6',
-      separator: 'rgba(92,100,111,0.18)',
-      cardBorder: 'rgba(0,0,0,0.06)',
-      textPrimary: '#0E1218',
-      textSecondary: '#5C646F',
-      textTertiary: 'rgba(92,100,111,0.62)',
-      accent,
+      /** Quiet fills: secondary buttons, segmented tracks, chips. */
+      surfaceRaised: '#EDE9E2',
+      surfaceSubtle: '#FAF8F4',
+      separator: 'rgba(21,23,28,0.10)',
+      cardBorder: 'rgba(21,23,28,0.06)',
+      textPrimary: INK,
+      textSecondary: '#464B54',
+      textTertiary: '#5F646D',
+      accent: p.accentLight,
+      /** The palette's pastel: next-dose tile, active tab. Text on it is `onAccentSoft`. */
+      accentSoft: p.softLight,
+      onAccentSoft: p.onSoft,
+      /** Primary action fill; inverts in dark mode. */
+      ink: INK,
+      onInk: PAPER,
+      /** Floating tab bar. */
+      chrome: INK,
+      onChrome: 'rgba(245,242,237,0.78)',
       destructive: '#A8342A',
       success: '#1F6F4A',
-      warning: '#D98A3D',
+      warning: '#7A5B00',
+      tones: tonesLight,
     };
   }
 
   return {
-    background: '#0E1218',
-    surface: '#151A22',
-    surfaceRaised: '#1E2530',
-    surfaceSubtle: '#12161E',
-    separator: 'rgba(255,255,255,0.12)',
-    cardBorder: 'rgba(255,255,255,0.08)',
-    textPrimary: '#F8FAFC',
-    textSecondary: 'rgba(241,245,249,0.76)',
-    textTertiary: 'rgba(241,245,249,0.48)',
-    accent,
-    destructive: '#E5534B',
-    success: '#34D399',
-    warning: '#F59E0B',
+    background: '#0F1115',
+    surface: '#1A1D23',
+    surfaceRaised: '#252932',
+    surfaceSubtle: '#14171C',
+    separator: 'rgba(245,242,237,0.12)',
+    cardBorder: 'rgba(245,242,237,0.07)',
+    textPrimary: PAPER,
+    textSecondary: 'rgba(245,242,237,0.76)',
+    textTertiary: 'rgba(245,242,237,0.58)',
+    accent: p.accentDark,
+    accentSoft: p.softDark,
+    onAccentSoft: p.onSoft,
+    ink: PAPER,
+    onInk: INK,
+    chrome: '#1C1F26',
+    onChrome: 'rgba(245,242,237,0.78)',
+    destructive: '#F08A80',
+    success: '#7BD19B',
+    warning: '#F2DC86',
+    tones: tonesDark,
   };
 };
+
+export type SemanticColors = ReturnType<typeof getSemanticColors>;
 
 export const semantic = {
   light: getSemanticColors('light', 'amber'),
   dark: getSemanticColors('dark', 'amber'),
 } as const;
 
-/** Corner radii — Health uses generous corners; 16 is the card value. */
+/** Corner radii: tiles 32, cards 28/24, fields 18, pills 999. */
 export const radius = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 22,
+  sm: 12,
+  md: 18,
+  lg: 24,
+  xl: 28,
+  xxl: 32,
   full: 999,
 } as const;
 
 /*
- * iOS type ramp. Names match Apple's text styles so a HIG reference
- * maps directly to a token. `metric` is the big number on a tile.
- * letterSpacing follows SF Pro tracking: tightening on display sizes,
- * neutral on body text, a wide track for the uppercase overline.
+ * Brand faces. Custom fonts carry their weight in the family name, so
+ * never pair these with `fontWeight` (Android would fake-bold them):
+ * pick the family instead.
  */
-export const typography = {
-  largeTitle: { fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.35 },
-  title1: { fontSize: 25, lineHeight: 30, fontWeight: '700', letterSpacing: -0.3 },
-  title2: { fontSize: 21, lineHeight: 26, fontWeight: '700', letterSpacing: -0.22 },
-  title3: { fontSize: 18, lineHeight: 23, fontWeight: '600', letterSpacing: -0.15 },
-  // Accessibility floor (product brief §10): body text is never below 17pt; the primary user is 65+.
-  headline: { fontSize: 17, lineHeight: 22, fontWeight: '600', letterSpacing: 0 },
-  body: { fontSize: 17, lineHeight: 22, fontWeight: '400', letterSpacing: 0 },
-  callout: { fontSize: 16, lineHeight: 21, fontWeight: '400', letterSpacing: 0 },
-  subhead: { fontSize: 15, lineHeight: 20, fontWeight: '400', letterSpacing: 0 },
-  footnote: { fontSize: 13, lineHeight: 18, fontWeight: '400', letterSpacing: 0 },
-  caption: { fontSize: 12, lineHeight: 16, fontWeight: '400', letterSpacing: 0 },
-  caption2: { fontSize: 11, lineHeight: 13, fontWeight: '400', letterSpacing: 0 },
-  /** Uppercase eyebrow / tab label: small, semi-bold, letter-spaced. */
-  overline: { fontSize: 11, lineHeight: 13, fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase' },
-  metric: { fontSize: 34, lineHeight: 38, fontWeight: '700', letterSpacing: -0.45 },
-  metricSm: { fontSize: 24, lineHeight: 28, fontWeight: '700', letterSpacing: -0.28 },
+export const font = {
+  regular: 'Figtree_400Regular',
+  medium: 'Figtree_500Medium',
+  semibold: 'Figtree_600SemiBold',
+  bold: 'Figtree_700Bold',
+  displaySemibold: 'BricolageGrotesque_600SemiBold',
+  display: 'BricolageGrotesque_700Bold',
+  displayHeavy: 'BricolageGrotesque_800ExtraBold',
 } as const;
 
-/** Matches the SDK's DEFAULT_MULTIPLIERS.spacing — spacing(n) = n * 4. */
-export const spacing = (n: number): number => n * 4;
-
-/** Minimum touch target per Apple HIG. Do not go below this. */
-export const MIN_TOUCH_TARGET = 44;
+/** Map a numeric weight onto the matching Figtree family. */
+export const weight = (w: '400' | '500' | '600' | '700' | '800' | 'normal' | 'bold') => ({
+  fontFamily:
+    w === '800' || w === '700' || w === 'bold'
+      ? font.bold
+      : w === '600'
+        ? font.semibold
+        : w === '500'
+          ? font.medium
+          : font.regular,
+});
 
 /*
- * Motion tokens. Two springs and three durations cover every animation
- * in the app; pick from here (via useMotion) so screens move the same way.
+ * Type ramp. Display styles (titles, metrics) use Bricolage Grotesque;
+ * everything you read uses Figtree. Body never drops below 17 (the
+ * primary user is 65+); 13 is the floor for any caption.
+ */
+export const typography = {
+  display: { fontFamily: font.display, fontSize: 40, lineHeight: 44, letterSpacing: -1.2 },
+  largeTitle: { fontFamily: font.display, fontSize: 34, lineHeight: 40, letterSpacing: -0.9 },
+  title1: { fontFamily: font.display, fontSize: 28, lineHeight: 34, letterSpacing: -0.6 },
+  title2: { fontFamily: font.display, fontSize: 24, lineHeight: 30, letterSpacing: -0.4 },
+  title3: { fontFamily: font.display, fontSize: 20, lineHeight: 26, letterSpacing: -0.25 },
+  headline: { fontFamily: font.semibold, fontSize: 17, lineHeight: 24, letterSpacing: 0 },
+  body: { fontFamily: font.regular, fontSize: 17, lineHeight: 24, letterSpacing: 0 },
+  callout: { fontFamily: font.regular, fontSize: 16, lineHeight: 22, letterSpacing: 0 },
+  subhead: { fontFamily: font.regular, fontSize: 15, lineHeight: 21, letterSpacing: 0 },
+  footnote: { fontFamily: font.regular, fontSize: 14, lineHeight: 20, letterSpacing: 0 },
+  caption: { fontFamily: font.medium, fontSize: 13, lineHeight: 18, letterSpacing: 0 },
+  caption2: { fontFamily: font.semibold, fontSize: 12, lineHeight: 16, letterSpacing: 0 },
+  /** Uppercase eyebrow: small, bold, letter-spaced. */
+  overline: { fontFamily: font.bold, fontSize: 13, lineHeight: 16, letterSpacing: 0.9, textTransform: 'uppercase' },
+  metric: { fontFamily: font.display, fontSize: 44, lineHeight: 48, letterSpacing: -1.4 },
+  metricSm: { fontFamily: font.display, fontSize: 30, lineHeight: 34, letterSpacing: -0.8 },
+} as const;
+
+/** spacing(n) = n * 4. Screen margin 20, tile gap 12, section gap 32. */
+export const spacing = (n: number): number => n * 4;
+
+/** Minimum touch target. The brand uses 48, above Apple's 44 floor. */
+export const MIN_TOUCH_TARGET = 48;
+
+/*
+ * Motion tokens. Calm by rule: dose confirmation never bounces and
+ * nothing pulses. Pick from here (via useMotion) so screens move alike.
  */
 export const motion = {
   spring: {
-    /** Layout shifts, progress, expanders. */
+    /** Layout shifts, progress, expanders, tab pill. */
     gentle: { damping: 20, stiffness: 180 },
     /** Press feedback, checkmarks, selection pills. */
     snappy: { damping: 18, stiffness: 350 },
+    /** Tiles and heroes settling in: no overshoot. */
+    settle: { damping: 26, stiffness: 170, overshootClamping: true },
   },
   duration: { fast: 150, base: 220, slow: 320 },
   /** ms between staggered list items, capped after `staggerMax` items. */

@@ -20,7 +20,7 @@ import { Card } from './card';
 export const Skeleton = ({
   width = '100%',
   height = 16,
-  radius = radiusTokens.sm,
+  radius = radiusTokens.sm / 1.5,
   style,
 }: {
   width?: DimensionValue;
@@ -56,7 +56,7 @@ export const SkeletonRow = ({ isFirst = false }: { isFirst?: boolean }) => {
         !isFirst && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator },
       ]}
     >
-      <Skeleton width={36} height={36} radius={radiusTokens.full} />
+      <Skeleton width={48} height={48} radius={radiusTokens.md} />
       <View style={styles.lines}>
         <Skeleton width="62%" height={14} />
         <Skeleton width="40%" height={12} />
@@ -83,9 +83,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(3),
-    paddingHorizontal: spacing(4),
-    paddingVertical: spacing(3.5),
+    paddingHorizontal: spacing(4.5),
+    paddingVertical: spacing(4),
   },
   lines: { flex: 1, gap: spacing(2) },
-  card: { padding: spacing(4), gap: spacing(3) },
+  card: { padding: spacing(5), gap: spacing(3) },
 });

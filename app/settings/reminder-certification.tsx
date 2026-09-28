@@ -17,6 +17,7 @@ import {
   spacing,
   typography,
   useTokens,
+  font,
 } from '@/components/ui';
 import { useReadinessChecklist } from '@/lib/takt/readiness-checklist';
 import { type ReminderCaseId, useReminderCertification } from '@/lib/takt/reminder-certification';
@@ -101,7 +102,7 @@ export default function ReminderCertificationScreen() {
             <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={[typography.headline, { color: c.textPrimary }]}>{t('reminderCertCaseProgress')}</Text>
-                <Text style={[typography.subhead, { color: c.accent, fontWeight: '700' }]}>
+                <Text style={[typography.subhead, { color: c.accent, fontFamily: font.bold }]}>
                   {cert.completionPct}%
                 </Text>
               </View>

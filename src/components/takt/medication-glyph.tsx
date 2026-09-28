@@ -1,7 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, Ellipse, Path, Rect } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
-import { radius } from '@/components/ui';
 import { useTokens } from '@/theme/use-tokens';
 import type { MedicationAppearance } from '@/lib/takt/types';
 
@@ -32,20 +31,33 @@ const isPale = (hex: string): boolean => {
   return 0.299 * r + 0.587 * g + 0.114 * b > 200;
 };
 
+/** The pill colour washed toward paper: the glyph's tile, and a hero tint for that medication. */
+export const glyphTint = (hex: string, dark = false): string => {
+  const n = Number.parseInt(hex.replace('#', '').slice(0, 6), 16);
+  if (Number.isNaN(n)) return dark ? '#252932' : '#F1EEE8';
+  const base = dark ? [37, 41, 50] : [250, 247, 242];
+  const k = dark ? 0.3 : 0.2; // share of the pill colour
+  const mix = (ch: number, i: number) => Math.round(ch * k + (base[i] ?? 0) * (1 - k));
+  const r = mix((n >> 16) & 255, 0);
+  const g = mix((n >> 8) & 255, 1);
+  const b = mix(n & 255, 2);
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+};
+
 /*
  * MedicationGlyph — a small drawing of the tablet (shape + colour) so a
  * row icon looks like the real thing in the pill box. Falls back to the
  * form icon for plans saved before appearance existed.
  */
 export function MedicationGlyph({ appearance, form, size = 34, tint }: Props) {
-  const { c } = useTokens();
-  const tile = { width: size, height: size, borderRadius: radius.md };
+  const { c, isDark } = useTokens();
+  const tile = { width: size, height: size, borderRadius: Math.round(size * 0.36) };
   const accent = tint ?? c.accent;
 
   if (!appearance) {
     return (
-      <View style={[styles.tile, tile, { backgroundColor: `${accent}1A` }]}>
-        <Ionicons name={fallbackIcon(form)} size={Math.round(size * 0.47)} color={accent} />
+      <View style={[styles.tile, tile, { backgroundColor: isDark ? c.surfaceRaised : c.accentSoft }]}>
+        <Ionicons name={fallbackIcon(form)} size={Math.round(size * 0.47)} color={isDark ? accent : (tint ?? c.onAccentSoft)} />
       </View>
     );
   }
@@ -53,7 +65,7 @@ export function MedicationGlyph({ appearance, form, size = 34, tint }: Props) {
   const { shape, color } = appearance;
   const stroke = isPale(color) ? c.separator : 'transparent';
   const s = size;
-  const inner = Math.round(s * 0.7);
+  const inner = Math.round(s * 0.62);
   const off = (s - inner) / 2;
 
   const drawing = (() => {
@@ -98,7 +110,7 @@ export function MedicationGlyph({ appearance, form, size = 34, tint }: Props) {
   })();
 
   return (
-    <View style={[styles.tile, tile, { backgroundColor: c.surfaceRaised }]}>
+    <View style={[styles.tile, tile, { backgroundColor: glyphTint(color, isDark) }]}>
       <Svg width={s} height={s}>{drawing}</Svg>
     </View>
   );

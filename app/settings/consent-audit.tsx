@@ -18,6 +18,7 @@ import {
   spacing,
   typography,
   useTokens,
+  font,
 } from '@/components/ui';
 import { useConsentEvents } from '@/lib/hooks/use-consent-events';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
@@ -141,7 +142,7 @@ export default function ConsentAuditScreen() {
             <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={[typography.headline, { color: c.textPrimary }]}>{t('consentAuditChecklist')}</Text>
-                <Text style={[typography.subhead, { color: c.accent, fontWeight: '700' }]}>
+                <Text style={[typography.subhead, { color: c.accent, fontFamily: font.bold }]}>
                   {audit.completionPct}%
                 </Text>
               </View>

@@ -2,6 +2,7 @@ import { useSegments } from 'expo-router';
 import type { ComponentType, ReactNode } from 'react';
 import { Platform, ScrollView, StatusBar, StyleSheet, Text, View, type ScrollViewProps } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CONTENT_MAX_WIDTH, spacing, typography } from '../../theme/tokens';
@@ -42,13 +43,15 @@ export const PageShell = ({ children }: { children: ReactNode }) => {
     <View style={{ flex: 1, backgroundColor: c.background, paddingTop: topInset }}>
       <Scroll
         style={{ backgroundColor: c.background }}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, isHeaderless && styles.contentTabs]}
         contentInsetAdjustmentBehavior="never"
         automaticallyAdjustContentInsets={false}
         keyboardShouldPersistTaps="handled"
         bottomOffset={96}
+        showsVerticalScrollIndicator={false}
       >
-        {children}
+        {/* One soft fade for the whole page; sections add their own staggered rise. */}
+        <Animated.View entering={FadeIn.duration(260)}>{children}</Animated.View>
       </Scroll>
     </View>
   );
@@ -58,17 +61,25 @@ export const PageHeader = ({
   title,
   subtitle,
   action,
+  eyebrow,
 }: {
   /** Omit on stack screens: the native header already shows the title, so only the lead line renders. */
   title?: string;
   subtitle?: string;
   action?: ReactNode;
+  /** Small line above the title, e.g. a greeting or date. */
+  eyebrow?: string;
 }) => {
   const { c } = useTokens();
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { alignItems: title ? 'flex-end' : 'flex-start' }]}>
       <View style={styles.headerText}>
-        {title ? <Text style={[typography.largeTitle, { color: c.textPrimary }]}>{title}</Text> : null}
+        {eyebrow ? <Text style={[typography.subhead, styles.eyebrow, { color: c.textSecondary }]}>{eyebrow}</Text> : null}
+        {title ? (
+          <Text accessibilityRole="header" style={[typography.display, { color: c.textPrimary }]}>
+            {title}
+          </Text>
+        ) : null}
         {subtitle ? (
           <Text style={[title ? typography.subhead : typography.body, title ? styles.subtitle : null, { color: c.textSecondary }]}>
             {subtitle}
@@ -86,22 +97,24 @@ export const Stack = ({ children }: { children: ReactNode }) => (
 
 const styles = StyleSheet.create({
   content: {
-    paddingTop: spacing(4),
-    paddingHorizontal: spacing(4),
-    paddingBottom: spacing(12),
+    paddingTop: spacing(3),
+    paddingHorizontal: spacing(5),
+    paddingBottom: spacing(14),
     // Reading column on wide viewports; a no-op on phones.
     width: '100%',
     maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: 'center',
   },
+  // Room for the floating tab bar (76 tall, 28 off the bottom).
+  contentTabs: { paddingTop: spacing(4), paddingBottom: 140 },
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing(4),
     marginBottom: spacing(4),
   },
   headerText: { flex: 1, minWidth: 0 },
-  subtitle: { marginTop: spacing(1) },
+  subtitle: { marginTop: spacing(1.5) },
+  eyebrow: { marginBottom: spacing(1) },
   stack: { gap: spacing(5) },
 });

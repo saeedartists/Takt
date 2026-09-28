@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedProps, useSharedValue, withDelay, withSpring } from 'react-native-reanimated';
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
-import { categoryColors, motion, spacing, typography, type HealthCategory } from '../../theme/tokens';
+import { categoryColors, motion, spacing, typography, type HealthCategory, font } from '../../theme/tokens';
 import { useMotion } from '../../theme/use-motion';
 import { useTokens } from '../../theme/use-tokens';
 
@@ -116,7 +116,7 @@ export const AdherenceBars = ({
             style={[
               typography.caption,
               styles.label,
-              { color: day.isToday ? c.accent : c.textTertiary, fontWeight: day.isToday ? '600' : '400' },
+              { color: day.isToday ? c.accent : c.textTertiary, fontFamily: day.isToday ? font.semibold : font.regular },
             ]}
           >
             {day.label}

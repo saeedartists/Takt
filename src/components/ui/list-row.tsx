@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
@@ -18,18 +19,17 @@ export const ListGroup = ({
   children: ReactNode;
   style?: ViewStyle;
 }) => {
-  const { c, scheme } = useTokens();
+  const { c, isDark } = useTokens();
   return (
     <View
       style={[
         {
           backgroundColor: c.surface,
           borderRadius: radius.xl,
-          borderWidth: StyleSheet.hairlineWidth,
+          borderWidth: isDark ? StyleSheet.hairlineWidth : 0,
           borderColor: c.cardBorder,
           overflow: 'hidden',
         },
-        scheme === 'light' && styles.lightShadow,
         style,
       ]}
     >
@@ -70,13 +70,13 @@ export const ListRow = ({
     <>
       {leading ? <View>{leading}</View> : null}
       <View style={styles.textCol}>
-        <Text numberOfLines={2} style={[typography.body, { color: c.textPrimary }]}>
+        <Text numberOfLines={2} style={[typography.headline, { color: c.textPrimary }]}>
           {title}
         </Text>
         {subtitle ? (
           <Text
             numberOfLines={2}
-            style={[typography.footnote, { color: c.textSecondary }]}
+            style={[typography.subhead, { color: c.textSecondary }]}
           >
             {subtitle}
           </Text>
@@ -102,9 +102,7 @@ export const ListRow = ({
             {value}
           </Text>
         ) : null)}
-      {onPress ? (
-        <Text style={[typography.body, { color: c.textTertiary }]}>›</Text>
-      ) : null}
+      {onPress ? <Ionicons name="chevron-forward" size={20} color={c.textTertiary} /> : null}
     </>
   );
 
@@ -127,7 +125,7 @@ export const ListRow = ({
       onPress={onPress}
       style={({ pressed }) => [
         ...(action ? [styles.row, styles.grow] : rowStyle),
-        pressed && { backgroundColor: c.background },
+        pressed && { backgroundColor: c.surfaceSubtle },
       ]}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? (subtitle ? `${title}, ${subtitle}` : title)}
@@ -151,20 +149,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(3),
-    minHeight: MIN_TOUCH_TARGET,
-    paddingHorizontal: spacing(4),
-    paddingVertical: spacing(2.5),
+    minHeight: MIN_TOUCH_TARGET + 16,
+    paddingHorizontal: spacing(4.5),
+    paddingVertical: spacing(3),
   },
   textCol: { flex: 1, minWidth: 0 },
   grow: { flex: 1, minWidth: 0 },
   withAction: { flexDirection: 'row', alignItems: 'center' },
   actionSlot: { paddingRight: spacing(3) },
   meta: { marginTop: spacing(1), alignSelf: 'flex-start' },
-  lightShadow: {
-    shadowColor: '#000000',
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
-  },
 });

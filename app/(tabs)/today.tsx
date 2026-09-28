@@ -24,6 +24,7 @@ import {
   useMotion,
   useTokens,
   type HeroPending,
+  font,
 } from '@/components/ui';
 import { MedicationGlyph } from '@/components/takt/medication-glyph';
 import { SharedWithMeCard } from '@/components/takt/shared-with-me-card';
@@ -581,7 +582,7 @@ export default function TodayScreen() {
                                 .filter(Boolean)
                                 .join(' · ')}
                             </Text>
-                            <Text style={[typography.footnote, { color: last ? c.success : c.textSecondary, fontWeight: '600' }]}>
+                            <Text style={[typography.footnote, { color: last ? c.success : c.textSecondary, fontFamily: font.semibold }]}>
                               {entry.atMax ? t('asNeededMaxReached') : line}
                             </Text>
                           </View>

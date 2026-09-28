@@ -18,6 +18,7 @@ import {
   spacing,
   typography,
   useTokens,
+  font,
 } from '@/components/ui';
 import { useLocale } from '@/lib/takt/l10n';
 import { useReadinessChecklist } from '@/lib/takt/readiness-checklist';
@@ -82,7 +83,7 @@ export default function ReportReviewScreen() {
             <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={[typography.headline, { color: c.textPrimary }]}>{t('reportReviewChecksDone')}</Text>
-                <Text style={[typography.subhead, { color: c.accent, fontWeight: '700' }]}>
+                <Text style={[typography.subhead, { color: c.accent, fontFamily: font.bold }]}>
                   {review.completionPct}%
                 </Text>
               </View>

@@ -1,9 +1,6 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Tabs, useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
 import { useEffect, useMemo, useRef } from 'react';
-import { Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
@@ -15,14 +12,11 @@ import { buildDoseOccurrencesForDay, courseEnded } from '@/lib/takt/schedule';
 import { TAKT_EXT } from '@/lib/takt/constants';
 import { isoDateKey, startOfDay } from '@/lib/takt/time';
 import { resolveSessionGate } from '@/lib/auth-session';
-import { CONTENT_MAX_WIDTH, radius, spacing, typography } from '@/theme/tokens';
-import { useTokens } from '@/theme/use-tokens';
+import { FloatingTabBar } from '@/components/ui/floating-tab-bar';
 
 export default function TabsLayout() {
   const { t, locale } = useLocale();
   const router = useRouter();
-  const { c } = useTokens();
-  const insets = useSafeAreaInsets();
 
   const patient = usePrimaryPatient();
   const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
@@ -139,75 +133,31 @@ export default function TabsLayout() {
   }, [router]);
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: c.accent,
-        tabBarInactiveTintColor: c.textSecondary,
-        tabBarStyle: {
-          backgroundColor: c.surface,
-          borderTopColor: c.separator,
-          borderTopWidth: 0.5,
-          // React Navigation pads the bar by the bottom inset; a fixed height would squeeze icons on iPhones with a home indicator.
-          height: 64 + insets.bottom,
-          paddingTop: spacing(1),
-          borderTopLeftRadius: radius.lg,
-          borderTopRightRadius: radius.lg,
-          // Match the content reading column on wide web viewports.
-          ...(Platform.OS === 'web'
-            ? { width: '100%' as const, maxWidth: CONTENT_MAX_WIDTH, alignSelf: 'center' as const }
-            : null),
-        },
-        tabBarLabelStyle: {
-          fontSize: typography.caption.fontSize,
-          lineHeight: typography.caption.lineHeight,
-          fontWeight: '600',
-          letterSpacing: 0.2,
-        },
-      }}
-    >
+    <Tabs tabBar={(props) => <FloatingTabBar {...props} />} screenOptions={{ headerShown: false }}>
       <Tabs.Screen
         name="today"
         options={{
           title: t('today'),
           tabBarBadge: dueNowCount > 0 ? dueNowCount : undefined,
-          tabBarBadgeStyle: {
-            backgroundColor: c.accent,
-            color: c.surface,
-            fontSize: typography.caption2.fontSize,
-            lineHeight: typography.caption2.lineHeight,
-            fontWeight: '700',
-          },
-          tabBarIcon: ({ color, focused, size }) => (
-            <Ionicons name={focused ? 'home' : 'home-outline'} color={color} size={size} />
-          ),
         }}
       />
       <Tabs.Screen
         name="medications"
         options={{
           title: t('medications'),
-          tabBarIcon: ({ color, focused, size }) => (
-            <Ionicons name={focused ? 'medkit' : 'medkit-outline'} color={color} size={size} />
-          ),
+          tabBarLabel: t('tabMedications'),
         }}
       />
       <Tabs.Screen
         name="history"
         options={{
           title: t('history'),
-          tabBarIcon: ({ color, focused, size }) => (
-            <Ionicons name={focused ? 'bar-chart' : 'bar-chart-outline'} color={color} size={size} />
-          ),
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: t('settings'),
-          tabBarIcon: ({ color, focused, size }) => (
-            <Ionicons name={focused ? 'settings' : 'settings-outline'} color={color} size={size} />
-          ),
         }}
       />
     </Tabs>
