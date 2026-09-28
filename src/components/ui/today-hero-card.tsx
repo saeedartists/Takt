@@ -170,7 +170,7 @@ export function TodayHeroCard({
           <View style={styles.block}>
             <Animated.View
               entering={reduce ? undefined : ZoomIn.delay(120).springify().damping(16).stiffness(180)}
-              style={[styles.doneBadge, { backgroundColor: c.tones.sage.solid }]}
+              style={[styles.doneBadge, { backgroundColor: '#1F6F4A' }]}
             >
               <Ionicons name="checkmark" size={26} color="#FFFFFF" />
             </Animated.View>

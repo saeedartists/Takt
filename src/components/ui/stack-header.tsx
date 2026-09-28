@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing(5),
-    paddingBottom: spacing(2),
+    paddingBottom: spacing(1.5),
     gap: spacing(3),
     width: '100%',
     maxWidth: CONTENT_MAX_WIDTH + spacing(10),

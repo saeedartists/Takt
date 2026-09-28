@@ -492,7 +492,7 @@ export default function TodayScreen() {
                     >
                       <View style={styles.bentoHead}>
                         <Text style={[typography.subhead, { color: INK, fontFamily: font.semibold }]}>{t('todayTakenTile')}</Text>
-                        <ProgressRing progress={todayTaken / todayTotal} size={36} stroke={5} color={c.tones.sage.solid} track="rgba(255,255,255,0.8)" />
+                        <ProgressRing progress={todayTaken / todayTotal} size={36} stroke={5} color={c.tones.sage.fg} track="rgba(255,255,255,0.8)" />
                       </View>
                       <View style={styles.metricRow}>
                         <AnimatedNumber value={todayTaken} style={[typography.metric, { color: INK }]} />
@@ -510,7 +510,7 @@ export default function TodayScreen() {
                       onPress={() => router.push('/history')}
                       accessibilityLabel={t('takenOfTotal').replace('{taken}', String(todayTaken)).replace('{total}', String(todayTotal))}
                     >
-                      <ProgressRing progress={todayTaken / todayTotal} size={52} stroke={6} color={c.tones.sage.solid} track="rgba(255,255,255,0.8)">
+                      <ProgressRing progress={todayTaken / todayTotal} size={52} stroke={6} color={c.tones.sage.fg} track="rgba(255,255,255,0.8)">
                         <AnimatedNumber value={todayTaken} style={[typography.headline, { color: INK, fontFamily: font.bold }]} />
                       </ProgressRing>
                       <View style={{ flex: 1, minWidth: 0 }}>
@@ -526,7 +526,7 @@ export default function TodayScreen() {
                     <Tile
                       tone="butter"
                       style={styles.bentoTile}
-                      onPress={() => router.push(`/medications/${lowSupply.requestId}` as never)}
+                      onPress={() => router.push('/refills' as never)}
                       accessibilityLabel={`${t('todayRefillTile')}, ${lowSupply.label}, ${t('supplyLeft').replace('{count}', String(lowSupply.count))}`}
                     >
                       <View style={styles.bentoHead}>
