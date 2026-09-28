@@ -339,8 +339,8 @@ export const typography = {
 /** spacing(n) = n * 4. Screen margin 20, tile gap 12, section gap 32. */
 export const spacing = (n: number): number => n * 4;
 
-/** Minimum touch target. The brand uses 48, above Apple's 44 floor. */
-export const MIN_TOUCH_TARGET = 48;
+/** Minimum touch target (Apple HIG). Icon buttons use 44; list rows stay taller. */
+export const MIN_TOUCH_TARGET = 44;
 
 /*
  * Motion tokens. Calm by rule: dose confirmation never bounces and

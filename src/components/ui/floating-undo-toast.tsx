@@ -42,7 +42,7 @@ export function FloatingUndoToast({
   onUndo,
   onDismiss,
   durationMs = 8000,
-  bottomOffset = 120,
+  bottomOffset = 104,
 }: FloatingUndoToastProps) {
   const { c, isDark } = useTokens();
   const { reduce } = useMotion();

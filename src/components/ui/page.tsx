@@ -105,8 +105,8 @@ const styles = StyleSheet.create({
     maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: 'center',
   },
-  // Room for the floating tab bar (76 tall, 28 off the bottom).
-  contentTabs: { paddingTop: spacing(4), paddingBottom: 140 },
+  // Room for the floating tab bar (64 tall) and its fade.
+  contentTabs: { paddingTop: spacing(3), paddingBottom: 124 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -148,7 +148,8 @@ export const Button = ({
 }) => {
   const { c } = useTokens();
   const isDisabled = Boolean(disabled) || loading;
-  const height = size === 'lg' ? 64 : size === 'md' ? 56 : MIN_TOUCH_TARGET;
+  // lg for the one hero action, md for form/primary, sm for inline rows. Never under 44 (HIG).
+  const height = size === 'lg' ? 56 : size === 'md' ? 52 : 44;
 
   const palette: Record<ButtonKind, { bg: string; fg: string; border?: string }> = onTone
     ? {
@@ -187,8 +188,8 @@ export const Button = ({
           backgroundColor: tone.bg,
           borderColor: tone.border ?? 'transparent',
           borderWidth: tone.border ? 1.5 : 0,
-          paddingLeft: withDot ? spacing(6.5) : spacing(5),
-          paddingRight: withDot ? spacing(2) : spacing(5),
+          paddingLeft: withDot ? spacing(5.5) : size === 'sm' ? spacing(4) : spacing(5),
+          paddingRight: withDot ? 6 : size === 'sm' ? spacing(4) : spacing(5),
           justifyContent: withDot ? 'space-between' : 'center',
           alignSelf: fullWidth ? 'stretch' : 'flex-start',
         },
@@ -206,8 +207,8 @@ export const Button = ({
         </Text>
       </View>
       {withDot && accentIcon ? (
-        <View style={[styles.dot, { width: height - 16, height: height - 16, backgroundColor: muted ? c.surface : c.accentSoft }]}>
-          <Ionicons name={accentIcon} size={22} color={muted ? c.textTertiary : INK} />
+        <View style={[styles.dot, { width: height - 12, height: height - 12, backgroundColor: muted ? c.surface : c.accentSoft }]}>
+          <Ionicons name={accentIcon} size={size === 'sm' ? 18 : 20} color={muted ? c.textTertiary : INK} />
         </View>
       ) : null}
       {loading ? <ActivityIndicator color={tone.fg} style={StyleSheet.absoluteFill} /> : null}
@@ -250,7 +251,7 @@ export const IconButton = ({
 
 const styles = StyleSheet.create({
   input: {
-    minHeight: 56,
+    minHeight: 52,
     borderRadius: radius.md,
     paddingHorizontal: spacing(4.5),
   },

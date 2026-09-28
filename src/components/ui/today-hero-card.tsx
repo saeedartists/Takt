@@ -75,7 +75,7 @@ const HeroCapsule = ({ turnKey }: { turnKey: string }) => {
 
   return (
     <Animated.View pointerEvents="none" style={[styles.capsule, style]}>
-      <Svg width={170} height={170} viewBox="0 0 170 170">
+      <Svg width={140} height={140} viewBox="0 0 170 170">
         <Rect x={25} y={59} width={120} height={52} rx={26} fill="#FFFFFF" opacity={0.5} />
         <Path d="M85 59v52" stroke="#FFFFFF" strokeWidth={3} opacity={0.6} />
       </Svg>
@@ -86,8 +86,8 @@ const HeroCapsule = ({ turnKey }: { turnKey: string }) => {
 /** Small chip on the hero: ink for "due now", white glass for "next". */
 const HeroChip = ({ label, icon, strong }: { label: string; icon: React.ComponentProps<typeof Ionicons>['name']; strong: boolean }) => (
   <View style={[styles.chip, { backgroundColor: strong ? INK : 'rgba(255,255,255,0.72)' }]}>
-    <Ionicons name={icon} size={16} color={strong ? '#FAD6B4' : INK} />
-    <Text style={[typography.subhead, { color: strong ? '#F5F2ED' : INK, fontFamily: font.bold, fontVariant: ['tabular-nums'] }]}>
+    <Ionicons name={icon} size={14} color={strong ? '#FAD6B4' : INK} />
+    <Text style={[typography.footnote, { color: strong ? '#F5F2ED' : INK, fontFamily: font.bold, fontVariant: ['tabular-nums'] }]}>
       {label}
     </Text>
   </View>
@@ -150,8 +150,8 @@ export function TodayHeroCard({
             <View style={[styles.chip, { backgroundColor: INK }]}>
               <Text style={[typography.subhead, { color: '#F5F2ED', fontFamily: font.bold }]}>{t('journeyStepOneLabel')}</Text>
             </View>
-            <Text style={[typography.largeTitle, styles.onTile]}>{t('journeyCardTitle')}</Text>
-            <Text style={[typography.body, { color: c.onAccentSoft }]}>{t('journeyCardNeedMedication')}</Text>
+            <Text style={[typography.title1, styles.onTile]}>{t('journeyCardTitle')}</Text>
+            <Text style={[typography.callout, { color: c.onAccentSoft }]}>{t('journeyCardNeedMedication')}</Text>
             <Button label={t('journeyAddMedicationCta')} accentIcon="add" size="lg" onTone onPress={onAddMedication} />
           </View>
         </Tile>
@@ -172,9 +172,9 @@ export function TodayHeroCard({
               entering={reduce ? undefined : ZoomIn.delay(120).springify().damping(16).stiffness(180)}
               style={[styles.doneBadge, { backgroundColor: c.tones.sage.solid }]}
             >
-              <Ionicons name="checkmark" size={32} color="#FFFFFF" />
+              <Ionicons name="checkmark" size={26} color="#FFFFFF" />
             </Animated.View>
-            <Text accessibilityRole="header" style={[typography.largeTitle, styles.onTile]}>
+            <Text accessibilityRole="header" style={[typography.title1, styles.onTile]}>
               {t('allDoneToday')}
             </Text>
             <Text style={[typography.body, { color: c.tones.sage.fg }]}>{t('allDoneSubtitle')}</Text>
@@ -204,19 +204,20 @@ export function TodayHeroCard({
       <Tile tone="accent" style={styles.tile}>
         <HeroCapsule turnKey={dose.id} />
         <Animated.View key={dose.id} entering={swapIn} exiting={swapOut} style={styles.block}>
+          {/* One line of context: what this is, and when. */}
           <View style={styles.labelRow}>
             <Text style={[typography.overline, { color: c.onAccentSoft }]}>{t('nextDose')}</Text>
+            <HeroChip
+              label={`${stateLabel(dose.state)} · ${time}`}
+              icon={due ? 'time' : 'time-outline'}
+              strong={Boolean(due)}
+            />
           </View>
-          <HeroChip
-            label={`${stateLabel(dose.state)} · ${time}`}
-            icon={due ? 'time' : 'time-outline'}
-            strong={Boolean(due)}
-          />
           <View>
-            <Text numberOfLines={2} style={[typography.largeTitle, styles.onTile]}>
+            <Text numberOfLines={2} style={[typography.title1, styles.onTile]}>
               {dose.label}
             </Text>
-            <Text style={[typography.body, { color: c.onAccentSoft, marginTop: spacing(1.5) }]}>
+            <Text style={[typography.callout, { color: c.onAccentSoft, marginTop: spacing(1) }]}>
               {[dose.strength, instruction].filter(Boolean).join(' · ')}
             </Text>
           </View>
@@ -238,6 +239,7 @@ export function TodayHeroCard({
                 <View style={{ flex: 1 }}>
                   <Button
                     kind="secondary"
+                    size="sm"
                     onTone
                     label={`${t('snooze')} ${snoozeMinutes} min`}
                     loading={pending === 'snooze'}
@@ -249,6 +251,7 @@ export function TodayHeroCard({
                 <View style={{ flex: 0.7 }}>
                   <Button
                     kind="outline"
+                    size="sm"
                     onTone
                     label={t('markSkipped')}
                     loading={pending === 'skip'}
@@ -294,6 +297,7 @@ export function TodayHeroCard({
             <View style={styles.actions}>
               <Button
                 kind="secondary"
+                size="md"
                 onTone
                 label={t('takeEarly')}
                 icon={<Ionicons name="checkmark" size={20} color={INK} />}
@@ -312,23 +316,23 @@ export function TodayHeroCard({
 }
 
 const styles = StyleSheet.create({
-  tile: { borderRadius: radius.xxl, padding: spacing(5.5) },
+  tile: { borderRadius: radius.xxl, padding: spacing(4.5) },
   onTile: { color: INK },
-  block: { gap: spacing(3.5) },
+  block: { gap: spacing(3) },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
-  labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: -spacing(1.5) },
+  labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing(2), flexWrap: 'wrap', paddingRight: spacing(10) },
   chip: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(1.5),
-    minHeight: 36,
-    paddingLeft: spacing(2.5),
-    paddingRight: spacing(3.5),
+    minHeight: 30,
+    paddingLeft: spacing(2),
+    paddingRight: spacing(3),
     borderRadius: radius.full,
   },
-  actions: { gap: spacing(2.5), marginTop: spacing(1) },
-  secondaryRow: { flexDirection: 'row', gap: spacing(2.5) },
+  actions: { gap: spacing(2), marginTop: spacing(0.5) },
+  secondaryRow: { flexDirection: 'row', gap: spacing(2) },
   reasonPanel: { gap: spacing(2.5), paddingTop: spacing(1) },
   chipRow: { flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' },
   reasonChip: {
@@ -342,5 +346,5 @@ const styles = StyleSheet.create({
   capsule: { position: 'absolute', right: -34, top: -30 },
   rings: { position: 'absolute', right: -56, top: -48, width: 200, height: 200 },
   ring: { position: 'absolute', borderWidth: 18, borderColor: 'rgba(255,255,255,0.4)' },
-  doneBadge: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
+  doneBadge: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
 });

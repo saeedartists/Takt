@@ -226,30 +226,33 @@ export function AnimatedDoseRow({
 
       {actionable ? (
         <Animated.View entering={panelIn} style={styles.actionsCol}>
-          <Button
-            label={primaryLabel}
-            accentIcon="checkmark"
-            loading={pending === 'take'}
-            disabled={locked}
-            haptic="success"
-            accessibilityLabel={`${primaryLabel}, ${who}`}
-            onPress={handleTake}
-          />
+          {/* One compact row: the confirm action leads, the two quieter ones follow. */}
           <View style={styles.pillRow}>
+            <View style={{ flex: 1.35 }}>
+              <Button
+                size="sm"
+                label={primaryLabel}
+                icon={<Ionicons name="checkmark" size={18} color={c.onInk} />}
+                loading={pending === 'take'}
+                disabled={locked}
+                haptic="success"
+                accessibilityLabel={`${primaryLabel}, ${who}`}
+                onPress={handleTake}
+              />
+            </View>
             {dose.state === 'due' ? (
               <View style={{ flex: 1 }}>
                 <Button
                   kind="secondary"
                   size="sm"
                   label={labels.snooze}
-                  icon={<Ionicons name="alarm-outline" size={18} color={c.textPrimary} />}
                   disabled={locked}
                   accessibilityLabel={`${labels.snooze}, ${who}`}
                   onPress={() => setPanel((current) => (current === 'snooze' ? null : 'snooze'))}
                 />
               </View>
             ) : null}
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 0.85 }}>
               <Button
                 kind="outline"
                 size="sm"
@@ -397,8 +400,8 @@ export function AnimatedDoseRow({
 const styles = StyleSheet.create({
   card: {
     borderRadius: radius.lg,
-    padding: spacing(3.5),
-    gap: spacing(3),
+    padding: spacing(3),
+    gap: spacing(2.5),
   },
   titleRow: {
     flexDirection: 'row',
@@ -406,18 +409,18 @@ const styles = StyleSheet.create({
     gap: spacing(3),
   },
   textCol: { flex: 1, minWidth: 0, gap: 2 },
-  name: { fontFamily: font.bold, fontSize: 18 },
+  name: { fontFamily: font.bold },
   badgesWrap: { alignItems: 'flex-end', gap: spacing(1.5) },
   timePill: {
-    minHeight: 32,
+    minHeight: 28,
     paddingHorizontal: spacing(3),
     borderRadius: radius.full,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  actionsCol: { gap: spacing(2.5) },
-  pillRow: { flexDirection: 'row', gap: spacing(2.5) },
+  actionsCol: { gap: spacing(2) },
+  pillRow: { flexDirection: 'row', gap: spacing(2) },
   panel: { gap: spacing(2.5), paddingTop: spacing(1) },
   chipRow: { flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' },
   chip: {
@@ -432,8 +435,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(1.5),
-    minHeight: 44,
-    paddingHorizontal: spacing(4),
+    minHeight: 40,
+    paddingHorizontal: spacing(3.5),
     borderRadius: radius.full,
   },
 });

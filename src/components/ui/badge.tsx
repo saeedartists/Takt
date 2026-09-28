@@ -37,7 +37,7 @@ export const Badge = ({
     ink: { bg: c.ink, fg: c.onInk },
   };
   const t = map[tone];
-  const height = size === 'sm' ? 28 : 34;
+  const height = size === 'sm' ? 26 : 30;
 
   return (
     <View

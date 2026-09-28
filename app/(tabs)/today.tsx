@@ -418,23 +418,23 @@ export default function TodayScreen() {
         {/* Greeting row: who, and a one-tap way to the doctor report. */}
         <View style={styles.greetingRow}>
           <View style={[styles.avatar, { backgroundColor: c.tones.lilac.bg }]}>
-            <Text style={[typography.title3, { color: INK }]}>{(patientFirstName ?? 'T').slice(0, 1).toUpperCase()}</Text>
+            <Text style={[typography.headline, { color: INK, fontFamily: font.bold }]}>{(patientFirstName ?? 'T').slice(0, 1).toUpperCase()}</Text>
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text numberOfLines={1} style={[typography.subhead, { color: c.textSecondary }]}>
               {patientFirstName ? `${greeting},` : greeting}
             </Text>
             {patientFirstName ? (
-              <Text numberOfLines={1} style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold, fontSize: 18 }]}>
+              <Text numberOfLines={1} style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>
                 {patientFirstName}
               </Text>
             ) : null}
           </View>
-          <IconButton icon="document-text-outline" accessibilityLabel={t('openReport')} onPress={() => router.push('/report')} />
+          <IconButton size={44} icon="document-text-outline" accessibilityLabel={t('openReport')} onPress={() => router.push('/report')} />
         </View>
 
-        <Text accessibilityRole="header" style={[typography.display, styles.dateTitle, { color: c.textPrimary }]}>
-          {`${formatDate(now, { weekday: 'long' })},\n`}
+        <Text accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit style={[typography.title1, styles.dateTitle, { color: c.textPrimary }]}>
+          {`${formatDate(now, { weekday: 'long' })}, `}
           <Text style={{ color: c.textTertiary }}>{formatDate(now, { day: 'numeric', month: 'long' })}</Text>
         </Text>
 
@@ -458,6 +458,7 @@ export default function TodayScreen() {
                   onSelectDate={(d) => setSelectedDate(d)}
                   adherenceMap={adherenceMap}
                   todayLabel={t('today')}
+                  showMonth={!isSelectedToday}
                 />
               </Animated.View>
 
@@ -482,24 +483,45 @@ export default function TodayScreen() {
               {/* Once everything is taken the hero already says so; the count tile would repeat it. */}
               {todayTotal > 0 && todayTaken < todayTotal ? (
                 <Animated.View entering={enter(2)} style={styles.bento}>
-                  <Tile
-                    tone="sage"
-                    style={[styles.bentoTile, !hasSecondTile && styles.bentoWide]}
-                    onPress={() => router.push('/history')}
-                    accessibilityLabel={t('takenOfTotal').replace('{taken}', String(todayTaken)).replace('{total}', String(todayTotal))}
-                  >
-                    <View style={styles.bentoHead}>
-                      <Text style={[typography.subhead, { color: INK, fontFamily: font.semibold }]}>{t('todayTakenTile')}</Text>
-                      <ProgressRing progress={todayTaken / todayTotal} size={40} stroke={5} color={c.tones.sage.solid} track="rgba(255,255,255,0.8)" />
-                    </View>
-                    <View style={styles.metricRow}>
-                      <AnimatedNumber value={todayTaken} style={[typography.metric, { color: INK }]} />
-                      <Text style={[typography.title3, { color: c.tones.sage.fg }]}>{` / ${todayTotal}`}</Text>
-                    </View>
-                    <Text style={[typography.subhead, { color: c.tones.sage.fg }]}>
-                      {t('takenOfTotal').replace('{taken}', String(todayTaken)).replace('{total}', String(todayTotal))}
-                    </Text>
-                  </Tile>
+                  {hasSecondTile ? (
+                    <Tile
+                      tone="sage"
+                      style={styles.bentoTile}
+                      onPress={() => router.push('/history')}
+                      accessibilityLabel={t('takenOfTotal').replace('{taken}', String(todayTaken)).replace('{total}', String(todayTotal))}
+                    >
+                      <View style={styles.bentoHead}>
+                        <Text style={[typography.subhead, { color: INK, fontFamily: font.semibold }]}>{t('todayTakenTile')}</Text>
+                        <ProgressRing progress={todayTaken / todayTotal} size={36} stroke={5} color={c.tones.sage.solid} track="rgba(255,255,255,0.8)" />
+                      </View>
+                      <View style={styles.metricRow}>
+                        <AnimatedNumber value={todayTaken} style={[typography.metric, { color: INK }]} />
+                        <Text style={[typography.title3, { color: c.tones.sage.fg }]}>{` / ${todayTotal}`}</Text>
+                      </View>
+                      <Text style={[typography.subhead, { color: c.tones.sage.fg }]}>
+                        {t('takenOfTotal').replace('{taken}', String(todayTaken)).replace('{total}', String(todayTotal))}
+                      </Text>
+                    </Tile>
+                  ) : (
+                    // Alone, the count reads better as one slim strip: ring left, words right.
+                    <Tile
+                      tone="sage"
+                      style={[styles.bentoTile, styles.bentoStrip]}
+                      onPress={() => router.push('/history')}
+                      accessibilityLabel={t('takenOfTotal').replace('{taken}', String(todayTaken)).replace('{total}', String(todayTotal))}
+                    >
+                      <ProgressRing progress={todayTaken / todayTotal} size={52} stroke={6} color={c.tones.sage.solid} track="rgba(255,255,255,0.8)">
+                        <AnimatedNumber value={todayTaken} style={[typography.headline, { color: INK, fontFamily: font.bold }]} />
+                      </ProgressRing>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={[typography.headline, { color: INK, fontFamily: font.bold }]}>{t('todayTakenTile')}</Text>
+                        <Text style={[typography.subhead, { color: c.tones.sage.fg }]}>
+                          {t('takenOfTotal').replace('{taken}', String(todayTaken)).replace('{total}', String(todayTotal))}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color={c.tones.sage.fg} />
+                    </Tile>
+                  )}
                   {lowSupply ? (
                     <Tile
                       tone="butter"
@@ -610,7 +632,7 @@ export default function TodayScreen() {
                               <View style={[styles.timeIcon, { backgroundColor: c.surface }]}>
                                 <Ionicons name={timeIcon.name} size={16} color={timeIcon.color} />
                               </View>
-                              <Text style={[typography.title3, { color: c.textPrimary, fontVariant: ['tabular-nums'] }]}>
+                              <Text style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold, fontVariant: ['tabular-nums'] }]}>
                                 {bucket.time}
                               </Text>
                             </View>
@@ -645,7 +667,7 @@ export default function TodayScreen() {
                                   stateLabel={stateLabel(dose.state)}
                                   instruction={describeInstruction(dose, t)}
                                   detail={doseDetail(dose)}
-                                  leading={<MedicationGlyph appearance={plan?.appearance} form={plan?.form} size={52} />}
+                                  leading={<MedicationGlyph appearance={plan?.appearance} form={plan?.form} size={44} />}
                                   onTake={() => takeAction(dose, 'taken')}
                                   onSkip={(reason) => takeAction(dose, 'skipped', reason)}
                                   skipReasons={skipReasons}
@@ -701,7 +723,7 @@ export default function TodayScreen() {
                           layout={LinearTransition}
                           style={[styles.prnCard, { borderColor: c.separator }]}
                         >
-                          <MedicationGlyph appearance={entry.plan.appearance} form={entry.plan.form} size={48} />
+                          <MedicationGlyph appearance={entry.plan.appearance} form={entry.plan.form} size={44} />
                           <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                             <Text numberOfLines={2} style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>
                               {entry.plan.label}
@@ -761,11 +783,11 @@ export default function TodayScreen() {
 
 const styles = StyleSheet.create({
   greetingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
-  avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  dateTitle: { marginTop: spacing(5), marginBottom: spacing(5) },
+  avatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  dateTitle: { marginTop: spacing(4), marginBottom: spacing(4) },
   bento: { flexDirection: 'row', gap: spacing(3) },
-  bentoTile: { flex: 1, gap: spacing(2), padding: spacing(4.5) },
-  bentoWide: { paddingVertical: spacing(4) },
+  bentoTile: { flex: 1, gap: spacing(1.5), padding: spacing(4) },
+  bentoStrip: { flexDirection: 'row', alignItems: 'center', gap: spacing(3.5), paddingVertical: spacing(3) },
   bentoHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing(2), minHeight: 40 },
   metricRow: { flexDirection: 'row', alignItems: 'baseline' },
   groups: { gap: spacing(2.5) },
@@ -774,7 +796,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(3),
-    padding: spacing(3.5),
+    padding: spacing(3),
     borderRadius: radius.lg,
     borderWidth: 1.5,
     borderStyle: 'dashed',
@@ -799,5 +821,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing(2.5),
   },
-  timeIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  timeIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
 });

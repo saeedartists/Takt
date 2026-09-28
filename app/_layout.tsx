@@ -58,6 +58,11 @@ function AppStack() {
       <Stack.Screen name="medications/[id]" options={{ title: t('medicationDetailsRouteTitle') }} />
       <Stack.Screen name="medications/[id]/edit" options={{ title: t('editMedicationRouteTitle') }} />
       <Stack.Screen name="report" options={{ title: t('reportRouteTitle') }} />
+      <Stack.Screen name="diary" options={{ title: t('diaryRouteTitle') }} />
+      <Stack.Screen name="refills" options={{ title: t('refillsRouteTitle') }} />
+      <Stack.Screen name="care/index" options={{ title: t('careRouteTitle') }} />
+      <Stack.Screen name="care/contact" options={{ title: t('careContactRouteTitle'), animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="care/appointment" options={{ title: t('careAppointmentRouteTitle'), animation: 'slide_from_bottom' }} />
       <Stack.Screen name="settings/privacy" options={{ title: t('privacyRouteTitle') }} />
       <Stack.Screen name="settings/imprint" options={{ title: t('imprintRouteTitle') }} />
       <Stack.Screen name="settings/reminders" options={{ title: t('reminders') }} />

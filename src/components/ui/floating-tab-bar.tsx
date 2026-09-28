@@ -13,8 +13,12 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
-import { CONTENT_MAX_WIDTH, font, motion, radius, spacing, typography } from '../../theme/tokens';
+// react-native-svg's Defs typing omits children (same workaround as sparkline.tsx).
+const SvgDefs = Defs as unknown as React.ComponentType<{ children?: React.ReactNode }>;
+
+import { font, motion, radius, spacing, typography } from '../../theme/tokens';
 import { useMotion } from '../../theme/use-motion';
 import { useTokens } from '../../theme/use-tokens';
 import { triggerHaptic } from './animated-pressable';
@@ -43,7 +47,20 @@ export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) 
   const layout = reduce ? undefined : LinearTransition.springify().damping(22).stiffness(220);
 
   return (
-    <View pointerEvents="box-none" style={[styles.host, { paddingBottom: Math.max(insets.bottom - 6, spacing(4)) }]}>
+    <View pointerEvents="box-none" style={[styles.host, { paddingBottom: Math.max(insets.bottom - 10, spacing(3)) }]}>
+      {/* Content scrolls away under a soft paper fade instead of a hard edge. */}
+      <View pointerEvents="none" style={styles.fade}>
+        <Svg width="100%" height="100%" preserveAspectRatio="none">
+          <SvgDefs>
+            <LinearGradient id="tabFade" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor={c.background} stopOpacity={0} />
+              <Stop offset="0.55" stopColor={c.background} stopOpacity={0.92} />
+              <Stop offset="1" stopColor={c.background} stopOpacity={1} />
+            </LinearGradient>
+          </SvgDefs>
+          <Rect x="0" y="0" width="100%" height="100%" fill="url(#tabFade)" />
+        </Svg>
+      </View>
       <View
         accessibilityRole="tablist"
         style={[styles.bar, { backgroundColor: c.chrome }, Platform.OS === 'web' ? styles.webShadow : styles.shadow]}
@@ -85,13 +102,13 @@ export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) 
                   pressed && !focused && { opacity: 0.6 },
                 ]}
               >
-                <TabIcon name={focused ? icons.on : icons.off} focused={focused} color={focused ? '#15171C' : c.onChrome} />
+                <TabIcon name={focused ? icons.on : icons.off} focused={focused} color={focused ? '#15171C' : c.onChrome} size={focused ? 19 : 21} />
                 {focused ? (
                   <Animated.Text
                     entering={reduce ? undefined : FadeIn.delay(90).duration(180)}
                     exiting={reduce ? undefined : FadeOut.duration(90)}
                     numberOfLines={1}
-                    style={[typography.callout, { color: '#15171C', fontFamily: font.bold }]}
+                    style={[typography.subhead, { color: '#15171C', fontFamily: font.bold }]}
                   >
                     {label}
                   </Animated.Text>
@@ -115,7 +132,7 @@ export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) 
 }
 
 /** Icon that gives a small, damped "tick" when its tab becomes active. */
-function TabIcon({ name, focused, color }: { name: IconName; focused: boolean; color: string }) {
+function TabIcon({ name, focused, color, size }: { name: IconName; focused: boolean; color: string; size: number }) {
   const scale = useSharedValue(1);
   useEffect(() => {
     if (focused) {
@@ -126,9 +143,9 @@ function TabIcon({ name, focused, color }: { name: IconName; focused: boolean; c
   return (
     <Animated.View style={animated}>
       {name === 'medical' || name === 'medical-outline' ? (
-        <PillIcon size={22} color={color} filled={focused} />
+        <PillIcon size={size} color={color} filled={focused} />
       ) : (
-        <Ionicons name={name} size={22} color={color} />
+        <Ionicons name={name} size={size} color={color} />
       )}
     </Animated.View>
   );
@@ -140,18 +157,20 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: spacing(4),
+    paddingHorizontal: spacing(5),
+    paddingTop: spacing(6),
     alignItems: 'center',
   },
+  fade: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
   bar: {
     width: '100%',
-    maxWidth: CONTENT_MAX_WIDTH,
-    height: 76,
+    maxWidth: 420,
+    height: 64,
     borderRadius: radius.full,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing(2.5),
+    paddingHorizontal: 8,
   },
   shadow: {
     shadowColor: '#15171C',
@@ -165,27 +184,27 @@ const styles = StyleSheet.create({
   slot: { flex: 1, alignItems: 'center' },
   activeSlot: { flexGrow: 0, flexShrink: 0 },
   item: {
-    minWidth: 56,
-    height: 56,
+    minWidth: 52,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
+    gap: 2,
     paddingHorizontal: spacing(1),
   },
   activePill: {
-    height: 56,
+    height: 48,
     borderRadius: radius.full,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing(2),
-    paddingLeft: spacing(4),
-    paddingRight: spacing(5),
+    gap: spacing(1.5),
+    paddingLeft: spacing(3.5),
+    paddingRight: spacing(4),
   },
-  label: { fontFamily: font.semibold, fontSize: 13, lineHeight: 16 },
+  label: { fontFamily: font.semibold, fontSize: 12, lineHeight: 15 },
   badge: {
     position: 'absolute',
-    top: 4,
-    right: 10,
+    top: 0,
+    right: 8,
     minWidth: 20,
     height: 20,
     borderRadius: 10,

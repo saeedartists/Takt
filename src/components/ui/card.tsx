@@ -113,7 +113,7 @@ export const SectionHeader = ({
 const styles = StyleSheet.create({
   tile: {
     borderRadius: radius.xl,
-    padding: spacing(4.5),
+    padding: spacing(4),
     overflow: 'hidden',
   },
   tileIcon: {

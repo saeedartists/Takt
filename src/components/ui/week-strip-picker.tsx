@@ -20,6 +20,8 @@ type WeekStripPickerProps = {
   onSelectDate: (date: Date) => void;
   adherenceMap?: Record<string, DayAdherence>;
   todayLabel?: string;
+  /** The month line above the strip; Today hides it while today is selected (the title already says it). */
+  showMonth?: boolean;
 };
 
 const getStartOfWeek = (date: Date): Date => {
@@ -37,6 +39,7 @@ export function WeekStripPicker({
   onSelectDate,
   adherenceMap = {},
   todayLabel = 'Today',
+  showMonth = true,
 }: WeekStripPickerProps) {
   const { c, isDark } = useTokens();
   const { spring, reduce } = useMotion();
@@ -107,6 +110,7 @@ export function WeekStripPicker({
 
   return (
     <View style={styles.container}>
+      {showMonth || !isCurrentDayToday ? (
       <View style={styles.headerRow}>
         <Text style={[typography.subhead, { color: c.textSecondary, fontFamily: font.semibold }]}>{monthYearLabel}</Text>
 
@@ -125,6 +129,7 @@ export function WeekStripPicker({
           </Animated.View>
         ) : null}
       </View>
+      ) : null}
 
       <View style={styles.stripRow}>
         {/* Layering: white day pills, then the sliding ink pill, then the labels on top. */}
@@ -188,7 +193,7 @@ export function WeekStripPicker({
 
               <Text
                 style={[
-                  typography.title3,
+                  typography.headline,
                   styles.numberLabel,
                   { color: item.isSelected ? c.onInk : isPast ? c.textPrimary : c.textSecondary },
                 ]}
@@ -252,8 +257,8 @@ const styles = StyleSheet.create({
   },
   dayCell: {
     flex: 1,
-    height: 76,
-    maxWidth: 52,
+    height: 62,
+    maxWidth: 48,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.full,
@@ -266,19 +271,20 @@ const styles = StyleSheet.create({
   },
   numberLabel: {
     fontVariant: ['tabular-nums'],
-    lineHeight: 20,
+    fontFamily: font.display,
+    lineHeight: 21,
   },
   dotContainer: {
-    height: 8,
+    height: 7,
     alignItems: 'center',
     justifyContent: 'center',
   },
   statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
-  dayBackdrop: { flex: 1, height: 76, maxWidth: 52, borderRadius: radius.full },
+  dayBackdrop: { flex: 1, height: 62, maxWidth: 48, borderRadius: radius.full },
   todayIndicator: {
     width: 4,
     height: 4,
