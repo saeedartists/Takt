@@ -1,5 +1,7 @@
-import { Text, View } from 'react-native';
-import { Badge, Card, PageShell, Stack, spacing, typography, useTokens } from '@/components/ui';
+import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
+import { Card, PageShell, Stack, spacing, typography, useMotion, useTokens } from '@/components/ui';
 import { useLocale } from '@/lib/takt/l10n';
 
 type MessageKey = Parameters<ReturnType<typeof useLocale>['t']>[0];
@@ -18,33 +20,43 @@ const LINES: MessageKey[] = [
 
 export default function ImprintScreen() {
   const { c } = useTokens();
+  const { enter } = useMotion();
   const { t } = useLocale();
 
   return (
     <PageShell>
       <Stack>
-        <Card>
-          <View style={{ padding: spacing(4), gap: spacing(2) }}>
-            <Text accessibilityRole="header" style={[typography.title3, { color: c.textPrimary }]}>
-              {t('imprintCompany')}
-            </Text>
-            {LINES.map((key) => (
-              <Text key={key} style={[typography.body, { color: c.textSecondary }]}>
-                {t(key)}
+        <Animated.View entering={enter(0)}>
+          <Card>
+            <View style={styles.body}>
+              <Text accessibilityRole="header" style={[typography.title2, { color: c.textPrimary }]}>
+                {t('imprintCompany')}
               </Text>
-            ))}
-            <View style={{ marginTop: spacing(1) }}>
-              <Badge label={t('imprintDraftNotice')} tone="neutral" />
+              {LINES.map((key) => (
+                <Text key={key} style={[typography.body, { color: c.textSecondary }]}>
+                  {t(key)}
+                </Text>
+              ))}
+              <View style={[styles.draft, { backgroundColor: c.tones.butter.bg }]}>
+                <Ionicons name="alert-circle-outline" size={18} color={c.tones.butter.fg} />
+                <Text style={[typography.footnote, styles.flex, { color: c.tones.butter.fg }]}>{t('imprintDraftNotice')}</Text>
+              </View>
             </View>
-          </View>
-        </Card>
+          </Card>
+        </Animated.View>
 
-        <Card>
-          <View style={{ padding: spacing(4) }}>
-            <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('safetyNote')}</Text>
-          </View>
-        </Card>
+        <View style={styles.note}>
+          <Ionicons name="information-circle-outline" size={20} color={c.textSecondary} />
+          <Text style={[typography.footnote, styles.flex, { color: c.textSecondary }]}>{t('safetyNote')}</Text>
+        </View>
       </Stack>
     </PageShell>
   );
 }
+
+const styles = StyleSheet.create({
+  body: { padding: spacing(4.5), gap: spacing(2) },
+  note: { flexDirection: 'row', gap: spacing(3), alignItems: 'flex-start', paddingHorizontal: spacing(1) },
+  flex: { flex: 1, minWidth: 0 },
+  draft: { flexDirection: 'row', gap: spacing(2), alignItems: 'flex-start', padding: spacing(3), borderRadius: 18, marginTop: spacing(1) },
+});

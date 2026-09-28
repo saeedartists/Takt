@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState, type ComponentProps } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AnimatedPressable, Button, CONTENT_MAX_WIDTH, Input, radius, spacing, typography, useTokens } from '@/components/ui';
+import { AnimatedPressable, Button, CONTENT_MAX_WIDTH, Input, font, radius, spacing, typography, useTokens } from '@/components/ui';
 import { Chip } from '@/components/takt/medication-form';
 import { TimeField } from '@/components/takt/time-field';
 import { planToInput, useUpdateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
@@ -156,8 +156,10 @@ export function MedicationActionSheet({ plan, patientRef, initialStep = 'root', 
       accessibilityLabel={`${label}, ${plan.label}`}
       style={[styles.item, { borderTopColor: c.separator }]}
     >
-      <Ionicons name={icon} size={22} color={destructive ? c.destructive : c.textPrimary} />
-      <Text style={[typography.body, { color: destructive ? c.destructive : c.textPrimary, flex: 1 }]}>{label}</Text>
+      <View style={[styles.itemIcon, { backgroundColor: destructive ? c.tones.rose.bg : c.surfaceRaised }]}>
+        <Ionicons name={icon} size={22} color={destructive ? c.tones.rose.fg : c.textPrimary} />
+      </View>
+      <Text style={[typography.body, { color: destructive ? c.destructive : c.textPrimary, fontFamily: font.semibold, flex: 1 }]}>{label}</Text>
     </AnimatedPressable>
   );
 
@@ -169,7 +171,7 @@ export function MedicationActionSheet({ plan, patientRef, initialStep = 'root', 
     <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.fill}>
         <Pressable
-          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(14,18,24,0.45)' }]}
+          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(21,23,28,0.45)' }]}
           onPress={onClose}
           accessibilityRole="button"
           accessibilityLabel={t('cancel')}
@@ -177,7 +179,7 @@ export function MedicationActionSheet({ plan, patientRef, initialStep = 'root', 
         <View style={[styles.sheet, { backgroundColor: c.surface, paddingBottom: spacing(4) + insets.bottom }]}>
           <View style={[styles.handle, { backgroundColor: c.separator }]} />
           <View style={styles.header}>
-            <Text numberOfLines={1} style={[typography.title3, { color: c.textPrimary, flex: 1 }]}>
+            <Text numberOfLines={1} style={[typography.title2, { color: c.textPrimary, flex: 1 }]}>
               {plan.label}
             </Text>
             <Text style={[typography.subhead, { color: c.textSecondary }]}>{plan.strength}</Text>
@@ -300,9 +302,9 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: 'center',
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    paddingHorizontal: spacing(4),
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    paddingHorizontal: spacing(5),
     paddingTop: spacing(2),
   },
   handle: { width: 36, height: 4, borderRadius: radius.full, alignSelf: 'center', marginBottom: spacing(3) },
@@ -311,9 +313,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(3),
-    minHeight: 52,
+    minHeight: 64,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
+  itemIcon: { width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   footer: { paddingTop: spacing(3) },
   stepBody: { gap: spacing(3), paddingTop: spacing(1) },
   wrapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) },

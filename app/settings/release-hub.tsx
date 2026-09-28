@@ -11,6 +11,7 @@ import {
   SectionHeader,
   Stack,
   spacing,
+  useTokens,
 } from '@/components/ui';
 import { useConsentAudit } from '@/lib/takt/consent-audit';
 import { useIsolationMatrix } from '@/lib/takt/isolation-matrix';
@@ -23,6 +24,7 @@ import { useSessionTokenMatrix } from '@/lib/takt/session-token-matrix';
 const statusTone = (done: boolean): 'success' | 'warning' => (done ? 'success' : 'warning');
 
 export default function ReleaseHubScreen() {
+  const { c } = useTokens();
   const { t } = useLocale();
   const router = useRouter();
   const readiness = useReadinessChecklist();
@@ -57,7 +59,7 @@ export default function ReleaseHubScreen() {
             />
             <AnimatedProgressBar
               progress={readiness.completionPct}
-              tintColor={readiness.completionPct === 100 ? '#10B981' : undefined}
+              tintColor={readiness.completionPct === 100 ? c.success : undefined}
             />
             <Badge
               tone={readiness.completionPct === 100 ? 'success' : 'neutral'}

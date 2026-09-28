@@ -1,25 +1,28 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Animated, { LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
   AnimatedPressable,
+  AnimatedProgressBar,
   Badge,
   Button,
   Card,
   EmptyState,
   ErrorState,
+  INK,
   Input,
-  ListGroup,
-  ListRow,
   PageHeader,
   PageShell,
   SectionHeader,
   SkeletonRow,
   Stack,
+  font,
+  motion,
   radius,
   spacing,
+  typography,
   useMotion,
   useTokens,
 } from '@/components/ui';
@@ -35,14 +38,18 @@ import type { MedicationPlan } from '@/lib/takt/types';
 
 /** Most people have three to five medications; a search box only earns its place beyond that. */
 const SEARCH_FROM = 6;
-const CLEAR_HIT = 44;
+const CLEAR_HIT = 48;
+
+const reflow = LinearTransition.springify()
+  .damping(motion.spring.gentle.damping)
+  .stiffness(motion.spring.gentle.stiffness);
 
 type SupplyMap = Record<string, SupplySnapshot | null>;
 
 export default function MedicationsScreen() {
-  const { c } = useTokens();
+  const { c, isDark } = useTokens();
   const { t, formatDate } = useLocale();
-  const { enter } = useMotion();
+  const { enter, duration } = useMotion();
   const router = useRouter();
 
   const patient = usePrimaryPatient();
@@ -106,84 +113,176 @@ export default function MedicationsScreen() {
       .join(' · ');
   };
 
-  const statusTint = (plan: MedicationPlan): string =>
-    plan.request.status === 'active' ? c.accent : plan.request.status === 'on-hold' ? c.warning : c.textTertiary;
-
   // Third line, by priority: pause end, then the supply state, or the way to set one.
   const rowMeta = (plan: MedicationPlan) => {
     if (plan.request.status === 'on-hold') {
       const until = pausedUntil(plan);
-      return until
-        ? t('pausedUntil').replace('{date}', formatDate(until, { day: 'numeric', month: 'short' }))
-        : t('statusPaused');
-    }
-    if (plan.request.status === 'stopped') return undefined;
-
-    const medicationId = plan.medication?.id;
-    const supply = medicationId ? supplyByMedication[medicationId] : undefined;
-    if (supply === undefined) return undefined;
-    if (supply === null) return t('supplySet');
-    if (supply.count <= 0) return <Badge label={t('supplyRefillNeeded')} tone="destructive" />;
-    if (supply.count <= LOW_SUPPLY_THRESHOLD) {
       return (
         <Badge
-          label={`${t('supplyLow')} · ${t('supplyLeft').replace('{count}', String(supply.count))}`}
-          tone="warning"
+          size="sm"
+          icon="pause"
+          label={until ? t('pausedUntil').replace('{date}', formatDate(until, { day: 'numeric', month: 'short' })) : t('statusPaused')}
         />
       );
     }
+    if (plan.request.status === 'stopped') return undefined;
+
+    const supply = supplyOf(plan);
+    if (supply === undefined) return undefined;
+    if (supply === null) return t('supplySet');
+    if (supply.count <= 0) return <Badge size="sm" icon="alert-circle" label={t('supplyRefillNeeded')} tone="destructive" />;
     return t('supplyLeftDays')
       .replace('{count}', String(supply.count))
       .replace('{days}', String(supply.daysUntilRefill));
   };
 
-  const renderList = (rows: MedicationPlan[], offset: number) => (
-    <ListGroup>
-      {rows.map((plan, index) => {
-        const tint = statusTint(plan);
-        return (
-          <Animated.View
-            key={plan.request.id}
-            entering={firstLoad.current ? enter(offset + index) : undefined}
-            layout={LinearTransition}
-          >
-            <ListRow
-              isFirst={index === 0}
-              title={plan.label}
-              subtitle={subtitle(plan)}
-              meta={rowMeta(plan)}
-              leading={<MedicationGlyph appearance={plan.appearance} form={plan.form} tint={tint} />}
-              action={
-                <AnimatedPressable
-                  onPress={() => setSheet({ plan, step: 'root' })}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('moreActionsFor').replace('{name}', plan.label)}
-                  hitSlop={4}
-                  style={[styles.more, { backgroundColor: c.surfaceRaised }]}
-                >
-                  <Ionicons name="ellipsis-horizontal" size={20} color={c.textPrimary} />
-                </AnimatedPressable>
-              }
-              onPress={() => router.push({ pathname: '/medications/[id]', params: { id: plan.request.id } })}
-            />
-          </Animated.View>
-        );
-      })}
-    </ListGroup>
+  const supplyOf = (plan: MedicationPlan) => {
+    const medicationId = plan.medication?.id;
+    return medicationId ? supplyByMedication[medicationId] : undefined;
+  };
+  const isLow = (plan: MedicationPlan) => {
+    const supply = supplyOf(plan);
+    return plan.request.status === 'active' && Boolean(supply) && (supply?.count ?? 0) <= LOW_SUPPLY_THRESHOLD;
+  };
+
+  const open = (plan: MedicationPlan) => router.push({ pathname: '/medications/[id]', params: { id: plan.request.id } });
+
+  const moreButton = (plan: MedicationPlan, onTone: boolean) => (
+    <AnimatedPressable
+      onPress={() => setSheet({ plan, step: 'root' })}
+      accessibilityRole="button"
+      accessibilityLabel={t('moreActionsFor').replace('{name}', plan.label)}
+      scaleTo={0.9}
+      style={[styles.more, { backgroundColor: onTone ? 'rgba(255,255,255,0.7)' : c.surfaceRaised }]}
+    >
+      <Ionicons name="ellipsis-horizontal" size={20} color={onTone ? INK : c.textPrimary} />
+    </AnimatedPressable>
   );
+
+  /** Low supply: promoted to a butter tile with the bar, so the refill is the first thing seen. */
+  const lowTile = (plan: MedicationPlan) => {
+    const supply = supplyOf(plan);
+    const butter = c.tones.butter;
+    const count = supply?.count ?? 0;
+    const line = [
+      count <= 0 ? t('supplyRefillNeeded') : t('supplyLeft').replace('{count}', String(count)),
+      count <= 0 ? undefined : t('supplyLow'),
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    return (
+      <View style={[styles.card, styles.lowCard, { backgroundColor: butter.bg }]}>
+        <View style={styles.cardRow}>
+          <AnimatedPressable
+            onPress={() => open(plan)}
+            haptic="light"
+            scaleTo={0.98}
+            accessibilityRole="button"
+            accessibilityLabel={`${plan.label}, ${subtitle(plan)}`}
+            style={styles.cardPress}
+          >
+            <View style={styles.glass}>
+              <MedicationGlyph appearance={plan.appearance} form={plan.form} size={52} />
+            </View>
+            <View style={styles.grow}>
+              <Text numberOfLines={2} style={[typography.title2, { color: INK }]}>
+                {plan.label}
+              </Text>
+              <Text style={[typography.callout, { color: butter.fg }]}>{subtitle(plan)}</Text>
+            </View>
+          </AnimatedPressable>
+          {moreButton(plan, true)}
+        </View>
+        <View style={styles.supplyRow}>
+          <View style={styles.grow}>
+            <AnimatedProgressBar
+              progress={supply ? Math.max(0.02, count / supply.capacity) : 0}
+              height={10}
+              color={butter.fg}
+              backgroundColor="rgba(255,255,255,0.7)"
+            />
+          </View>
+          <Ionicons name="alert-circle" size={18} color={butter.fg} />
+          <Text style={[typography.subhead, { color: butter.fg, fontFamily: font.bold }]}>{line}</Text>
+        </View>
+      </View>
+    );
+  };
+
+  const card = (plan: MedicationPlan) => {
+    const meta = rowMeta(plan);
+    const archived = plan.request.status === 'stopped';
+    return (
+      <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.cardBorder, borderWidth: isDark ? StyleSheet.hairlineWidth : 0 }]}>
+        <View style={styles.cardRow}>
+          <AnimatedPressable
+            onPress={() => open(plan)}
+            haptic="light"
+            scaleTo={0.98}
+            accessibilityRole="button"
+            accessibilityLabel={`${plan.label}, ${subtitle(plan)}`}
+            style={styles.cardPress}
+          >
+            <View style={archived ? styles.dim : null}>
+              <MedicationGlyph appearance={plan.appearance} form={plan.form} size={56} />
+            </View>
+            <View style={styles.grow}>
+              <Text numberOfLines={2} style={[typography.headline, styles.name, { color: c.textPrimary }]}>
+                {plan.label}
+              </Text>
+              <Text style={[typography.subhead, { color: c.textSecondary }]}>{subtitle(plan)}</Text>
+              {meta ? (
+                typeof meta === 'string' ? (
+                  <Text style={[typography.subhead, styles.meta, { color: c.textTertiary }]}>{meta}</Text>
+                ) : (
+                  <View style={styles.meta}>{meta}</View>
+                )
+              ) : null}
+            </View>
+          </AnimatedPressable>
+          {moreButton(plan, false)}
+        </View>
+      </View>
+    );
+  };
+
+  const renderList = (rows: MedicationPlan[], offset: number) => (
+    <View style={styles.list}>
+      {rows.map((plan, index) => (
+        <Animated.View
+          key={plan.request.id}
+          entering={firstLoad.current ? enter(offset + index) : FadeIn.duration(duration.base)}
+          exiting={FadeOut.duration(duration.fast)}
+          layout={reflow}
+        >
+          {isLow(plan) ? lowTile(plan) : card(plan)}
+        </Animated.View>
+      ))}
+    </View>
+  );
+
+  // Low-supply medications float to the top of the active list.
+  const activeSorted = [...activePlans.filter(isLow), ...activePlans.filter((plan) => !isLow(plan))];
+  const onlyActive = pausedPlans.length === 0 && archivedPlans.length === 0;
 
   return (
     <PageShell>
       <PageHeader
         title={t('medications')}
         action={
-          <Button
-            size="sm"
-            label={t('addCta')}
-            icon={<Ionicons name="add" size={16} color={c.surface} />}
-            accessibilityLabel={t('addMedication')}
+          <AnimatedPressable
             onPress={() => router.push('/medications/new')}
-          />
+            haptic="light"
+            scaleTo={0.96}
+            accessibilityRole="button"
+            accessibilityLabel={t('addMedication')}
+            style={[styles.add, { backgroundColor: c.ink }]}
+          >
+            <View style={[styles.addDot, { backgroundColor: c.accentSoft }]}>
+              <Ionicons name="add" size={20} color={INK} />
+            </View>
+            <Text style={[typography.headline, { color: c.onInk, fontFamily: font.bold }]}>{t('addCta')}</Text>
+          </AnimatedPressable>
         }
       />
 
@@ -213,11 +312,13 @@ export default function MedicationsScreen() {
 
         <View>
           {isLoading ? (
-            <Card>
-              {[0, 1, 2, 3].map((i) => (
-                <SkeletonRow key={i} isFirst={i === 0} />
+            <View style={styles.list}>
+              {[0, 1, 2].map((i) => (
+                <Card key={i}>
+                  <SkeletonRow isFirst />
+                </Card>
               ))}
-            </Card>
+            </View>
           ) : patient.error || plans.error ? (
             <ErrorState
               description={t('loadMedicationsError')}
@@ -240,8 +341,8 @@ export default function MedicationsScreen() {
             <Stack>
               {activePlans.length > 0 ? (
                 <View>
-                  <SectionHeader title={t('statusActive')} />
-                  {renderList(activePlans, 0)}
+                  {onlyActive ? null : <SectionHeader title={t('statusActive')} />}
+                  {renderList(activeSorted, 0)}
                 </View>
               ) : null}
 
@@ -253,9 +354,9 @@ export default function MedicationsScreen() {
               ) : null}
 
               {archivedPlans.length > 0 ? (
-                <Animated.View layout={LinearTransition} style={{ gap: spacing(3) }}>
+                <Animated.View layout={reflow} style={{ gap: spacing(3) }}>
                   <Button
-                    kind="secondary"
+                    kind="outline"
                     label={t('archivedMedicationsCount').replace('{count}', String(archivedPlans.length))}
                     icon={<Ionicons name={showArchived ? 'chevron-up' : 'chevron-down'} size={16} color={c.textPrimary} />}
                     onPress={() => setShowArchived((open) => !open)}
@@ -280,9 +381,37 @@ export default function MedicationsScreen() {
 }
 
 const styles = StyleSheet.create({
+  add: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(2),
+    paddingLeft: spacing(2),
+    paddingRight: spacing(4),
+    borderRadius: radius.full,
+  },
+  addDot: { width: 36, height: 36, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  list: { gap: spacing(2.5) },
+  card: { borderRadius: radius.xl, padding: spacing(4) },
+  lowCard: { borderRadius: radius.xxl, padding: spacing(5), gap: spacing(3.5) },
+  cardRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(2) },
+  cardPress: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing(3.5) },
+  glass: {
+    width: 60,
+    height: 60,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  grow: { flex: 1, minWidth: 0 },
+  name: { fontSize: 19, lineHeight: 25, fontFamily: font.bold },
+  meta: { marginTop: 2, alignSelf: 'flex-start' },
+  dim: { opacity: 0.55 },
+  supplyRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(2) },
   more: {
-    width: 40,
-    height: 40,
+    width: 48,
+    height: 48,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',

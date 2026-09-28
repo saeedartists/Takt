@@ -1,22 +1,28 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { useMemo, useState } from 'react';
-import { Platform, StyleSheet, Text, View, type ViewStyle } from 'react-native';
-import Animated from 'react-native-reanimated';
+import { useEffect, useMemo, useState } from 'react';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSpring } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  AnimatedProgressBar,
+  AnimatedNumber,
   AnimatedSegmentedControl,
   Button,
   Card,
   EmptyState,
   ErrorState,
+  INK,
   ListGroup,
   ListRow,
   PageShell,
+  ProgressRing,
   SectionHeader,
   SkeletonCard,
   Stack,
+  Tile,
+  font,
+  motion,
   radius,
   spacing,
   typography,
@@ -46,23 +52,11 @@ const REPORT_MISSED_LIMIT = 6;
 
 type Note = { tone: 'success' | 'error'; text: string };
 
-/** Compact two-column line inside the paper sheet; hairline above all but the first. */
-const PaperRow = ({ label, value, isFirst }: { label: string; value: string; isFirst: boolean }) => {
-  const { c } = useTokens();
-  return (
-    <View style={[styles.paperRow, !isFirst && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator }]}>
-      <Text numberOfLines={1} style={[typography.subhead, styles.paperRowLabel, { color: c.textPrimary }]}>
-        {label}
-      </Text>
-      <Text style={[typography.subhead, { color: c.textSecondary, fontVariant: ['tabular-nums'] }]}>{value}</Text>
-    </View>
-  );
-};
-
 export default function ReportScreen() {
   const { c, isDark } = useTokens();
   const { t, formatDate, formatDateTime } = useLocale();
-  const { enter } = useMotion();
+  const { enter, stagger } = useMotion();
+  const insets = useSafeAreaInsets();
   const patient = usePrimaryPatient();
   const patientRef = patient.data ? `Patient/${patient.data.id}` : undefined;
   const plans = useMedicationPlans(patientRef);
@@ -150,8 +144,6 @@ export default function ReportScreen() {
   const hiddenMeds = Math.max(0, summary.byMedication.length - visibleMeds.length);
   const visibleMissed = summary.missedRows.slice(0, REPORT_MISSED_LIMIT);
   const hiddenMissed = Math.max(0, summary.missedRows.length - visibleMissed.length);
-  // No traffic-light grading on the report (brief §7, §12).
-  const pctColor = c.textPrimary;
 
   /** Share sheet on device; the browser's print dialog (Save as PDF) on web. */
   const deliverHtml = async (html: string) => {
@@ -231,24 +223,19 @@ export default function ReportScreen() {
     }
   };
 
-  const exportPdf = async () => {
-    if (!patient.data) return;
+  /** The one-page clinical report. Content is fixed by the brief; only the screen around it is styled. */
+  const reportHtml = (): string => {
+    const medicationRows = visibleMeds
+      .map((row) => `<tr><td>${esc(row.label)}</td><td style=\"text-align:right\">${esc(medicationValue(row))}</td></tr>`)
+      .join('');
 
-    setNote(null);
-    setExporting(true);
+    const missedRows = visibleMissed
+      .map((row) => `<tr><td>${esc(row.label)}</td><td style=\"text-align:right\">${esc(row.dateLabel)}</td></tr>`)
+      .join('');
 
-    try {
-      const medicationRows = visibleMeds
-        .map((row) => `<tr><td>${esc(row.label)}</td><td style=\"text-align:right\">${esc(medicationValue(row))}</td></tr>`)
-        .join('');
+    const focusRows = focusNotes.map((note) => `<li>${esc(note)}</li>`).join('');
 
-      const missedRows = visibleMissed
-        .map((row) => `<tr><td>${esc(row.label)}</td><td style=\"text-align:right\">${esc(row.dateLabel)}</td></tr>`)
-        .join('');
-
-      const focusRows = focusNotes.map((note) => `<li>${esc(note)}</li>`).join('');
-
-      const html = `
+    return `
 <!DOCTYPE html>
 <html>
   <head>
@@ -259,7 +246,7 @@ export default function ReportScreen() {
       h1 { margin: 0 0 4px 0; font-size: 20px; }
       h2 { margin: 10px 0 4px 0; font-size: 13px; color: #0E1218; }
       .meta { color: #5C646F; margin-bottom: 8px; font-size: 10px; line-height: 1.3; }
-      .score { font-size: 24px; color: #B4611C; margin: 4px 0 8px; font-weight: 700; }
+      .score { font-size: 24px; color: #15171C; margin: 4px 0 8px; font-weight: 700; }
       .notes { margin: 0 0 8px; padding-left: 16px; }
       .notes li { font-size: 10px; line-height: 1.3; margin: 0 0 3px; }
       table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
@@ -304,13 +291,25 @@ export default function ReportScreen() {
   </body>
 </html>`;
 
-      await deliverHtml(html);
+  };
+
+  const runExport = async (deliver: (html: string) => Promise<void>) => {
+    if (!patient.data) return;
+    setNote(null);
+    setExporting(true);
+    try {
+      await deliver(reportHtml());
     } catch {
       setNote({ tone: 'error', text: t('pdfError') });
     } finally {
       setExporting(false);
     }
   };
+
+  const exportPdf = () => runExport(deliverHtml);
+  // Straight to the system print dialog; the web build already prints from a hidden frame.
+  const printReport = () =>
+    runExport((html) => (Platform.OS === 'web' ? deliverHtml(html) : Print.printAsync({ html })));
 
   if (patient.isLoading || plans.isLoading || events.isLoading) {
     return (
@@ -344,190 +343,301 @@ export default function ReportScreen() {
     );
   }
 
-  const paperStyle: ViewStyle = isDark ? styles.paper : { ...styles.paper, ...styles.paperShadow };
+  const sky = c.tones.sky;
 
   return (
-    <PageShell>
-      <Stack>
-        <View style={{ gap: spacing(2) }}>
-          <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('reportWindowLabel')}</Text>
-          <AnimatedSegmentedControl
-            value={windowDays.toString()}
-            onChange={(next) => setWindowDays(Number.parseInt(next, 10) as 7 | 14 | 30)}
-            options={[
-              { value: '7', label: t('historyWindow7') },
-              { value: '14', label: t('historyWindow14') },
-              { value: '30', label: t('historyWindow30') },
-            ]}
-          />
-          <Button
-            label={t('exportPdf')}
-            icon={<Ionicons name="document-text-outline" size={18} color={c.surface} />}
-            onPress={() => void exportPdf()}
-            loading={exporting}
-          />
-          <Button
-            kind="secondary"
-            label={t('exportMedicationListCta')}
-            icon={<Ionicons name="list-outline" size={18} color={c.textPrimary} />}
-            onPress={() => void exportMedicationList()}
-            disabled={exporting}
-          />
-          {exporting ? (
-            <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('preparingPdf')}</Text>
-          ) : note ? (
-            <Text
-              accessibilityRole={note.tone === 'error' ? 'alert' : undefined}
-              style={[typography.footnote, { color: note.tone === 'error' ? c.destructive : c.textSecondary }]}
-            >
-              {note.text}
+    <View style={{ flex: 1, backgroundColor: c.background }}>
+      <PageShell>
+        <Stack>
+          <View style={{ gap: spacing(4) }}>
+            <Text accessibilityRole="header" style={[typography.largeTitle, { color: c.textPrimary }]}>
+              {t('reportLead')}
             </Text>
-          ) : null}
-        </View>
+            <AnimatedSegmentedControl
+              track="surface"
+              value={windowDays.toString()}
+              onChange={(next) => setWindowDays(Number.parseInt(next, 10) as 7 | 14 | 30)}
+              options={[
+                { value: '7', label: t('historyWindow7') },
+                { value: '14', label: t('historyWindow14') },
+                { value: '30', label: t('historyWindow30') },
+              ]}
+            />
+          </View>
 
-        <Animated.View entering={enter(0)}>
-          <Card style={paperStyle}>
-            <View style={styles.paperInner}>
-              <View style={{ gap: spacing(1) }}>
-                <Text style={[typography.title2, { color: c.textPrimary }]}>{t('reportPdfHeading')}</Text>
-                <Text style={[typography.footnote, { color: c.textSecondary }]}>
+          {/* The "paper": a preview of what the doctor gets. */}
+          <Animated.View entering={enter(0)}>
+            <Card style={[styles.paper, !isDark && styles.paperShadow]}>
+              <View style={styles.wordmarkRow}>
+                <Text style={[styles.wordmark, { color: c.textPrimary }]}>
+                  takt<Text style={{ color: c.accent }}>.</Text>
+                </Text>
+                <Text numberOfLines={1} style={[typography.subhead, styles.flexText, { color: c.textSecondary, fontFamily: font.semibold }]}>
+                  {t('reportTitle')}
+                </Text>
+              </View>
+
+              <View style={styles.scoreRow}>
+                <View accessible accessibilityRole="image" accessibilityLabel={`${summary.pct.toString()}% ${t('takenOnSchedule')}`}>
+                  <ProgressRing progress={summary.pct / 100} size={96} stroke={12} color={c.success} track={c.surfaceRaised}>
+                    <AnimatedNumber
+                      value={summary.pct}
+                      suffix="%"
+                      delay={150}
+                      style={[typography.title3, { color: c.textPrimary }]}
+                    />
+                  </ProgressRing>
+                </View>
+                <View style={styles.flexText}>
+                  <Text style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>
+                    {t('reportDoseCount')
+                      .replace('{taken}', summary.taken.toString())
+                      .replace('{total}', summary.denominator.toString())}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={[styles.meta, { borderTopColor: c.separator }]}>
+                <Text style={[typography.subhead, { color: c.textSecondary }]}>
                   {t('patientLabel')}: {patientName}
                 </Text>
-                <Text style={[typography.footnote, { color: c.textSecondary }]}>
+                <Text style={[typography.subhead, { color: c.textSecondary }]}>
                   {t('dateLabel')}: {reportDate}
                 </Text>
-                <Text style={[typography.footnote, { color: c.textSecondary }]}>
+                <Text style={[typography.subhead, { color: c.textSecondary }]}>
                   {t('windowLabel')}: {windowText}
                 </Text>
               </View>
+            </Card>
+          </Animated.View>
 
-              <View style={{ gap: spacing(2) }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <Text
-                    accessibilityLabel={`${summary.pct.toString()}% ${t('takenOnSchedule')}`}
-                    style={[typography.metric, { color: pctColor, fontVariant: ['tabular-nums'] }]}
+          <Animated.View entering={enter(1)}>
+            <Tile tone="sky" style={styles.section}>
+              <Text accessibilityRole="header" style={[typography.title3, { color: INK }]}>
+                {t('reportVisitFocusTitle')}
+              </Text>
+              {focusNotes.map((focusNote) => (
+                <View key={focusNote} style={styles.bullet}>
+                  <View style={[styles.bulletDot, { backgroundColor: sky.fg }]} />
+                  <Text style={[typography.callout, styles.flexText, { color: INK }]}>{focusNote}</Text>
+                </View>
+              ))}
+            </Tile>
+          </Animated.View>
+
+          <Animated.View entering={enter(2)}>
+            <Card style={styles.section}>
+              <Text accessibilityRole="header" style={[typography.title3, { color: c.textPrimary }]}>
+                {t('reportPerMedication')}
+              </Text>
+              {visibleMeds.length === 0 ? (
+                <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('reportNoDataInWindow')}</Text>
+              ) : (
+                visibleMeds.map((row, index) => (
+                  <MedicationBar
+                    key={row.id}
+                    label={row.label}
+                    value={medicationValue(row)}
+                    pct={row.asNeeded ? null : row.pct}
+                    delay={stagger(index) + 200}
+                  />
+                ))
+              )}
+              {hiddenMeds > 0 ? (
+                <Text style={[typography.footnote, { color: c.textTertiary }]}>
+                  {t('reportExtraMedications').replace('{count}', hiddenMeds.toString())}
+                </Text>
+              ) : null}
+            </Card>
+          </Animated.View>
+
+          <Animated.View entering={enter(3)}>
+            <Card style={[styles.section, { gap: spacing(1) }]}>
+              <Text accessibilityRole="header" style={[typography.title3, { color: c.textPrimary, marginBottom: spacing(2) }]}>
+                {t('reportMissedDetailsTitle')}
+              </Text>
+              {visibleMissed.length === 0 ? (
+                <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('reportNoMissedInPeriod')}</Text>
+              ) : (
+                visibleMissed.map((row, index) => (
+                  <View
+                    key={`${row.requestId}-${row.scheduledAt.toISOString()}`}
+                    style={[styles.missedRow, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator }]}
                   >
-                    {summary.pct}%
-                  </Text>
-                  <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('takenOnSchedule')}</Text>
-                </View>
-                <AnimatedProgressBar progress={Math.min(1, Math.max(0, summary.pct / 100))} color={c.accent} height={8} />
-              </View>
-
-              <View style={[styles.paperSection, { borderTopColor: c.separator }]}>
-                <Text style={[typography.headline, { color: c.textPrimary }]}>{t('reportVisitFocusTitle')}</Text>
-                {focusNotes.map((focusNote) => (
-                  <View key={focusNote} style={styles.bullet}>
-                    <Text style={[typography.subhead, { color: c.accent }]}>•</Text>
-                    <Text style={[typography.subhead, styles.bulletText, { color: c.textPrimary }]}>{focusNote}</Text>
+                    <Text numberOfLines={1} style={[typography.callout, styles.flexText, { color: c.textPrimary, fontFamily: font.bold }]}>
+                      {row.label}
+                    </Text>
+                    <Text style={[typography.subhead, { color: c.destructive, fontFamily: font.semibold, fontVariant: ['tabular-nums'] }]}>
+                      {row.dateLabel}
+                    </Text>
                   </View>
-                ))}
-              </View>
+                ))
+              )}
+              {hiddenMissed > 0 ? (
+                <Text style={[typography.footnote, { color: c.textTertiary }]}>
+                  {t('reportExtraMissedRows').replace('{count}', hiddenMissed.toString())}
+                </Text>
+              ) : null}
+            </Card>
+          </Animated.View>
 
-              <View style={[styles.paperSection, { borderTopColor: c.separator }]}>
-                <Text style={[typography.headline, { color: c.textPrimary }]}>{t('reportPerMedication')}</Text>
-                {visibleMeds.length === 0 ? (
-                  <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('reportNoDataInWindow')}</Text>
-                ) : (
-                  <View>
-                    {visibleMeds.map((row, index) => (
-                      <PaperRow key={row.id} isFirst={index === 0} label={row.label} value={medicationValue(row)} />
-                    ))}
+          <Animated.View entering={enter(4)}>
+            <SectionHeader title={t('reportClinicianSummaryTitle')} />
+            <ListGroup>
+              <ListRow
+                isFirst
+                title={t('reportFactTotalLogged').replace('{count}', summary.denominator.toString())}
+                subtitle={t('reportFactTotalLoggedHint')}
+                leading={
+                  <View style={[styles.factIcon, { backgroundColor: sky.bg }]}>
+                    <Ionicons name="stats-chart-outline" size={18} color={sky.fg} />
                   </View>
-                )}
-                {hiddenMeds > 0 ? (
-                  <Text style={[typography.footnote, { color: c.textTertiary }]}>
-                    {t('reportExtraMedications').replace('{count}', hiddenMeds.toString())}
-                  </Text>
-                ) : null}
-              </View>
-
-              <View style={[styles.paperSection, { borderTopColor: c.separator }]}>
-                <Text style={[typography.headline, { color: c.textPrimary }]}>{t('reportMissedDetailsTitle')}</Text>
-                {visibleMissed.length === 0 ? (
-                  <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('reportNoMissedInPeriod')}</Text>
-                ) : (
-                  <View>
-                    {visibleMissed.map((row, index) => (
-                      <PaperRow
-                        key={`${row.requestId}-${row.scheduledAt.toISOString()}`}
-                        isFirst={index === 0}
-                        label={row.label}
-                        value={row.dateLabel}
-                      />
-                    ))}
+                }
+              />
+              <ListRow
+                title={t('reportFactMissed').replace('{count}', summary.missedRows.length.toString())}
+                subtitle={t('reportFactMissedHint')}
+                leading={
+                  <View style={[styles.factIcon, { backgroundColor: c.tones.rose.bg }]}>
+                    <Ionicons name="alert-circle-outline" size={18} color={c.tones.rose.fg} />
                   </View>
-                )}
-                {hiddenMissed > 0 ? (
-                  <Text style={[typography.footnote, { color: c.textTertiary }]}>
-                    {t('reportExtraMissedRows').replace('{count}', hiddenMissed.toString())}
-                  </Text>
-                ) : null}
-              </View>
+                }
+              />
+            </ListGroup>
+          </Animated.View>
 
-              <Text style={[typography.caption, { color: c.textTertiary }]}>{t('reportPdfDisclaimer')}</Text>
-            </View>
-          </Card>
-        </Animated.View>
-
-        <Animated.View entering={enter(1)}>
-          <SectionHeader title={t('reportClinicianSummaryTitle')} />
-          <ListGroup>
-            <ListRow
-              isFirst
-              title={t('reportFactTotalLogged').replace('{count}', summary.denominator.toString())}
-              subtitle={t('reportFactTotalLoggedHint')}
-              leading={
-                <View style={[styles.factIcon, { backgroundColor: `${c.accent}14` }]}>
-                  <Ionicons name="stats-chart-outline" size={15} color={c.accent} />
-                </View>
-              }
+          <Animated.View entering={enter(5)} style={{ gap: spacing(3) }}>
+            <Button
+              kind="outline"
+              label={t('exportMedicationListCta')}
+              icon={<Ionicons name="list-outline" size={20} color={c.textPrimary} />}
+              onPress={() => void exportMedicationList()}
+              disabled={exporting}
             />
-            <ListRow
-              title={t('reportFactMissed').replace('{count}', summary.missedRows.length.toString())}
-              subtitle={t('reportFactMissedHint')}
-              leading={
-                <View style={[styles.factIcon, { backgroundColor: `${c.destructive}1A` }]}>
-                  <Ionicons name="alert-circle-outline" size={16} color={c.destructive} />
-                </View>
-              }
-            />
-          </ListGroup>
-        </Animated.View>
-      </Stack>
-    </PageShell>
+            <Text style={[typography.footnote, styles.footnote, { color: c.textTertiary }]}>
+              {t('reportFormula')} {t('reportPdfDisclaimer')}
+            </Text>
+          </Animated.View>
+        </Stack>
+        {/* Room for the sticky action bar. */}
+        <View style={{ height: 72 + insets.bottom }} />
+      </PageShell>
+
+      <View
+        style={[
+          styles.actionBar,
+          { backgroundColor: c.background, borderTopColor: c.separator, paddingBottom: Math.max(insets.bottom, spacing(4)) },
+        ]}
+      >
+        {exporting ? (
+          <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('preparingPdf')}</Text>
+        ) : note ? (
+          <Text
+            accessibilityRole={note.tone === 'error' ? 'alert' : undefined}
+            style={[typography.footnote, { color: note.tone === 'error' ? c.destructive : c.textSecondary }]}
+          >
+            {note.text}
+          </Text>
+        ) : null}
+        <View style={styles.actionRow}>
+          <Button
+            size="lg"
+            label={t('exportPdf')}
+            accentIcon="share-outline"
+            onPress={() => void exportPdf()}
+            loading={exporting}
+            style={styles.flexText}
+          />
+          <Button
+            kind="outline"
+            size="lg"
+            fullWidth={false}
+            label={t('reportPrint')}
+            onPress={() => void printReport()}
+            disabled={exporting}
+          />
+        </View>
+      </View>
+    </View>
   );
 }
 
+/** One per-medication line: name and figure, with a bar that fills in (as-needed plans show a count, no bar). */
+const MedicationBar = ({ label, value, pct, delay }: { label: string; value: string; pct: number | null; delay: number }) => {
+  const { c } = useTokens();
+  const { reduce } = useMotion();
+  const target = Math.max(0, Math.min(100, pct ?? 0));
+  const fill = useSharedValue(reduce ? target : 0);
+
+  useEffect(() => {
+    fill.value = reduce ? target : withDelay(delay, withSpring(target, motion.spring.settle));
+  }, [delay, fill, reduce, target]);
+
+  const fillStyle = useAnimatedStyle(() => ({ width: `${fill.value}%` }));
+
+  return (
+    <View style={{ gap: spacing(1.5) }}>
+      <View style={styles.medHead}>
+        <Text numberOfLines={1} style={[typography.callout, styles.flexText, { color: c.textPrimary, fontFamily: font.bold }]}>
+          {label}
+        </Text>
+        <Text style={[typography.callout, { color: pct === null ? c.textSecondary : c.textPrimary, fontFamily: pct === null ? font.regular : font.bold, fontVariant: ['tabular-nums'] }]}>
+          {value}
+        </Text>
+      </View>
+      {pct === null ? null : (
+        <View style={[styles.medTrack, { backgroundColor: c.surfaceRaised }]}>
+          <Animated.View style={[styles.medFill, { backgroundColor: c.textPrimary }, fillStyle]} />
+        </View>
+      )}
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
-  paper: { borderRadius: radius.lg },
+  paper: { padding: spacing(5.5), gap: spacing(4) },
   paperShadow: {
+    shadowColor: INK,
     shadowOpacity: 0.12,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
     elevation: 4,
   },
-  paperInner: { padding: spacing(5), gap: spacing(4) },
-  paperSection: {
-    gap: spacing(2),
-    paddingTop: spacing(4),
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  paperRow: {
+  wordmarkRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing(2) },
+  wordmark: { fontFamily: font.displayHeavy, fontSize: 22, lineHeight: 26, letterSpacing: -0.6 },
+  scoreRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(4) },
+  meta: { gap: spacing(0.5), paddingTop: spacing(3), borderTopWidth: StyleSheet.hairlineWidth },
+  section: { padding: spacing(5), gap: spacing(3.5) },
+  bullet: { flexDirection: 'row', gap: spacing(2.5) },
+  bulletDot: { width: 8, height: 8, borderRadius: 4, marginTop: 8 },
+  flexText: { flex: 1, minWidth: 0 },
+  medHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing(3) },
+  medTrack: { height: 10, borderRadius: radius.full, overflow: 'hidden' },
+  medFill: { height: '100%', borderRadius: radius.full },
+  missedRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: spacing(3),
-    paddingVertical: spacing(2),
+    minHeight: 48,
   },
-  paperRowLabel: { flex: 1, minWidth: 0 },
-  bullet: { flexDirection: 'row', gap: spacing(2) },
-  bulletText: { flex: 1, minWidth: 0 },
   factIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: radius.md,
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  footnote: { paddingHorizontal: spacing(1), lineHeight: 21 },
+  actionBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingTop: spacing(3),
+    paddingHorizontal: spacing(5),
+    gap: spacing(2),
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  actionRow: { flexDirection: 'row', gap: spacing(2.5), width: '100%', maxWidth: 640, alignSelf: 'center' },
 });

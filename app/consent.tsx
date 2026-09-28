@@ -1,18 +1,22 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
-import Animated from 'react-native-reanimated';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Button,
   Card,
+  INK,
   PageShell,
-  Stack,
+  TaktMark,
+  font,
   radius,
   spacing,
   typography,
   useMotion,
+  type IconName,
+  type ToneName,
 } from '@/components/ui';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useEnsurePatient, useRecordConsent } from '@/lib/hooks/use-takt-mutations';
@@ -21,11 +25,16 @@ import { useLocale } from '@/lib/takt/l10n';
 import { requestReminderPermissionsAtConsent } from '@/lib/takt/reminders';
 import { useTokens } from '@/theme/use-tokens';
 
+/*
+ * First-launch health-data consent: the brand lead (mark + display
+ * headline), three plain points in tinted circles, the safety line, and
+ * one ink call to action.
+ */
 export default function ConsentScreen() {
   const router = useRouter();
   const { t } = useLocale();
   const { c } = useTokens();
-  const { enter } = useMotion();
+  const { enter, stagger, reduce } = useMotion();
   const patient = usePrimaryPatient();
   const ensurePatient = useEnsurePatient();
   const consent = useRecordConsent();
@@ -51,19 +60,22 @@ export default function ConsentScreen() {
 
   const busy = consent.isPending || ensurePatient.isPending || patient.isLoading;
 
-  const trustPoints = [
+  const trustPoints: { icon: IconName; tone: ToneName; title: string; description: string }[] = [
     {
-      icon: 'lock-closed-outline' as const,
+      icon: 'lock-closed-outline',
+      tone: 'apricot',
       title: t('consentPillarStandardTitle'),
       description: t('consentPillarStandardDescription'),
     },
     {
-      icon: 'notifications-outline' as const,
+      icon: 'notifications-outline',
+      tone: 'sky',
       title: t('consentPillarRemindersTitle'),
       description: t('consentPillarRemindersDescription'),
     },
     {
-      icon: 'document-text-outline' as const,
+      icon: 'document-text-outline',
+      tone: 'butter',
       title: t('consentPillarReportTitle'),
       description: t('consentPillarReportDescription'),
     },
@@ -71,92 +83,66 @@ export default function ConsentScreen() {
 
   return (
     <PageShell>
-      <Stack>
-        {/* Shield Hero */}
-        <Card>
-          <View style={{ padding: spacing(5), alignItems: 'center', gap: spacing(3) }}>
-            <View
-              style={{
-                width: 68,
-                height: 68,
-                borderRadius: radius.xl,
-                backgroundColor: `${c.accent}1A`,
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderWidth: 1,
-                borderColor: `${c.accent}33`,
-              }}
-            >
-              <Ionicons name="shield-checkmark" size={36} color={c.accent} />
-            </View>
+      <View style={styles.page}>
+        <Animated.View entering={reduce ? undefined : FadeInDown.duration(420)} style={styles.lead}>
+          <TaktMark size={56} />
+          <Text style={[typography.headline, { color: c.textSecondary }]}>{t('consentTitle')}</Text>
+          <Text accessibilityRole="header" style={[typography.largeTitle, { color: c.textPrimary }]}>
+            {t('consentHeadline')}
+          </Text>
+          <Text style={[typography.body, { color: c.textSecondary }]}>{t('consentBody')}</Text>
+        </Animated.View>
 
-            <View style={{ alignItems: 'center', gap: spacing(1) }}>
-              <Text style={[typography.title2, { color: c.textPrimary, textAlign: 'center' }]}>
-                {t('consentTitle')}
-              </Text>
-              <Text
-                style={[
-                  typography.subhead,
-                  { color: c.textSecondary, textAlign: 'center', lineHeight: 22, marginTop: 4 },
-                ]}
-              >
-                {t('consentBody')}
-              </Text>
-            </View>
-          </View>
-        </Card>
-
-        {/* 3 Pillars of Trust */}
-        <View style={{ gap: spacing(3) }}>
+        <View style={styles.points}>
           {trustPoints.map((point, index) => (
-            <Animated.View key={point.icon} entering={enter(index)}>
+            <Animated.View key={point.icon} entering={enter(index + 2)}>
               <Card>
-              <View style={{ padding: spacing(4), flexDirection: 'row', gap: spacing(3.5), alignItems: 'flex-start' }}>
-                <View
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: radius.md,
-                    backgroundColor: `${c.accent}14`,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginTop: 2,
-                  }}
-                >
-                  <Ionicons name={point.icon} size={20} color={c.accent} />
+                <View style={styles.point}>
+                  <View style={[styles.pointIcon, { backgroundColor: c.tones[point.tone].bg }]}>
+                    <Ionicons name={point.icon} size={20} color={INK} />
+                  </View>
+                  <View style={styles.flex}>
+                    <Text style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>{point.title}</Text>
+                    <Text style={[typography.subhead, { color: c.textSecondary }]}>{point.description}</Text>
+                  </View>
                 </View>
-
-                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                  <Text style={[typography.headline, { color: c.textPrimary }]}>{point.title}</Text>
-                  <Text style={[typography.footnote, { color: c.textSecondary, lineHeight: 18 }]}>
-                    {point.description}
-                  </Text>
-                </View>
-              </View>
               </Card>
             </Animated.View>
           ))}
         </View>
 
-        {/* Safety Note + permission disclosure */}
-        <Card>
-          <View style={{ padding: spacing(4), flexDirection: 'row', gap: spacing(3), alignItems: 'flex-start' }}>
-            <Ionicons name="information-circle-outline" size={20} color={c.textSecondary} />
-            <View style={{ flex: 1, gap: spacing(1.5) }}>
-              <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('safetyNote')}</Text>
-              <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('consentPermissionsHint')}</Text>
-            </View>
+        <Animated.View entering={enter(5)} style={styles.note}>
+          <Ionicons name="information-circle-outline" size={20} color={c.textSecondary} />
+          <View style={[styles.flex, { gap: spacing(1.5) }]}>
+            <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('safetyNote')}</Text>
+            <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('consentPermissionsHint')}</Text>
           </View>
-        </Card>
+        </Animated.View>
 
         {submitError ? (
-          <Text accessibilityRole="alert" style={[typography.footnote, { color: c.destructive, textAlign: 'center' }]}>
-            {submitError}
-          </Text>
+          <Animated.View entering={FadeIn.duration(220)} accessibilityRole="alert" style={[styles.error, { backgroundColor: c.tones.rose.bg }]}>
+            <Ionicons name="alert-circle" size={20} color={c.tones.rose.fg} />
+            <Text style={[typography.subhead, styles.flex, { color: INK }]}>{submitError}</Text>
+          </Animated.View>
         ) : null}
 
-        <Button label={t('acceptConsent')} onPress={() => void submit()} loading={busy} />
-      </Stack>
+        <Animated.View entering={reduce ? undefined : FadeInDown.delay(stagger(6)).duration(360)} style={styles.actions}>
+          <Button size="lg" accentIcon="arrow-forward" label={t('acceptConsent')} onPress={() => void submit()} loading={busy} />
+          <Button kind="ghost" label={t('privacyNotice')} onPress={() => router.push('/settings/privacy')} />
+        </Animated.View>
+      </View>
     </PageShell>
   );
 }
+
+const styles = StyleSheet.create({
+  page: { gap: spacing(5) },
+  lead: { gap: spacing(2.5) },
+  points: { gap: spacing(2.5) },
+  point: { padding: spacing(4), flexDirection: 'row', gap: spacing(3.5), alignItems: 'flex-start' },
+  pointIcon: { width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  flex: { flex: 1, minWidth: 0 },
+  note: { flexDirection: 'row', gap: spacing(3), alignItems: 'flex-start', paddingHorizontal: spacing(1) },
+  error: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), padding: spacing(3.5), borderRadius: radius.md },
+  actions: { gap: spacing(1) },
+});

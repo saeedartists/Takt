@@ -68,7 +68,6 @@ export function AnimatedSegmentedControl({
   return (
     <View
       onLayout={handleLayout}
-      accessibilityRole="tablist"
       style={[styles.wrap, { backgroundColor: track === 'surface' ? c.surface : c.surfaceRaised }, style]}
     >
       {segmentWidth > 0 ? (
@@ -84,7 +83,7 @@ export function AnimatedSegmentedControl({
               if (!active) triggerHaptic('light');
               onChange(option.value);
             }}
-            accessibilityRole="tab"
+            accessibilityRole="button"
             accessibilityState={{ selected: active }}
             style={styles.segment}
           >

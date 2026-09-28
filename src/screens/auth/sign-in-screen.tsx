@@ -1,14 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { View } from 'react-native';
-import { Button, Card, Field, Input, PageShell, Stack, spacing } from '@/components/ui';
+import { StyleSheet, View } from 'react-native';
+import { Button, Field, Input, PageShell, spacing } from '@/components/ui';
 import { env } from '@/lib/env';
 import { ovokClient } from '@/lib/ovok-client';
 import { CONSENT_STORAGE_KEY } from '@/lib/takt/constants';
 import { mapAuthError } from '@/lib/takt/auth-errors';
 import { useLocale } from '@/lib/takt/l10n';
-import { AuthBanner, AuthHero, AuthLinkRow, PasswordInput } from './auth-shared';
+import { AuthBanner, AuthBlock, AuthHero, AuthLinkRow, PasswordInput } from './auth-shared';
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -68,25 +68,25 @@ export default function SignInScreen() {
 
   return (
     <PageShell>
-      <Stack>
-        <AuthHero icon="medkit" title={t('appName')} description={t('authSignInDescription')} />
+      <View style={styles.page}>
+        <AuthHero title={t('authWelcomeBack')} description={t('authSignInDescription')} />
 
-        <Card>
-          <View style={{ padding: spacing(4), gap: spacing(3.5) }}>
-            <Field label={t('authEmailLabel')} error={emailError}>
-              <Input
-                value={email}
-                onChangeText={setEmail}
-                invalid={Boolean(emailError)}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                textContentType="emailAddress"
-                autoComplete="email"
-                placeholder={t('authEmailPlaceholder')}
-              />
-            </Field>
+        <AuthBlock index={2}>
+          <Field label={t('authEmailLabel')} error={emailError}>
+            <Input
+              value={email}
+              onChangeText={setEmail}
+              invalid={Boolean(emailError)}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              autoComplete="email"
+              placeholder={t('authEmailPlaceholder')}
+            />
+          </Field>
 
+          <View>
             <Field label={t('authPasswordLabel')} error={passwordError}>
               <PasswordInput
                 value={password}
@@ -98,26 +98,28 @@ export default function SignInScreen() {
                 onSubmitEditing={() => void submit()}
               />
             </Field>
-
-            <View style={{ alignItems: 'flex-end' }}>
-              <AuthLinkRow
-                label={`${t('authForgotPasswordCta')}?`}
-                onPress={() => router.push('/auth/reset-password' as never)}
-              />
-            </View>
-
-            {errorText ? <AuthBanner tone="destructive" message={errorText} /> : null}
-
-            <Button label={t('authSignInTitle')} loading={busy} onPress={() => void submit()} />
+            <AuthLinkRow
+              align="flex-end"
+              label={`${t('authForgotPasswordCta')}?`}
+              onPress={() => router.push('/auth/reset-password' as never)}
+            />
           </View>
-        </Card>
 
-        <AuthLinkRow
-          prompt={t('authNoAccountYet')}
-          label={t('authCreateAccountCta')}
-          onPress={() => router.push('/auth/register' as never)}
-        />
-      </Stack>
+          {errorText ? <AuthBanner tone="destructive" message={errorText} /> : null}
+        </AuthBlock>
+
+        <AuthBlock index={4}>
+          <View style={styles.actions}>
+            <Button size="lg" accentIcon="arrow-forward" label={t('authSignInTitle')} loading={busy} onPress={() => void submit()} />
+            <Button kind="outline" label={t('authCreateAccountCta')} onPress={() => router.push('/auth/register' as never)} />
+          </View>
+        </AuthBlock>
+      </View>
     </PageShell>
   );
 }
+
+const styles = StyleSheet.create({
+  page: { gap: spacing(7) },
+  actions: { gap: spacing(3) },
+});

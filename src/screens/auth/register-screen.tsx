@@ -2,13 +2,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
-import { Button, Card, Field, Input, PageShell, Stack, spacing } from '@/components/ui';
+import { Button, Field, Input, PageShell, spacing } from '@/components/ui';
 import { env } from '@/lib/env';
 import { ovokClient } from '@/lib/ovok-client';
 import { mapAuthError } from '@/lib/takt/auth-errors';
 import { CONSENT_STORAGE_KEY } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
-import { AuthBanner, AuthHero, AuthLinkRow, PasswordInput } from './auth-shared';
+import { AuthBanner, AuthBlock, AuthHero, AuthLinkRow, PasswordInput } from './auth-shared';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -84,82 +84,81 @@ export default function RegisterScreen() {
 
   return (
     <PageShell>
-      <Stack>
-        <AuthHero icon="person-add" title={t('authRegisterHeaderTitle')} description={t('authRegisterDescription')} />
+      <View style={{ gap: spacing(7) }}>
+        <AuthHero title={t('authRegisterHeaderTitle')} description={t('authRegisterDescription')} />
 
-        <Card>
-          <View style={{ padding: spacing(4), gap: spacing(3) }}>
-            <Field label={t('authGivenNameLabel')} error={errors.name}>
-              <Input
-                value={name}
-                onChangeText={setName}
-                invalid={Boolean(errors.name)}
-                textContentType="givenName"
-                autoComplete="name-given"
-                placeholder={t('authGivenNamePlaceholder')}
-              />
-            </Field>
+        <AuthBlock index={2}>
+          <Field label={t('authGivenNameLabel')} error={errors.name}>
+            <Input
+              value={name}
+              onChangeText={setName}
+              invalid={Boolean(errors.name)}
+              textContentType="givenName"
+              autoComplete="name-given"
+              placeholder={t('authGivenNamePlaceholder')}
+            />
+          </Field>
 
-            <Field label={t('authFamilyNameLabel')} error={errors.surname}>
-              <Input
-                value={surname}
-                onChangeText={setSurname}
-                invalid={Boolean(errors.surname)}
-                textContentType="familyName"
-                autoComplete="name-family"
-                placeholder={t('authFamilyNamePlaceholder')}
-              />
-            </Field>
+          <Field label={t('authFamilyNameLabel')} error={errors.surname}>
+            <Input
+              value={surname}
+              onChangeText={setSurname}
+              invalid={Boolean(errors.surname)}
+              textContentType="familyName"
+              autoComplete="name-family"
+              placeholder={t('authFamilyNamePlaceholder')}
+            />
+          </Field>
 
-            <Field label={t('authEmailLabel')} error={errors.email}>
-              <Input
-                value={email}
-                onChangeText={setEmail}
-                invalid={Boolean(errors.email)}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                textContentType="emailAddress"
-                autoComplete="email"
-                placeholder={t('authEmailPlaceholder')}
-              />
-            </Field>
+          <Field label={t('authEmailLabel')} error={errors.email}>
+            <Input
+              value={email}
+              onChangeText={setEmail}
+              invalid={Boolean(errors.email)}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              autoComplete="email"
+              placeholder={t('authEmailPlaceholder')}
+            />
+          </Field>
 
-            <Field label={t('authPasswordLabel')} error={errors.password}>
-              <PasswordInput
-                value={password}
-                onChangeText={setPassword}
-                invalid={Boolean(errors.password)}
-                textContentType="newPassword"
-                autoComplete="password-new"
-                placeholder={t('authPasswordPlaceholder')}
-              />
-            </Field>
+          <Field label={t('authPasswordLabel')} error={errors.password}>
+            <PasswordInput
+              value={password}
+              onChangeText={setPassword}
+              invalid={Boolean(errors.password)}
+              textContentType="newPassword"
+              autoComplete="password-new"
+              placeholder={t('authPasswordPlaceholder')}
+            />
+          </Field>
 
-            <Field label={t('authPasswordConfirmLabel')} error={errors.passwordConfirm}>
-              <PasswordInput
-                value={passwordConfirm}
-                onChangeText={setPasswordConfirm}
-                invalid={Boolean(errors.passwordConfirm)}
-                textContentType="newPassword"
-                autoComplete="password-new"
-                placeholder={t('authPasswordConfirmPlaceholder')}
-                onSubmitEditing={() => void submit()}
-              />
-            </Field>
+          <Field label={t('authPasswordConfirmLabel')} error={errors.passwordConfirm}>
+            <PasswordInput
+              value={passwordConfirm}
+              onChangeText={setPasswordConfirm}
+              invalid={Boolean(errors.passwordConfirm)}
+              textContentType="newPassword"
+              autoComplete="password-new"
+              placeholder={t('authPasswordConfirmPlaceholder')}
+              onSubmitEditing={() => void submit()}
+            />
+          </Field>
 
-            {errorText ? <AuthBanner tone="destructive" message={errorText} /> : null}
+          {errorText ? <AuthBanner tone="destructive" message={errorText} /> : null}
+        </AuthBlock>
 
-            <Button label={t('authRegisterTitle')} loading={busy} onPress={() => void submit()} />
-          </View>
-        </Card>
-
-        <AuthLinkRow
-          prompt={t('authHaveAccount')}
-          label={t('authSignInTitle')}
-          onPress={() => router.push('/auth/sign-in' as never)}
-        />
-      </Stack>
+        <AuthBlock index={4}>
+          <Button size="lg" accentIcon="arrow-forward" label={t('authRegisterTitle')} loading={busy} onPress={() => void submit()} />
+          <AuthLinkRow
+            prompt={t('authHaveAccount')}
+            label={t('authSignInTitle')}
+            onPress={() => router.push('/auth/sign-in' as never)}
+          />
+        </AuthBlock>
+      </View>
     </PageShell>
   );
 }

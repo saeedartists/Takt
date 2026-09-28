@@ -6,7 +6,6 @@ import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 
 import {
   AnimatedPressable,
-  MIN_TOUCH_TARGET,
   radius,
   spacing,
   typography,
@@ -82,7 +81,8 @@ export const TimeField = ({
           styles.field,
           {
             backgroundColor: c.surface,
-            borderColor: invalid ? c.destructive : open ? c.accent : c.separator,
+            borderColor: invalid ? c.destructive : open ? c.textPrimary : c.separator,
+            borderWidth: open || invalid ? 2 : 1.5,
           },
         ]}
       >
@@ -94,7 +94,7 @@ export const TimeField = ({
         >
           {display}
         </Text>
-        <Ionicons name={mode === 'time' ? 'time-outline' : 'calendar-outline'} size={18} color={c.textSecondary} />
+        <Ionicons name={mode === 'time' ? 'time-outline' : 'calendar-outline'} size={20} color={c.textSecondary} />
       </AnimatedPressable>
 
       {open && Platform.OS === 'ios' ? (
@@ -118,13 +118,12 @@ export const TimeField = ({
 const styles = StyleSheet.create({
   wrap: { gap: spacing(2) },
   field: {
-    minHeight: MIN_TOUCH_TARGET,
+    minHeight: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing(2),
-    borderWidth: 1,
     borderRadius: radius.md,
-    paddingHorizontal: spacing(3),
+    paddingHorizontal: spacing(4.5),
   },
 });

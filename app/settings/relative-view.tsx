@@ -1,6 +1,7 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Badge,
@@ -15,9 +16,16 @@ import {
   SectionHeader,
   SkeletonRow,
   Stack,
+  INK,
+  Tile,
+  TileIcon,
+  font,
   spacing,
   typography,
+  useMotion,
   useTokens,
+  type BadgeTone,
+  type IconName,
 } from '@/components/ui';
 import {
   useAccountEmail,
@@ -49,8 +57,18 @@ const statusKey = (state: DoseState) =>
           ? ('statusMissed' as const)
           : ('statusScheduled' as const);
 
+/* Status as a badge with an icon, so it never rests on colour alone. */
+const STATUS_BADGE: Record<DoseState, { tone: BadgeTone; icon: IconName }> = {
+  taken: { tone: 'success', icon: 'checkmark-circle' },
+  due: { tone: 'accent', icon: 'time-outline' },
+  missed: { tone: 'destructive', icon: 'alert-circle' },
+  skipped: { tone: 'neutral', icon: 'play-skip-forward-outline' },
+  scheduled: { tone: 'neutral', icon: 'ellipse-outline' },
+};
+
 export default function RelativeViewScreen() {
   const { c } = useTokens();
+  const { enter } = useMotion();
   const { t } = useLocale();
   const router = useRouter();
   const params = useLocalSearchParams<{ patientRef?: string; relatedPersonRef?: string }>();
@@ -157,18 +175,23 @@ export default function RelativeViewScreen() {
       <PageHeader title={title} subtitle={t('familySharingRelativeSubtitle')} />
       <Stack>
         {isPreview ? (
-          <Card>
-            <View style={{ padding: spacing(4), gap: spacing(2) }}>
-              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('familySharingRelativeGuardrail')}</Text>
+          <Animated.View entering={enter(0)}>
+            <Tile tone="sage" style={styles.guard}>
+              <View style={styles.guardRow}>
+                <TileIcon name="eye-outline" size={44} />
+                <Text style={[typography.body, styles.flex, { color: INK }]}>{t('familySharingRelativeGuardrail')}</Text>
+              </View>
               {previewGrant ? (
-                <Badge label={t('relativePreviewMode').replace('{name}', previewGrant.relatedPersonLabel)} tone="accent" />
+                <Text style={[typography.subhead, { color: c.tones.sage.fg, fontFamily: font.semibold }]}>
+                  {t('relativePreviewMode').replace('{name}', previewGrant.relatedPersonLabel)}
+                </Text>
               ) : null}
-            </View>
-          </Card>
+            </Tile>
+          </Animated.View>
         ) : null}
 
         {blocked ?? (
-          <View>
+          <Animated.View entering={enter(1)}>
             <SectionHeader
               title={t('timeline')}
               action={
@@ -180,6 +203,8 @@ export default function RelativeViewScreen() {
                         : t('sharedWithMeAllGood')
                     }
                     tone={unconfirmed > 0 ? 'warning' : 'success'}
+                    icon={unconfirmed > 0 ? 'time-outline' : 'checkmark-circle'}
+                    size="sm"
                   />
                 ) : undefined
               }
@@ -196,11 +221,13 @@ export default function RelativeViewScreen() {
                       isFirst={index === 0}
                       title={dose.label}
                       subtitle={doseSubtitle(dose)}
-                      meta={late ? <Badge label={t('relativeUnconfirmedBadge')} tone="warning" /> : undefined}
+                      meta={late ? <Badge size="sm" icon="time-outline" label={t('relativeUnconfirmedBadge')} tone="warning" /> : undefined}
                       trailing={
                         <Badge
+                          size="sm"
                           label={t(statusKey(dose.state))}
-                          tone={dose.state === 'taken' ? 'success' : dose.state === 'due' ? 'accent' : 'neutral'}
+                          tone={STATUS_BADGE[dose.state].tone}
+                          icon={STATUS_BADGE[dose.state].icon}
                         />
                       }
                     />
@@ -211,23 +238,34 @@ export default function RelativeViewScreen() {
             <Text style={[typography.footnote, { color: c.textTertiary, marginTop: spacing(2), paddingHorizontal: spacing(1) }]}>
               {t('familySharingOptionalQuietReminder')}
             </Text>
-          </View>
+          </Animated.View>
         )}
 
-        <View>
+        <Animated.View entering={enter(2)}>
           <SectionHeader title={t('familySharingRelativeBlockedTitle')} />
-          <ListGroup>
-            {lockedLines.map((line, index) => (
-              <ListRow
-                key={line}
-                isFirst={index === 0}
-                title={line}
-                trailing={<Ionicons name="close-circle" size={20} color={c.textTertiary} />}
-              />
-            ))}
-          </ListGroup>
-        </View>
+          <Card>
+            <View style={styles.locked}>
+              {lockedLines.map((line) => (
+                <View key={line} style={styles.lockedLine}>
+                  <View style={[styles.lockIcon, { backgroundColor: c.surfaceRaised }]}>
+                    <Ionicons name="lock-closed-outline" size={16} color={c.textSecondary} />
+                  </View>
+                  <Text style={[typography.body, styles.flex, { color: c.textSecondary }]}>{line}</Text>
+                </View>
+              ))}
+            </View>
+          </Card>
+        </Animated.View>
       </Stack>
     </PageShell>
   );
 }
+
+const styles = StyleSheet.create({
+  flex: { flex: 1, minWidth: 0 },
+  guard: { gap: spacing(3) },
+  guardRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3.5) },
+  locked: { padding: spacing(4.5), gap: spacing(3) },
+  lockedLine: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
+  lockIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+});

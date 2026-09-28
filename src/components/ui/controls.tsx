@@ -165,7 +165,9 @@ export const Button = ({
         ghost: { bg: 'transparent', fg: c.textPrimary },
         destructive: { bg: c.tones.rose.bg, fg: c.tones.rose.fg },
       };
-  const tone = palette[kind];
+  // Disabled reads as a quiet paper pill (spec: #E6E1D8 / grey label), never as a live ink button.
+  const muted = Boolean(disabled) && !loading;
+  const tone = muted && kind !== 'ghost' ? { bg: c.surfaceRaised, fg: c.textTertiary, border: undefined } : palette[kind];
   const withDot = kind === 'primary' && Boolean(accentIcon);
   const textStyle = size === 'sm' ? typography.subhead : typography.headline;
 
@@ -185,7 +187,6 @@ export const Button = ({
           backgroundColor: tone.bg,
           borderColor: tone.border ?? 'transparent',
           borderWidth: tone.border ? 1.5 : 0,
-          opacity: disabled && !loading ? 0.45 : 1,
           paddingLeft: withDot ? spacing(6.5) : spacing(5),
           paddingRight: withDot ? spacing(2) : spacing(5),
           justifyContent: withDot ? 'space-between' : 'center',
@@ -194,7 +195,8 @@ export const Button = ({
         style,
       ]}
     >
-      <View style={[styles.buttonInner, { opacity: loading ? 0 : 1 }]}>
+      {/* Fade lives on the content: AnimatedPressable owns the pressable's own opacity. */}
+      <View style={[styles.buttonInner, { opacity: loading ? 0 : muted && kind === 'ghost' ? 0.45 : 1 }]}>
         {icon}
         <Text
           numberOfLines={1}
@@ -204,8 +206,8 @@ export const Button = ({
         </Text>
       </View>
       {withDot && accentIcon ? (
-        <View style={[styles.dot, { width: height - 16, height: height - 16, backgroundColor: c.accentSoft }]}>
-          <Ionicons name={accentIcon} size={22} color={INK} />
+        <View style={[styles.dot, { width: height - 16, height: height - 16, backgroundColor: muted ? c.surface : c.accentSoft }]}>
+          <Ionicons name={accentIcon} size={22} color={muted ? c.textTertiary : INK} />
         </View>
       ) : null}
       {loading ? <ActivityIndicator color={tone.fg} style={StyleSheet.absoluteFill} /> : null}

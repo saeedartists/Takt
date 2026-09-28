@@ -3,7 +3,25 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Badge, Card, ListGroup, ListRow, PageShell, SectionHeader, SkeletonCard, Stack, spacing, typography, useTokens } from '@/components/ui';
+import Animated, { FadeIn } from 'react-native-reanimated';
+import {
+  Badge,
+  Card,
+  INK,
+  ListGroup,
+  ListRow,
+  PageShell,
+  SectionHeader,
+  SkeletonCard,
+  Stack,
+  Tile,
+  TileIcon,
+  radius,
+  spacing,
+  typography,
+  useMotion,
+  useTokens,
+} from '@/components/ui';
 import { ConfirmExpander } from '@/components/takt/confirm-expander';
 import { useConsentStatus } from '@/lib/hooks/use-consent-status';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
@@ -14,6 +32,7 @@ import { useLocale } from '@/lib/takt/l10n';
 /** What was agreed, when, under which version, and the one place to withdraw it. */
 export default function ConsentSettingsScreen() {
   const { c } = useTokens();
+  const { enter } = useMotion();
   const { t, formatDate } = useLocale();
   const router = useRouter();
   const patient = usePrimaryPatient();
@@ -44,47 +63,52 @@ export default function ConsentSettingsScreen() {
         {patient.isLoading || consent.isLoading ? (
           <SkeletonCard rows={2} />
         ) : (
-          <Card>
-            <View style={styles.cardBody}>
+          <Animated.View entering={enter(0)}>
+            <Tile tone={consent.isActive ? 'sage' : 'surface'} style={styles.hero}>
               <View style={styles.titleRow}>
-                <View style={[styles.icon, { backgroundColor: `${c.accent}1A` }]}>
-                  <Ionicons name="shield-checkmark" size={24} color={c.accent} />
-                </View>
-                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                  <Text style={[typography.headline, { color: c.textPrimary }]}>{t('consentTitle')}</Text>
-                  {givenOn ? (
-                    <Text style={[typography.subhead, { color: c.textSecondary }]}>
-                      {t('consentGivenOn').replace('{date}', givenOn)}
-                    </Text>
-                  ) : null}
-                </View>
+                <TileIcon name={consent.isActive ? 'shield-checkmark' : 'shield-outline'} size={48} color={consent.isActive ? INK : c.textPrimary} />
                 <Badge
                   label={consent.isActive ? t('consentStatusActive') : t('consentStatusInactive')}
-                  tone={consent.isActive ? 'success' : 'neutral'}
+                  tone={consent.isActive ? 'ink' : 'neutral'}
+                  icon={consent.isActive ? 'checkmark-circle' : 'remove-circle-outline'}
                 />
               </View>
-              <Text style={[typography.body, { color: c.textSecondary }]}>{t('consentBody')}</Text>
-              <Text style={[typography.footnote, { color: c.textTertiary }]}>
+              <View style={{ gap: 2 }}>
+                <Text accessibilityRole="header" style={[typography.title2, { color: consent.isActive ? INK : c.textPrimary }]}>
+                  {t('consentTitle')}
+                </Text>
+                {givenOn ? (
+                  <Text style={[typography.subhead, { color: consent.isActive ? c.tones.sage.fg : c.textSecondary }]}>
+                    {t('consentGivenOn').replace('{date}', givenOn)}
+                  </Text>
+                ) : null}
+              </View>
+              <Text style={[typography.body, { color: consent.isActive ? INK : c.textSecondary }]}>{t('consentBody')}</Text>
+              <Text style={[typography.footnote, { color: consent.isActive ? c.tones.sage.fg : c.textTertiary }]}>
                 {t('consentVersionLabel').replace('{version}', TAKT_CONSENT_VERSION)}
               </Text>
-            </View>
-          </Card>
+            </Tile>
+          </Animated.View>
         )}
 
         <ListGroup>
           <ListRow
             isFirst
             title={t('privacyNotice')}
-            leading={<Ionicons name="document-text-outline" size={20} color={c.textSecondary} />}
+            leading={
+              <View style={[styles.rowIcon, { backgroundColor: c.surfaceRaised }]}>
+                <Ionicons name="eye-outline" size={20} color={c.textPrimary} />
+              </View>
+            }
             onPress={() => router.push('/settings/privacy')}
           />
         </ListGroup>
 
-        <View>
+        <Animated.View entering={enter(1)}>
           <SectionHeader title={t('withdrawConsent')} />
           <Card>
             <View style={styles.cardBody}>
-              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('withdrawConsentHint')}</Text>
+              <Text style={[typography.body, { color: c.textSecondary }]}>{t('withdrawConsentHint')}</Text>
               <ConfirmExpander
                 open={confirm}
                 onOpen={() => setConfirm(true)}
@@ -98,20 +122,23 @@ export default function ConsentSettingsScreen() {
                 disabled={patient.isLoading}
               />
               {error ? (
-                <Text accessibilityRole="alert" style={[typography.footnote, { color: c.destructive }]}>
-                  {error}
-                </Text>
+                <Animated.View entering={FadeIn.duration(220)} accessibilityRole="alert" style={styles.errorRow}>
+                  <Ionicons name="alert-circle" size={18} color={c.destructive} />
+                  <Text style={[typography.subhead, { color: c.destructive, flex: 1 }]}>{error}</Text>
+                </Animated.View>
               ) : null}
             </View>
           </Card>
-        </View>
+        </Animated.View>
       </Stack>
     </PageShell>
   );
 }
 
 const styles = StyleSheet.create({
-  cardBody: { padding: spacing(4), gap: spacing(3) },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
-  icon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  cardBody: { padding: spacing(4.5), gap: spacing(3.5) },
+  hero: { gap: spacing(3.5), padding: spacing(5.5), borderRadius: radius.xxl },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing(3) },
+  rowIcon: { width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(2) },
 });

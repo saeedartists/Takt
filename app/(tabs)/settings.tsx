@@ -6,19 +6,25 @@ import Animated from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Badge,
-  Card,
+  INK,
   ListGroup,
   ListRow,
   PageHeader,
   PageShell,
   SectionHeader,
   Stack,
+  Tile,
+  TileIcon,
+  font,
   radius,
   spacing,
   typography,
   useMotion,
   useTheme,
+  useTileColors,
   useTokens,
+  type IconName,
+  type TileTone,
 } from '@/components/ui';
 import { ConfirmExpander } from '@/components/takt/confirm-expander';
 import { useConsentStatus } from '@/lib/hooks/use-consent-status';
@@ -34,7 +40,7 @@ type PermissionStatus = Awaited<ReturnType<typeof readReminderPermissionStatus>>
 type MessageKey = Parameters<ReturnType<typeof useLocale>['t']>[0];
 
 /** Internal QA boards. Rendered only in dev / mock builds. */
-const DEVELOPER_BOARDS: { key: MessageKey; route: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+const DEVELOPER_BOARDS: { key: MessageKey; route: string; icon: IconName }[] = [
   { key: 'reminderTestTitle', route: '/settings/reminder-test', icon: 'notifications-outline' },
   { key: 'reminderCertTitle', route: '/settings/reminder-certification', icon: 'ribbon-outline' },
   { key: 'reportReviewTitle', route: '/settings/report-review', icon: 'document-text-outline' },
@@ -46,13 +52,12 @@ const DEVELOPER_BOARDS: { key: MessageKey; route: string; icon: keyof typeof Ion
   { key: 'a11yPassTitle', route: '/settings/accessibility-pass', icon: 'accessibility-outline' },
 ];
 
-function RowIcon({ name, color }: { name: keyof typeof Ionicons.glyphMap; color: string }) {
+/** Plain ink glyph in a quiet circle: list rows stay calm next to the pastel tiles. */
+function RowIcon({ name }: { name: IconName }) {
   const { c } = useTokens();
-  // Alpha suffix only works on hex tokens; rgba tokens (textSecondary) fall back to the raised surface.
-  const backgroundColor = color.startsWith('#') ? `${color}1F` : c.surfaceRaised;
   return (
-    <View style={[styles.iconBadge, { backgroundColor }]}>
-      <Ionicons name={name} size={17} color={color} />
+    <View style={[styles.rowIcon, { backgroundColor: c.surfaceRaised }]}>
+      <Ionicons name={name} size={20} color={c.textPrimary} />
     </View>
   );
 }
@@ -67,14 +72,49 @@ function Section({ index, title, children }: { index: number; title?: string; ch
   );
 }
 
+/** One bento block: tone = meaning, icon top-left, title + live value underneath. */
+function SettingsTile({
+  index,
+  tone,
+  icon,
+  title,
+  value,
+  extra,
+  onPress,
+}: {
+  index: number;
+  tone: TileTone;
+  icon: IconName;
+  title: string;
+  value: string;
+  extra?: ReactNode;
+  onPress: () => void;
+}) {
+  const { enter } = useMotion();
+  const { fg } = useTileColors(tone);
+  return (
+    <Animated.View entering={enter(index)} style={styles.tileCell}>
+      <Tile tone={tone} onPress={onPress} accessibilityLabel={`${title}, ${value}`} style={styles.tile}>
+        <TileIcon name={icon} size={44} />
+        <View style={styles.tileText}>
+          <Text style={[typography.headline, styles.tileTitle]}>{title}</Text>
+          <Text style={[typography.subhead, { color: fg }]}>{value}</Text>
+          {extra}
+        </View>
+      </Tile>
+    </Animated.View>
+  );
+}
+
 /*
- * Settings — every feature that is not daily, as named rows with their
- * current value. Controls live one level down (Reminders, Appearance,
- * Consent) so nothing on this page has to be interpreted.
+ * Settings — who you are, then the four things people change most as
+ * pastel tiles (each tone keeps its one meaning), then legal and account
+ * rows. Controls live one level down so nothing here needs interpreting.
  */
 export default function SettingsTabScreen() {
   const router = useRouter();
   const { c } = useTokens();
+  const { enter } = useMotion();
   const { themeMode } = useTheme();
   const { locale, t, formatDate } = useLocale();
   const patient = usePrimaryPatient();
@@ -150,112 +190,116 @@ export default function SettingsTabScreen() {
       <PageHeader title={t('settings')} />
 
       <Stack>
-        <Section index={0}>
-          <ListGroup>
-            <ListRow
-              isFirst
-              title={fullName || t('profileSignedIn')}
-              subtitle={email ?? (fullName ? t('profileSignedIn') : undefined)}
-              leading={
-                <View style={[styles.avatar, { backgroundColor: `${c.accent}1F` }]}>
-                  <Text style={[typography.headline, { color: c.accent }]}>{initials || '·'}</Text>
-                </View>
-              }
-            />
-          </ListGroup>
-        </Section>
+        {/* Profile: lilac is the "you / profile" tone. */}
+        <Animated.View entering={enter(0)}>
+          <Tile tone="lilac" style={styles.profile}>
+            <View style={styles.avatar}>
+              <Text style={[typography.title2, { color: INK }]}>{initials || '·'}</Text>
+            </View>
+            <View style={styles.profileText}>
+              <Text numberOfLines={1} style={[typography.title3, { color: INK }]}>
+                {fullName || t('profileSignedIn')}
+              </Text>
+              {email || fullName ? (
+                <Text numberOfLines={1} style={[typography.subhead, { color: c.tones.lilac.fg }]}>
+                  {email ?? t('profileSignedIn')}
+                </Text>
+              ) : null}
+            </View>
+          </Tile>
+        </Animated.View>
 
-        <Section index={1}>
-          <ListGroup>
-            <ListRow
-              isFirst
+        <View style={styles.grid}>
+          <View style={styles.gridRow}>
+            <SettingsTile
+              index={1}
+              tone="sky"
+              icon="notifications-outline"
               title={t('reminders')}
-              subtitle={remindersSummary}
-              meta={permission === 'denied' ? <Badge label={t('notificationStatusDenied')} tone="warning" /> : undefined}
-              leading={<RowIcon name="notifications-outline" color={c.accent} />}
+              value={remindersSummary}
+              extra={
+                permission === 'denied' ? (
+                  <View style={styles.tileBadge}>
+                    <Badge size="sm" icon="alert-circle" label={t('notificationStatusDenied')} tone="warning" />
+                  </View>
+                ) : undefined
+              }
               onPress={() => router.push('/settings/reminders' as never)}
             />
-          </ListGroup>
-        </Section>
-
-        <Section index={2} title={t('careSection')}>
-          <ListGroup>
-            <ListRow
-              isFirst
-              title={t('familySharingRouteTitle')}
-              subtitle={familySummary}
-              leading={<RowIcon name="people-outline" color={c.accent} />}
-              onPress={() => router.push('/settings/family-sharing' as never)}
-            />
-            <ListRow
-              title={t('report')}
-              subtitle={t('reportRouteSubtitle')}
-              leading={<RowIcon name="document-text-outline" color={c.accent} />}
-              onPress={() => router.push('/report')}
-            />
-          </ListGroup>
-        </Section>
-
-        <Section index={3}>
-          <ListGroup>
-            <ListRow
-              isFirst
+            <SettingsTile
+              index={2}
+              tone="accent"
+              icon="color-palette-outline"
               title={t('appearance')}
-              subtitle={appearanceSummary}
-              leading={<RowIcon name="color-palette-outline" color={c.accent} />}
+              value={appearanceSummary}
               onPress={() => router.push('/settings/appearance' as never)}
             />
-          </ListGroup>
-        </Section>
+          </View>
+          <View style={styles.gridRow}>
+            <SettingsTile
+              index={3}
+              tone="sage"
+              icon="people-outline"
+              title={t('familySharingRouteTitle')}
+              value={familySummary}
+              onPress={() => router.push('/settings/family-sharing' as never)}
+            />
+            <SettingsTile
+              index={4}
+              tone="butter"
+              icon="document-text-outline"
+              title={t('report')}
+              value={t('reportRouteSubtitle')}
+              onPress={() => router.push('/report')}
+            />
+          </View>
+        </View>
 
-        <Section index={4} title={t('legal')}>
+        <Section index={5} title={t('legal')}>
           <ListGroup>
             <ListRow
               isFirst
               title={t('consentRouteTitle')}
               subtitle={consentSummary}
-              leading={<RowIcon name="shield-checkmark-outline" color={c.success} />}
+              leading={<RowIcon name="shield-checkmark-outline" />}
               onPress={() => router.push('/settings/consent' as never)}
             />
             <ListRow
               title={t('privacyNotice')}
-              leading={<RowIcon name="lock-closed-outline" color={c.textSecondary} />}
+              leading={<RowIcon name="eye-outline" />}
               onPress={() => router.push('/settings/privacy')}
             />
             <ListRow
               title={t('imprint')}
-              leading={<RowIcon name="information-circle-outline" color={c.textSecondary} />}
+              leading={<RowIcon name="information-circle-outline" />}
               onPress={() => router.push('/settings/imprint')}
             />
           </ListGroup>
         </Section>
 
         {env.ovokMockEnabled ? null : (
-          <Section index={5} title={t('accountSectionTitle')}>
-            <Card>
-              <View style={{ padding: spacing(4) }}>
-                <ConfirmExpander
-                  open={confirmSignOut}
-                  onOpen={() => setConfirmSignOut(true)}
-                  onCancel={() => setConfirmSignOut(false)}
-                  onConfirm={signOut}
-                  triggerLabel={t('signOut')}
-                  body={t('signOutConfirmBody')}
-                />
-              </View>
-            </Card>
+          <Section index={6}>
+            <ConfirmExpander
+              open={confirmSignOut}
+              onOpen={() => setConfirmSignOut(true)}
+              onCancel={() => setConfirmSignOut(false)}
+              onConfirm={signOut}
+              triggerLabel={t('signOut')}
+              triggerKind="outline"
+              body={t('signOutConfirmBody')}
+            />
           </Section>
         )}
 
         {showDeveloper ? (
-          <Section index={6} title={t('developerSection')}>
+          <Section index={7} title={t('developerSection')}>
             <ListGroup>
               {DEVELOPER_BOARDS.map((board, index) => (
                 <ListRow
                   key={board.route}
                   isFirst={index === 0}
                   title={t(board.key)}
-                  leading={<RowIcon name={board.icon} color={c.textSecondary} />}
+                  leading={<RowIcon name={board.icon} />}
                   onPress={() => router.push(board.route as never)}
                 />
               ))}
@@ -279,16 +323,26 @@ export default function SettingsTabScreen() {
 }
 
 const styles = StyleSheet.create({
-  iconBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.md,
+  profile: { flexDirection: 'row', alignItems: 'center', gap: spacing(3.5), borderRadius: radius.xxl },
+  avatar: {
+    width: 60,
+    height: 60,
+    borderRadius: radius.full,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatar: {
-    width: 44,
-    height: 44,
+  profileText: { flex: 1, minWidth: 0, gap: 2 },
+  grid: { gap: spacing(3) },
+  gridRow: { flexDirection: 'row', gap: spacing(3) },
+  tileCell: { flex: 1, minWidth: 0 },
+  tile: { flex: 1, gap: spacing(5), minHeight: 168, justifyContent: 'space-between' },
+  tileText: { gap: 2 },
+  tileTitle: { color: INK, fontFamily: font.bold, fontSize: 18 },
+  tileBadge: { marginTop: spacing(2) },
+  rowIcon: {
+    width: 40,
+    height: 40,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',

@@ -3,7 +3,21 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Badge, Button, ListGroup, ListRow, SectionHeader, spacing, typography, useTokens } from '@/components/ui';
+import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
+
+import {
+  Badge,
+  Button,
+  INK,
+  ListGroup,
+  ListRow,
+  SectionHeader,
+  Tile,
+  spacing,
+  typography,
+  useMotion,
+  useTokens,
+} from '@/components/ui';
 import {
   useAcceptSharedInvite,
   useAccountEmail,
@@ -22,6 +36,7 @@ import { useLocale } from '@/lib/takt/l10n';
  */
 export const SharedWithMeCard = () => {
   const { c } = useTokens();
+  const { enter, duration } = useMotion();
   const { t } = useLocale();
   const router = useRouter();
 
@@ -48,29 +63,35 @@ export const SharedWithMeCard = () => {
         ? t('sharedWithMeUnconfirmed').replace('{count}', unconfirmed.toString())
         : t('sharedWithMeAllGood');
 
+  const initial = (label: string) => label.trim()[0]?.toUpperCase() ?? '·';
+
   return (
     <View>
       <SectionHeader title={t('sharedWithMeTitle')} />
-      <ListGroup>
+      <View style={styles.list}>
         {rows.map((share, index) =>
           share.status === 'invited' ? (
-            <View
-              key={share.relatedPerson.id}
-              style={[styles.invite, index > 0 && { borderTopWidth: 1, borderTopColor: c.separator }]}
-            >
-              <Text style={[typography.body, { color: c.textPrimary }]}>
-                {t('sharedWithMeInviteBody').replace('{name}', share.patientLabel)}
-              </Text>
-              {acceptError ? (
-                <Text accessibilityRole="alert" style={[typography.footnote, { color: c.destructive }]}>
-                  {acceptError}
-                </Text>
-              ) : null}
-              <View style={styles.inviteActions}>
+            /* Sage = family: an invitation is a tile you can act on. */
+            <Animated.View key={share.relatedPerson.id} entering={enter(index)} layout={LinearTransition.duration(duration.base)}>
+              <Tile tone="sage" style={styles.invite}>
+                <View style={styles.inviteHead}>
+                  <View style={[styles.avatar, { backgroundColor: '#FFFFFF' }]}>
+                    <Text style={[typography.title3, { color: INK }]}>{initial(share.patientLabel)}</Text>
+                  </View>
+                  <Text style={[typography.body, styles.flex, { color: INK }]}>
+                    {t('sharedWithMeInviteBody').replace('{name}', share.patientLabel)}
+                  </Text>
+                </View>
+                {acceptError ? (
+                  <Animated.View entering={FadeIn.duration(duration.base)} accessibilityRole="alert" style={styles.error}>
+                    <Ionicons name="alert-circle" size={18} color={c.tones.rose.fg} />
+                    <Text style={[typography.subhead, styles.flex, { color: c.tones.rose.fg }]}>{acceptError}</Text>
+                  </Animated.View>
+                ) : null}
                 <Button
-                  size="sm"
+                  onTone
                   label={t('sharedWithMeAccept')}
-                  icon={<Ionicons name="checkmark" size={16} color={c.surface} />}
+                  accentIcon="checkmark"
                   loading={accept.isPending}
                   disabled={!ownRef}
                   haptic="success"
@@ -80,40 +101,49 @@ export const SharedWithMeCard = () => {
                     accept.mutateAsync({ share, accountRef: ownRef }).catch(() => setAcceptError(t('sharedWithMeAcceptError')));
                   }}
                 />
-              </View>
-            </View>
+              </Tile>
+            </Animated.View>
           ) : (
-            <ListRow
-              key={share.relatedPerson.id}
-              isFirst={index === 0}
-              title={share.patientLabel}
-              subtitle={share === firstAccepted ? statusLine : undefined}
-              trailing={
-                share === firstAccepted && firstToday.doses.length > 0 ? (
-                  <Badge
-                    label={unconfirmed > 0 ? unconfirmed.toString() : t('statusTaken')}
-                    tone={unconfirmed > 0 ? 'warning' : 'success'}
-                  />
-                ) : undefined
-              }
-              accessibilityLabel={`${share.patientLabel}, ${statusLine}`}
-              onPress={() =>
-                router.push({ pathname: '/settings/relative-view', params: { patientRef: share.patientRef } } as never)
-              }
-            />
+            <Animated.View key={share.relatedPerson.id} entering={enter(index)} layout={LinearTransition.duration(duration.base)}>
+              <ListGroup>
+                <ListRow
+                  isFirst
+                  title={share.patientLabel}
+                  subtitle={share === firstAccepted ? statusLine : undefined}
+                  leading={
+                    <View style={[styles.avatar, { backgroundColor: c.tones.sage.bg }]}>
+                      <Text style={[typography.title3, { color: INK }]}>{initial(share.patientLabel)}</Text>
+                    </View>
+                  }
+                  trailing={
+                    share === firstAccepted && firstToday.doses.length > 0 ? (
+                      <Badge
+                        size="sm"
+                        label={unconfirmed > 0 ? unconfirmed.toString() : t('statusTaken')}
+                        tone={unconfirmed > 0 ? 'warning' : 'success'}
+                        icon={unconfirmed > 0 ? 'time-outline' : 'checkmark-circle'}
+                      />
+                    ) : undefined
+                  }
+                  accessibilityLabel={`${share.patientLabel}, ${statusLine}`}
+                  onPress={() =>
+                    router.push({ pathname: '/settings/relative-view', params: { patientRef: share.patientRef } } as never)
+                  }
+                />
+              </ListGroup>
+            </Animated.View>
           ),
         )}
-      </ListGroup>
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  invite: {
-    padding: spacing(4),
-    gap: spacing(3),
-  },
-  inviteActions: {
-    flexDirection: 'row',
-  },
+  list: { gap: spacing(3) },
+  flex: { flex: 1, minWidth: 0 },
+  invite: { gap: spacing(4) },
+  inviteHead: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing(3) },
+  avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  error: { flexDirection: 'row', alignItems: 'center', gap: spacing(2) },
 });

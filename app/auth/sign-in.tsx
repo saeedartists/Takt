@@ -12,10 +12,10 @@ export default function SignInScreen() {
     <PageShell>
       <PageHeader title={t('authSignInTitle')} />
       <Stack>
-        <Text style={{ ...typography.body, textAlign: 'center', marginTop: spacing(6) }}>
+        <Text style={{ ...typography.body, color: c.textPrimary, textAlign: 'center', marginTop: spacing(6) }}>
           Sign in screen loading...
         </Text>
-        <Text style={{ ...typography.caption, textAlign: 'center', marginTop: spacing(2) }}>
+        <Text style={{ ...typography.caption, color: c.textSecondary, textAlign: 'center', marginTop: spacing(2) }}>
           This is a fallback screen. Please check your platform-specific files.
         </Text>
         <Button 

@@ -2,8 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack as RouterStack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Animated, { LinearTransition } from 'react-native-reanimated';
+import Animated, { LinearTransition, ZoomIn } from 'react-native-reanimated';
 import {
+  AnimatedNumber,
   AnimatedPressable,
   AnimatedProgressBar,
   Badge,
@@ -11,13 +12,16 @@ import {
   Card,
   EmptyState,
   ErrorState,
+  INK,
   ListGroup,
   ListRow,
+  PAPER,
   PageShell,
   SectionHeader,
   SkeletonCard,
   SkeletonRow,
   Stack,
+  Tile,
   motion,
   radius,
   spacing,
@@ -38,19 +42,26 @@ import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { TAKT_EXT } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
-import { MedicationGlyph } from '@/components/takt/medication-glyph';
+import { MedicationGlyph, glyphTint } from '@/components/takt/medication-glyph';
 import { describeCadence, describeInstruction } from '@/lib/takt/medication-form';
-import { parseDateOnly } from '@/lib/takt/schedule';
+import { buildHistory, parseDateOnly } from '@/lib/takt/schedule';
 import { LOW_SUPPLY_THRESHOLD, getSupplySnapshot, type SupplySnapshot } from '@/lib/takt/supply-tracker';
-import { isoDateKey } from '@/lib/takt/time';
 import type { MedicationAdministrationResource, MedicationPlan } from '@/lib/takt/types';
 
 const expand = LinearTransition.springify()
   .damping(motion.spring.gentle.damping)
   .stiffness(motion.spring.gentle.stiffness);
 
-const statusTone = (status: string): 'success' | 'warning' | 'destructive' =>
-  status === 'on-hold' ? 'warning' : status === 'stopped' ? 'destructive' : 'success';
+/** The tablet settles in: a small, unhurried scale from 85%, no overshoot. */
+const heroGlyphIn = ZoomIn.springify()
+  .damping(motion.spring.settle.damping)
+  .stiffness(motion.spring.settle.stiffness)
+  .withInitialValues({ transform: [{ scale: 0.85 }] });
+
+const timeIcon = (time: string): 'sunny-outline' | 'partly-sunny-outline' | 'moon-outline' => {
+  const hour = Number(time.slice(0, 2));
+  return hour < 12 ? 'sunny-outline' : hour < 18 ? 'partly-sunny-outline' : 'moon-outline';
+};
 
 const statusLabelKey = (status: string): 'statusActive' | 'statusPaused' | 'statusArchived' =>
   status === 'on-hold' ? 'statusPaused' : status === 'stopped' ? 'statusArchived' : 'statusActive';
@@ -64,9 +75,9 @@ const eventState = (event: MedicationAdministrationResource): 'taken' | 'skipped
 };
 
 export default function MedicationDetailsScreen() {
-  const { c } = useTokens();
+  const { c, isDark } = useTokens();
   const { t, formatDate, formatTime } = useLocale();
-  const { enter } = useMotion();
+  const { enter, reduce } = useMotion();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 
@@ -94,25 +105,25 @@ export default function MedicationDetailsScreen() {
     }, [reloadSupply]),
   );
 
-  // Recent logs, newest first, grouped by calendar day.
-  const dayGroups = useMemo(() => {
+  // Recent logs, newest first.
+  const recent = useMemo(() => {
     if (!plan) return [];
-    const related = (events.data?.entry ?? [])
+    return (events.data?.entry ?? [])
       .map((entry) => entry.resource)
       .filter((entry) => entry.request?.reference === `MedicationRequest/${plan.request.id}`)
       .map((event) => ({ event, at: new Date(eventTimestamp(event) ?? 0) }))
       .filter(({ at }) => !Number.isNaN(at.getTime()))
       .sort((a, b) => b.at.getTime() - a.at.getTime())
-      .slice(0, 8);
+      .slice(0, 6);
+  }, [events.data?.entry, plan]);
 
-    const groups = new Map<string, { date: Date; items: typeof related }>();
-    for (const item of related) {
-      const key = isoDateKey(item.at);
-      const group = groups.get(key) ?? { date: item.at, items: [] };
-      group.items.push(item);
-      groups.set(key, group);
-    }
-    return [...groups.entries()].map(([key, group]) => ({ key, ...group }));
+  // Share of scheduled doses taken over the last 14 days; as-needed plans have no schedule to keep.
+  const adherence = useMemo(() => {
+    if (!plan || plan.cadence === 'as-needed') return null;
+    const days = buildHistory([plan], (events.data?.entry ?? []).map((entry) => entry.resource), 14);
+    const taken = days.reduce((sum, day) => sum + day.taken, 0);
+    const denominator = days.reduce((sum, day) => sum + day.taken + day.skipped + day.missed, 0);
+    return { denominator, pct: denominator ? Math.round((taken / denominator) * 100) : 0 };
   }, [events.data?.entry, plan]);
 
   /** Resume and Restore are one tap; Pause and Archive go through the sheet because they ask a question. */
@@ -176,211 +187,231 @@ export default function MedicationDetailsScreen() {
   const cadenceText = describeCadence(plan, t);
   const instructionText = describeInstruction(plan, t);
   const courseEnd = parseDateOnly(plan.endDate);
-  const supplyTone =
-    supply && supply.count <= 0 ? 'destructive' : supply && supply.count <= LOW_SUPPLY_THRESHOLD ? 'warning' : 'neutral';
-  const supplyColor = supplyTone === 'destructive' ? c.destructive : supplyTone === 'warning' ? c.warning : c.accent;
+  const low = Boolean(supply && supply.count <= LOW_SUPPLY_THRESHOLD);
+
+  // The hero wears the tablet's own colour; without an appearance it falls back to the palette pastel.
+  const heroBg = plan.appearance ? glyphTint(plan.appearance.color, isDark) : c.accentSoft;
+  const heroInk = plan.appearance ? c.textPrimary : INK;
+  const heroSub = plan.appearance ? c.textSecondary : c.onAccentSoft;
+  const sky = c.tones.sky;
+  const lilac = c.tones.lilac;
+  const butter = c.tones.butter;
 
   return (
     <PageShell>
       <RouterStack.Screen options={{ title }} />
 
       <Stack>
-        {/* Hero: what it is */}
-        <Animated.View entering={enter(0)} layout={expand}>
-          <Card>
-            <View style={styles.cardBody}>
-              <View style={styles.heroRow}>
-                <MedicationGlyph appearance={plan.appearance} form={plan.form} size={52} />
-                <View style={styles.grow}>
-                  <Text style={[typography.title2, { color: c.textPrimary }]} numberOfLines={2}>
-                    {plan.label}
-                  </Text>
-                  <Text style={[typography.subhead, { color: c.textSecondary, marginTop: 2 }]}>
-                    {[plan.form || t('formNotSet'), plan.strength].filter(Boolean).join(' · ')}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.wrapRow}>
-                <Badge
-                  label={
-                    until
-                      ? t('pausedUntil').replace('{date}', formatDate(until, { day: 'numeric', month: 'short' }))
-                      : t(statusLabelKey(status))
-                  }
-                  tone={statusTone(status)}
-                />
-              </View>
-
-              <Button
-                kind="secondary"
-                label={t('editMedicationPlanCta')}
-                icon={<Ionicons name="create-outline" size={18} color={c.textPrimary} />}
-                onPress={() => router.push(`/medications/${plan.request.id}/edit`)}
-              />
-            </View>
-          </Card>
+        {/* Hero: what it is, in its own colour */}
+        <Animated.View entering={enter(0)} layout={expand} style={[styles.hero, { backgroundColor: heroBg }]}>
+          <Animated.View entering={reduce ? undefined : heroGlyphIn} style={styles.heroGlyph}>
+            <MedicationGlyph appearance={plan.appearance} form={plan.form} size={112} />
+          </Animated.View>
+          <Badge
+            label={
+              until
+                ? t('pausedUntil').replace('{date}', formatDate(until, { day: 'numeric', month: 'short' }))
+                : t(statusLabelKey(status))
+            }
+            tone={status === 'active' ? 'success' : 'neutral'}
+            icon={status === 'active' ? 'checkmark-circle' : status === 'on-hold' ? 'pause-circle' : 'archive'}
+          />
+          <View style={styles.heroText}>
+            <Text style={[typography.metric, { color: heroInk }]} numberOfLines={2} accessibilityRole="header">
+              {plan.label}
+            </Text>
+            <Text style={[typography.body, styles.heroSub, { color: heroSub }]}>
+              {[plan.form || t('formNotSet'), plan.strength].filter(Boolean).join(' · ')}
+            </Text>
+          </View>
         </Animated.View>
 
-        {/* Schedule: when, and whether it is running */}
+        {/* Schedule (sky): when */}
         <Animated.View entering={enter(1)} layout={expand}>
-          <SectionHeader title={t('medicationScheduleSectionTitle')} />
-          <Card>
-            <View style={styles.cardBody}>
-              <View style={{ gap: spacing(1) }}>
-                <Text style={[typography.overline, { color: c.textSecondary }]}>{t('medicationCadence')}</Text>
-                <Text style={[typography.body, { color: c.textPrimary }]}>{cadenceText}</Text>
-              </View>
-              {plan.cadence === 'as-needed' ? (
-                <View style={{ gap: spacing(1) }}>
-                  {plan.maxPerDay ? (
-                    <Text style={[typography.body, { color: c.textPrimary }]}>{t('asNeededUpTo').replace('{count}', String(plan.maxPerDay))}</Text>
-                  ) : null}
-                  <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('asNeededHint')}</Text>
-                </View>
-              ) : (
-              <View style={{ gap: spacing(1.5) }}>
-                <Text style={[typography.overline, { color: c.textSecondary }]}>{t('medicationTimes')}</Text>
-                <View style={styles.wrapRow}>
-                  {plan.times.map((time) => (
-                    <View key={time} style={[styles.timeChip, { backgroundColor: c.surfaceRaised, borderColor: c.separator }]}>
-                      <Ionicons name="time-outline" size={14} color={c.accent} />
-                      <Text style={[typography.subhead, { color: c.textPrimary, fontFamily: font.semibold, fontVariant: ['tabular-nums'] }]}>
-                        {time}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-              )}
-
-              {instructionText ? (
-                <View style={{ gap: spacing(1) }}>
-                  <Text style={[typography.overline, { color: c.textSecondary }]}>{t('instructionLabel')}</Text>
-                  <Text style={[typography.body, { color: c.textPrimary }]}>{instructionText}</Text>
-                </View>
-              ) : null}
-
-              {courseEnd ? (
-                <Text style={[typography.footnote, { color: c.textSecondary }]}>
-                  {t(status === 'stopped' ? 'courseEndedOn' : 'courseEndsOn').replace('{date}', formatDate(courseEnd, { day: 'numeric', month: 'long' }))}
-                </Text>
-              ) : null}
-
-              {status === 'active' ? (
-                <Button
-                  kind="secondary"
-                  label={t('pauseCta')}
-                  accessibilityLabel={t('pauseMedicationCta')}
-                  icon={<Ionicons name="pause-circle-outline" size={18} color={c.textPrimary} />}
-                  onPress={() => setSheet('pause')}
-                  disabled={statusUpdate.isPending}
-                />
-              ) : null}
-              {status === 'on-hold' ? (
-                <Button
-                  label={t('resumeCta')}
-                  accessibilityLabel={t('resumeMedicationCta')}
-                  icon={<Ionicons name="play-circle-outline" size={18} color={c.surface} />}
-                  onPress={() => void setActive(plan)}
-                  loading={statusUpdate.isPending}
-                />
-              ) : null}
-              {status === 'stopped' ? (
-                <Button
-                  label={t('restoreCta')}
-                  icon={<Ionicons name="refresh-circle-outline" size={18} color={c.surface} />}
-                  onPress={() => void setActive(plan)}
-                  loading={statusUpdate.isPending}
-                />
-              ) : null}
-              {statusError ? (
-                <Text accessibilityRole="alert" style={[typography.footnote, { color: c.destructive }]}>
-                  {statusError}
-                </Text>
-              ) : null}
+          <Tile tone="sky" style={styles.tileBody}>
+            <View style={styles.spaceBetween}>
+              <Text style={[typography.headline, { color: INK, fontFamily: font.bold }]}>{t('medicationCadence')}</Text>
+              <Text style={[typography.callout, { color: sky.fg, fontFamily: font.semibold, flexShrink: 1, textAlign: 'right' }]}>
+                {cadenceText}
+              </Text>
             </View>
-          </Card>
+            {plan.cadence === 'as-needed' ? (
+              <View style={{ gap: spacing(1) }}>
+                {plan.maxPerDay ? (
+                  <Text style={[typography.title3, { color: INK }]}>{t('asNeededUpTo').replace('{count}', String(plan.maxPerDay))}</Text>
+                ) : null}
+                <Text style={[typography.subhead, { color: sky.fg }]}>{t('asNeededHint')}</Text>
+              </View>
+            ) : (
+              <View style={styles.wrapRow} accessibilityLabel={`${t('medicationTimes')}: ${plan.times.join(', ')}`}>
+                {plan.times.map((time) => (
+                  <View key={time} style={styles.timeChip}>
+                    <Ionicons name={timeIcon(time)} size={20} color={sky.fg} />
+                    <Text style={[typography.title3, styles.timeText]}>{time}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            {instructionText ? <Text style={[typography.body, { color: sky.fg }]}>{instructionText}</Text> : null}
+            {courseEnd ? (
+              <Text style={[typography.subhead, { color: sky.fg }]}>
+                {t(status === 'stopped' ? 'courseEndedOn' : 'courseEndsOn').replace('{date}', formatDate(courseEnd, { day: 'numeric', month: 'long' }))}
+              </Text>
+            ) : null}
+          </Tile>
         </Animated.View>
 
-        {/* Supply: how much is left, and the refill */}
-        <Animated.View entering={enter(2)} layout={expand}>
-          <SectionHeader title={t('medicationSupplySectionTitle')} />
-          <Card>
-            <View style={styles.cardBody}>
-              {supply ? (
-                <>
+        {/* Adherence (lilac): only once there is something to measure */}
+        {adherence && adherence.denominator > 0 ? (
+          <Animated.View entering={enter(2)} layout={expand}>
+            <Tile tone="lilac" style={styles.adherence}>
+              <AnimatedNumber value={adherence.pct} suffix="%" style={[typography.metric, { color: INK }]} delay={200} />
+              <View style={styles.grow}>
+                <Text style={[typography.headline, { color: INK }]}>{t('takenOnSchedule')}</Text>
+                <Text style={[typography.subhead, { color: lilac.fg }]}>{t('adherenceWindow')}</Text>
+              </View>
+            </Tile>
+          </Animated.View>
+        ) : null}
+
+        {/* Supply (butter): how much is left, and the refill */}
+        <Animated.View entering={enter(3)} layout={expand}>
+          <Tile tone="butter" style={styles.tileBody}>
+            <Text style={[typography.headline, { color: INK, fontFamily: font.bold }]}>{t('medicationSupplySectionTitle')}</Text>
+            {supply ? (
+              <>
+                <View>
                   <View style={styles.spaceBetween}>
-                    <View>
-                      <Text style={[typography.metricSm, { color: supplyTone === 'neutral' ? c.textPrimary : supplyColor, fontVariant: ['tabular-nums'] }]}>
-                        {supply.count}
-                      </Text>
-                      <Text style={[typography.footnote, { color: c.textSecondary }]}>
-                        {t('supplyRemaining').replace('{count}', String(supply.count))}
+                    <AnimatedNumber value={supply.count} style={[typography.metric, { color: INK }]} delay={150} />
+                    <View style={styles.glassPill}>
+                      <Ionicons name={low ? 'alert-circle' : 'time-outline'} size={16} color={butter.fg} />
+                      <Text style={[typography.subhead, { color: butter.fg, fontFamily: font.bold }]}>
+                        {supply.count <= 0 ? t('supplyRefillNeeded') : t('supplyDaysLeft').replace('{days}', String(supply.daysUntilRefill))}
                       </Text>
                     </View>
-                    <Badge label={t('supplyDaysLeft').replace('{days}', String(supply.daysUntilRefill))} tone={supplyTone} />
                   </View>
-                  <AnimatedProgressBar progress={Math.min(1, supply.count / supply.capacity)} color={supplyColor} height={8} />
-                  <Text style={[typography.caption, { color: c.textSecondary }]}>
-                    {t('supplyLastRefilled')}:{' '}
-                    {supply.lastRefilledAt
-                      ? formatDate(new Date(supply.lastRefilledAt), { year: 'numeric', month: 'short', day: 'numeric' })
-                      : '—'}
+                  <Text style={[typography.subhead, { color: butter.fg }]}>
+                    {t('supplyRemaining').replace('{count}', String(supply.count))}
                   </Text>
-                </>
-              ) : (
-                <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('medicationSupplyOptional')}</Text>
-              )}
-              {status !== 'stopped' ? (
-                <Button
-                  kind="secondary"
-                  label={supply ? t('refillCta') : t('supplySet')}
-                  accessibilityLabel={t('logRefillCta')}
-                  icon={<Ionicons name="add-circle-outline" size={18} color={c.textPrimary} />}
-                  onPress={() => setSheet('refill')}
+                </View>
+                <AnimatedProgressBar
+                  progress={Math.max(0.02, Math.min(1, supply.count / supply.capacity))}
+                  color={butter.fg}
+                  backgroundColor="rgba(255,255,255,0.75)"
+                  height={12}
                 />
-              ) : null}
-            </View>
-          </Card>
+                <Text style={[typography.subhead, { color: butter.fg }]}>
+                  {t('supplyLastRefilled')}:{' '}
+                  {supply.lastRefilledAt
+                    ? formatDate(new Date(supply.lastRefilledAt), { year: 'numeric', month: 'short', day: 'numeric' })
+                    : '—'}
+                </Text>
+              </>
+            ) : (
+              <Text style={[typography.subhead, { color: butter.fg }]}>{t('medicationSupplyOptional')}</Text>
+            )}
+            {status !== 'stopped' ? (
+              <Button
+                onTone
+                label={supply ? t('logRefillCta') : t('supplySet')}
+                accessibilityLabel={t('logRefillCta')}
+                icon={<Ionicons name="add-circle-outline" size={20} color={PAPER} />}
+                onPress={() => setSheet('refill')}
+              />
+            ) : null}
+          </Tile>
         </Animated.View>
 
         {/* Recent dose logs */}
-        <Animated.View entering={enter(3)} layout={expand}>
+        <Animated.View entering={enter(4)} layout={expand}>
           <SectionHeader title={t('recentDoseLogsTitle')} />
-          {dayGroups.length === 0 ? (
+          {recent.length === 0 ? (
             <EmptyState title={t('noDoseLogsYetTitle')} description={t('noDoseLogsYetHint')} />
           ) : (
-            <View style={{ gap: spacing(3) }}>
-              {dayGroups.map((group) => (
-                <View key={group.key} style={{ gap: spacing(1.5) }}>
-                  <Text style={[typography.overline, { color: c.textSecondary, paddingHorizontal: spacing(1) }]}>
-                    {formatDate(group.date, { weekday: 'short', day: 'numeric', month: 'short' })}
-                  </Text>
-                  <ListGroup>
-                    {group.items.map(({ event, at }, index) => {
-                      const state = eventState(event);
-                      const dotColor = state === 'taken' ? c.success : state === 'skipped' ? c.warning : c.destructive;
-                      const label = state === 'taken' ? t('statusTaken') : state === 'skipped' ? t('statusSkipped') : t('statusMissed');
-                      return (
-                        <ListRow
-                          key={event.id}
-                          isFirst={index === 0}
-                          title={label}
-                          value={formatTime(at)}
-                          leading={<View style={[styles.dot, { backgroundColor: dotColor }]} />}
-                        />
-                      );
-                    })}
-                  </ListGroup>
-                </View>
-              ))}
-            </View>
+            <Card style={styles.recent}>
+              {recent.map(({ event, at }, index) => {
+                const state = eventState(event);
+                const tone = state === 'taken' ? c.tones.sage : state === 'skipped' ? c.tones.butter : c.tones.rose;
+                const label = state === 'taken' ? t('statusTaken') : state === 'skipped' ? t('statusSkipped') : t('statusMissed');
+                const icon = state === 'taken' ? 'checkmark' : state === 'skipped' ? 'remove' : 'close';
+                return (
+                  <Animated.View
+                    key={event.id}
+                    entering={enter(5 + index)}
+                    style={[styles.doseRow, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator }]}
+                  >
+                    <View style={[styles.doseDot, { backgroundColor: tone.bg }]}>
+                      <Ionicons name={icon} size={20} color={tone.fg} />
+                    </View>
+                    <View style={styles.grow}>
+                      <Text style={[typography.headline, { color: c.textPrimary }]}>
+                        {formatDate(at, { weekday: 'short', day: 'numeric', month: 'short' })} · {formatTime(at)}
+                      </Text>
+                      <Text style={[typography.subhead, { color: c.textSecondary }]}>{label}</Text>
+                    </View>
+                  </Animated.View>
+                );
+              })}
+            </Card>
           )}
         </Animated.View>
 
+        {/* Plan actions: edit, and pause / resume / restore */}
+        <Animated.View entering={enter(5)} layout={expand} style={{ gap: spacing(2) }}>
+          <View style={styles.actionRow}>
+            <View style={styles.grow}>
+              <Button
+                kind="secondary"
+                label={t('editPlanCta')}
+                accessibilityLabel={t('editMedicationPlanCta')}
+                icon={<Ionicons name="create-outline" size={18} color={c.textPrimary} />}
+                onPress={() => router.push(`/medications/${plan.request.id}/edit`)}
+                style={{ backgroundColor: c.surface }}
+              />
+            </View>
+            {status === 'active' ? (
+              <View style={styles.grow}>
+                <Button
+                  kind="outline"
+                  label={t('pauseCta')}
+                  accessibilityLabel={t('pauseMedicationCta')}
+                  icon={<Ionicons name="pause" size={18} color={c.textPrimary} />}
+                  onPress={() => setSheet('pause')}
+                  disabled={statusUpdate.isPending}
+                />
+              </View>
+            ) : null}
+            {status === 'on-hold' ? (
+              <View style={styles.grow}>
+                <Button
+                  label={t('resumeCta')}
+                  accessibilityLabel={t('resumeMedicationCta')}
+                  icon={<Ionicons name="play" size={18} color={c.onInk} />}
+                  onPress={() => void setActive(plan)}
+                  loading={statusUpdate.isPending}
+                />
+              </View>
+            ) : null}
+            {status === 'stopped' ? (
+              <View style={styles.grow}>
+                <Button
+                  label={t('restoreCta')}
+                  icon={<Ionicons name="refresh" size={18} color={c.onInk} />}
+                  onPress={() => void setActive(plan)}
+                  loading={statusUpdate.isPending}
+                />
+              </View>
+            ) : null}
+          </View>
+          {statusError ? (
+            <Text accessibilityRole="alert" style={[typography.footnote, { color: c.destructive }]}>
+              {statusError}
+            </Text>
+          ) : null}
+        </Animated.View>
+
         {/* Footer: rarely used, destructive last */}
-        <Animated.View entering={enter(4)} layout={expand}>
+        <Animated.View entering={enter(6)} layout={expand}>
           <ListGroup>
             <ListRow
               isFirst
@@ -416,27 +447,52 @@ export default function MedicationDetailsScreen() {
 }
 
 const styles = StyleSheet.create({
-  cardBody: { padding: spacing(4), gap: spacing(3.5) },
-  heroRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
+  hero: {
+    borderRadius: 36,
+    padding: spacing(6),
+    minHeight: 240,
+    overflow: 'hidden',
+    justifyContent: 'space-between',
+    gap: spacing(4),
+  },
+  heroGlyph: { position: 'absolute', top: spacing(2), right: spacing(2) },
+  heroText: { marginTop: spacing(10) },
+  heroSub: { fontSize: 18, marginTop: spacing(1.5) },
+  tileBody: { gap: spacing(3), padding: spacing(5) },
+  adherence: { flexDirection: 'row', alignItems: 'center', gap: spacing(4), padding: spacing(5) },
   grow: { flex: 1, minWidth: 0 },
-  wrapRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing(2) },
+  wrapRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing(2.5) },
   timeChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing(3),
-    paddingVertical: spacing(1.5),
+    gap: spacing(2),
+    minHeight: 52,
+    paddingLeft: spacing(3),
+    paddingRight: spacing(4.5),
     borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
+    backgroundColor: '#FFFFFF',
   },
-  spaceBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing(2) },
-  dot: { width: 10, height: 10, borderRadius: radius.full },
+  timeText: { color: INK, fontSize: 22, fontVariant: ['tabular-nums'] },
+  glassPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(1),
+    minHeight: 32,
+    paddingHorizontal: spacing(3),
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+  },
+  spaceBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing(3) },
+  recent: { paddingHorizontal: spacing(4.5), paddingVertical: spacing(1.5) },
+  doseRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), minHeight: 64, paddingVertical: spacing(2) },
+  doseDot: { width: 36, height: 36, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  actionRow: { flexDirection: 'row', gap: spacing(2.5) },
   destructiveRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(3),
-    minHeight: 52,
-    paddingHorizontal: spacing(4),
+    minHeight: 56,
+    paddingHorizontal: spacing(4.5),
     borderTopWidth: StyleSheet.hairlineWidth,
   },
 });

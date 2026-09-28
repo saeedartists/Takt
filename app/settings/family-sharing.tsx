@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeIn, FadeInDown, LinearTransition, ZoomIn } from 'react-native-reanimated';
 import {
   AnimatedPressable,
   AnimatedSegmentedControl,
@@ -11,6 +12,7 @@ import {
   EmptyState,
   ErrorState,
   Field,
+  INK,
   Input,
   ListGroup,
   ListRow,
@@ -19,9 +21,12 @@ import {
   SectionHeader,
   SkeletonCard,
   Stack,
+  Tile,
+  font,
   radius,
   spacing,
   typography,
+  useMotion,
   useTokens,
 } from '@/components/ui';
 import {
@@ -50,6 +55,7 @@ const isEmail = (value: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(va
 export default function FamilySharingScreen() {
   const { t, formatDateTime } = useLocale();
   const { c } = useTokens();
+  const { enter, stagger, duration, reduce } = useMotion();
   const router = useRouter();
 
   const patient = usePrimaryPatient();
@@ -155,16 +161,134 @@ export default function FamilySharingScreen() {
 
   const activeGrants = grants.grants.filter((grant) => grant.status === 'granted');
   const revokedGrants = grants.grants.filter((grant) => grant.status === 'revoked');
+  const ownName = patient.data?.name?.[0];
+  const ownInitial = (ownName?.given?.[0]?.[0] ?? ownName?.family?.[0] ?? '·').toUpperCase();
 
   return (
     <PageShell>
-      <PageHeader subtitle={t('familySharingSubtitle')} />
-
       <Stack>
-        <View>
+        {/* Hero: sage = family. You, the people who can see, and an open seat. */}
+        <Animated.View entering={enter(0)}>
+          <Tile tone="sage" style={styles.hero}>
+            <View style={styles.cluster} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <Avatar letter={ownInitial} bg={c.tones.lilac.bg} ring={c.tones.sage.bg} index={0} />
+              {activeGrants.slice(0, 2).map((grant, index) => (
+                <Avatar
+                  key={grant.id}
+                  letter={grant.relatedPersonLabel.trim()[0]?.toUpperCase() ?? '·'}
+                  bg={c.tones.apricot.bg}
+                  ring={c.tones.sage.bg}
+                  index={index + 1}
+                />
+              ))}
+              <Animated.View
+                entering={FadeIn.delay(stagger(activeGrants.slice(0, 2).length + 1) + 120)}
+                style={[styles.avatar, styles.avatarOverlap, styles.avatarOpen, { borderColor: c.tones.sage.solid }]}
+              >
+                <Ionicons name="add" size={24} color={c.tones.sage.fg} />
+              </Animated.View>
+            </View>
+            <Text accessibilityRole="header" style={[typography.title1, { color: INK }]}>
+              {t('familySharingHeroTitle')}
+            </Text>
+            <Text style={[typography.body, { color: c.tones.sage.fg }]}>{t('familySharingSubtitle')}</Text>
+          </Tile>
+        </Animated.View>
+
+        <Animated.View entering={enter(1)}>
+          <SectionHeader title={t('familySharingScopeTitle')} />
+          <Card>
+            <View style={styles.scope}>
+              {[t('familySharingAllowedLine1'), t('familySharingAllowedLine2')].map((line) => (
+                <ScopeLine key={line} allowed label={line} />
+              ))}
+              <View style={[styles.divider, { backgroundColor: c.separator }]} />
+              {[t('familySharingBlockedLine1'), t('familySharingBlockedLine2'), t('familySharingBlockedLine3')].map((line) => (
+                <ScopeLine key={line} label={line} />
+              ))}
+            </View>
+          </Card>
+        </Animated.View>
+
+        <Animated.View entering={enter(2)}>
+          <SectionHeader title={t('familySharingActiveListTitle').replace('{count}', activeGrants.length.toString())} />
+          {activeGrants.length === 0 ? (
+            <EmptyState title={t('familySharingNoGrants')} description={t('familySharingNoGrantsHint')} />
+          ) : (
+            <View style={styles.list}>
+              {activeGrants.map((grant) => {
+                const accepted = Boolean(grant.linkedAccountRef);
+                const revokeConfirm = pendingRevokeGrantId === grant.id;
+                const subtitle = accepted
+                  ? t('familySharingActiveSince').replace('{date}', formatDateTime(new Date(grant.acceptedAt ?? grant.grantedAt)))
+                  : t('familySharingInvitedWaiting').replace('{email}', grant.email ?? '');
+
+                return (
+                  <Animated.View key={grant.id} entering={FadeInDown.duration(duration.base)} layout={LinearTransition.duration(duration.base)}>
+                    <Card>
+                      <View style={styles.grantBody}>
+                        <View style={styles.grantHead}>
+                          <View style={[styles.avatar, { backgroundColor: c.tones.apricot.bg }]}>
+                            <Text style={[typography.title3, { color: INK }]}>
+                              {grant.relatedPersonLabel.trim()[0]?.toUpperCase() ?? '·'}
+                            </Text>
+                          </View>
+                          <View style={styles.flex}>
+                            <Text style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>
+                              {`${grant.relatedPersonLabel} · ${relationLabel(grant.relationshipCode)}`}
+                            </Text>
+                            <Text style={[typography.subhead, { color: c.textSecondary }]}>{subtitle}</Text>
+                          </View>
+                        </View>
+                        <Badge
+                          label={accepted ? t('statusActive') : t('familySharingStatusInvited')}
+                          tone={accepted ? 'success' : 'warning'}
+                          icon={accepted ? 'checkmark-circle' : 'time-outline'}
+                        />
+                        <View style={styles.grantActions}>
+                          <View>
+                            <Button
+                              kind="secondary"
+                              size="sm"
+                              label={t('familySharingPreviewCta')}
+                              icon={<Ionicons name="eye-outline" size={18} color={c.textPrimary} />}
+                              onPress={() =>
+                                router.push({
+                                  pathname: '/settings/relative-view',
+                                  params: { relatedPersonRef: grant.relatedPersonRef },
+                                } as never)
+                              }
+                            />
+                          </View>
+                          <View>
+                            <Button
+                              kind={revokeConfirm ? 'destructive' : 'outline'}
+                              size="sm"
+                              label={revokeConfirm ? t('familySharingRevokeConfirmCta') : t('familySharingRevokeCta')}
+                              loading={revokeMutation.isPending && revokeConfirm}
+                              disabled={revokeMutation.isPending || grantMutation.isPending}
+                              onPress={() => (revokeConfirm ? void revokeGrant(grant) : setPendingRevokeGrantId(grant.id))}
+                            />
+                          </View>
+                        </View>
+                        {revokeConfirm ? (
+                          <Animated.Text entering={FadeIn.duration(duration.base)} style={[typography.footnote, { color: c.textSecondary }]}>
+                            {t('familySharingRevokeConfirmHint')}
+                          </Animated.Text>
+                        ) : null}
+                      </View>
+                    </Card>
+                  </Animated.View>
+                );
+              })}
+            </View>
+          )}
+        </Animated.View>
+
+        <Animated.View entering={enter(3)} layout={LinearTransition.duration(duration.base)}>
           <SectionHeader title={t('familySharingAddTitle')} />
           <Card>
-            <View style={{ padding: spacing(4), gap: spacing(3) }}>
+            <View style={styles.form}>
               <Field label={t('familySharingFirstNameLabel')}>
                 <Input value={givenName} onChangeText={setGivenName} placeholder={t('familySharingFirstNamePlaceholder')} autoCapitalize="words" />
               </Field>
@@ -199,88 +323,48 @@ export default function FamilySharingScreen() {
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: consented }}
                 accessibilityLabel={consentText}
+                haptic="light"
+                scaleTo={0.98}
                 onPress={() => setConsented((value) => !value)}
-                style={[
-                  styles.consentRow,
-                  { borderColor: consented ? c.accent : c.separator, backgroundColor: consented ? `${c.accent}0F` : c.surface },
-                ]}
+                style={[styles.consentRow, { backgroundColor: c.surfaceSubtle, borderColor: consented ? c.textPrimary : c.separator }]}
               >
-                <Ionicons name={consented ? 'checkbox' : 'square-outline'} size={24} color={consented ? c.accent : c.textTertiary} />
-                <Text style={[typography.subhead, { color: c.textPrimary, flex: 1, minWidth: 0 }]}>{consentText}</Text>
+                <View style={[styles.box, { borderColor: c.textPrimary, backgroundColor: consented ? c.ink : 'transparent' }]}>
+                  {consented ? (
+                    <Animated.View entering={reduce ? undefined : ZoomIn.duration(180)}>
+                      <Ionicons name="checkmark" size={18} color={c.onInk} />
+                    </Animated.View>
+                  ) : null}
+                </View>
+                <Text style={[typography.subhead, styles.flex, { color: c.textPrimary }]}>{consentText}</Text>
               </AnimatedPressable>
 
               {submitError ? (
-                <Text accessibilityRole="alert" style={[typography.footnote, { color: c.destructive }]}>{submitError}</Text>
+                <Animated.View entering={FadeIn.duration(duration.base)} accessibilityRole="alert" style={styles.message}>
+                  <Ionicons name="alert-circle" size={18} color={c.destructive} />
+                  <Text style={[typography.subhead, styles.flex, { color: c.destructive }]}>{submitError}</Text>
+                </Animated.View>
               ) : null}
-              {successMessage ? <Text style={[typography.footnote, { color: c.success }]}>{successMessage}</Text> : null}
+              {successMessage ? (
+                <Animated.View entering={FadeIn.duration(duration.base)} style={styles.message}>
+                  <Ionicons name="checkmark-circle" size={18} color={c.success} />
+                  <Text style={[typography.subhead, styles.flex, { color: c.textPrimary }]}>{successMessage}</Text>
+                </Animated.View>
+              ) : null}
 
               <Button
+                size="lg"
                 label={t('familySharingGrantCta')}
-                icon={<Ionicons name="mail-outline" size={18} color={c.surface} />}
+                icon={<Ionicons name="mail-outline" size={20} color={c.onInk} />}
                 loading={grantMutation.isPending}
                 disabled={!canSubmit || revokeMutation.isPending}
                 onPress={() => void submitGrant()}
               />
             </View>
           </Card>
-        </View>
-
-        <View>
-          <SectionHeader title={t('familySharingActiveListTitle').replace('{count}', activeGrants.length.toString())} />
-          {activeGrants.length === 0 ? (
-            <EmptyState title={t('familySharingNoGrants')} description={t('familySharingNoGrantsHint')} />
-          ) : (
-            <Stack>
-              {activeGrants.map((grant) => {
-                const accepted = Boolean(grant.linkedAccountRef);
-                const revokeConfirm = pendingRevokeGrantId === grant.id;
-                const subtitle = accepted
-                  ? t('familySharingActiveSince').replace('{date}', formatDateTime(new Date(grant.acceptedAt ?? grant.grantedAt)))
-                  : t('familySharingInvitedWaiting').replace('{email}', grant.email ?? '');
-
-                return (
-                  <Card key={grant.id}>
-                    <ListRow
-                      isFirst
-                      title={`${grant.relatedPersonLabel} · ${relationLabel(grant.relationshipCode)}`}
-                      subtitle={subtitle}
-                      trailing={
-                        <Badge label={accepted ? t('statusActive') : t('familySharingStatusInvited')} tone={accepted ? 'success' : 'neutral'} />
-                      }
-                    />
-                    <View style={styles.grantActions}>
-                      <Button
-                        kind="secondary"
-                        size="sm"
-                        label={t('familySharingPreviewCta')}
-                        onPress={() =>
-                          router.push({
-                            pathname: '/settings/relative-view',
-                            params: { relatedPersonRef: grant.relatedPersonRef },
-                          } as never)
-                        }
-                      />
-                      <Button
-                        kind={revokeConfirm ? 'destructive' : 'secondary'}
-                        size="sm"
-                        label={revokeConfirm ? t('familySharingRevokeConfirmCta') : t('familySharingRevokeCta')}
-                        loading={revokeMutation.isPending && revokeConfirm}
-                        disabled={revokeMutation.isPending || grantMutation.isPending}
-                        onPress={() => (revokeConfirm ? void revokeGrant(grant) : setPendingRevokeGrantId(grant.id))}
-                      />
-                    </View>
-                    {revokeConfirm ? (
-                      <Text style={[typography.footnote, styles.hint, { color: c.textSecondary }]}>{t('familySharingRevokeConfirmHint')}</Text>
-                    ) : null}
-                  </Card>
-                );
-              })}
-            </Stack>
-          )}
-        </View>
+        </Animated.View>
 
         {revokedGrants.length > 0 ? (
-          <View>
+          <Animated.View entering={enter(4)}>
             <SectionHeader title={t('familySharingRevokedListTitle')} />
             <ListGroup>
               {revokedGrants.map((grant, index) => (
@@ -293,45 +377,82 @@ export default function FamilySharingScreen() {
                       ? `${t('familySharingRevokedAt')}: ${formatDateTime(new Date(grant.revokedAt))}`
                       : t('statusArchived')
                   }
-                  trailing={<Badge label={t('familySharingRevokedAt')} tone="neutral" />}
+                  trailing={<Badge label={t('familySharingRevokedAt')} tone="neutral" icon="close-circle-outline" />}
                 />
               ))}
             </ListGroup>
-          </View>
+          </Animated.View>
         ) : null}
-
-        <View>
-          <SectionHeader title={t('familySharingScopeTitle')} />
-          <ListGroup>
-            <ListRow isFirst title={t('familySharingAllowedLine1')} trailing={<Ionicons name="checkmark-circle" size={20} color={c.success} />} />
-            <ListRow title={t('familySharingAllowedLine2')} trailing={<Ionicons name="checkmark-circle" size={20} color={c.success} />} />
-            <ListRow title={t('familySharingBlockedLine1')} trailing={<Ionicons name="close-circle" size={20} color={c.textTertiary} />} />
-            <ListRow title={t('familySharingBlockedLine2')} trailing={<Ionicons name="close-circle" size={20} color={c.textTertiary} />} />
-            <ListRow title={t('familySharingBlockedLine3')} trailing={<Ionicons name="close-circle" size={20} color={c.textTertiary} />} />
-          </ListGroup>
-        </View>
       </Stack>
     </PageShell>
   );
 }
 
+/** A cluster avatar that pops in after the one before it. */
+function Avatar({ letter, bg, ring, index }: { letter: string; bg: string; ring: string; index: number }) {
+  const { stagger, reduce } = useMotion();
+  return (
+    <Animated.View
+      entering={reduce ? undefined : ZoomIn.delay(stagger(index) + 120).duration(260)}
+      style={[styles.avatar, styles.avatarLg, index > 0 && styles.avatarOverlap, { backgroundColor: bg, borderColor: ring }]}
+    >
+      <Text style={[typography.title2, { color: INK }]}>{letter}</Text>
+    </Animated.View>
+  );
+}
+
+/** Allowed / not allowed line: icon + words, so the meaning never rests on colour. */
+function ScopeLine({ label, allowed = false }: { label: string; allowed?: boolean }) {
+  const { c } = useTokens();
+  return (
+    <View style={styles.scopeLine}>
+      <View style={[styles.scopeIcon, { backgroundColor: allowed ? c.tones.sage.bg : c.surfaceRaised }]}>
+        <Ionicons name={allowed ? 'checkmark' : 'close'} size={18} color={allowed ? c.tones.sage.fg : c.textSecondary} />
+      </View>
+      <Text style={[typography.body, styles.flex, { color: allowed ? c.textPrimary : c.textSecondary }]}>{label}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  flex: { flex: 1, minWidth: 0 },
+  hero: { gap: spacing(3.5), padding: spacing(5.5), borderRadius: radius.xxl },
+  cluster: { flexDirection: 'row' },
+  avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  avatarLg: { width: 60, height: 60, borderRadius: 30, borderWidth: 3 },
+  avatarOverlap: { marginLeft: -14 },
+  avatarOpen: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2.5,
+    borderStyle: 'dashed',
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+  scope: { padding: spacing(4.5), gap: spacing(3) },
+  scopeLine: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
+  scopeIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  divider: { height: StyleSheet.hairlineWidth, marginVertical: spacing(1) },
+  list: { gap: spacing(3) },
+  grantBody: { padding: spacing(4.5), gap: spacing(3) },
+  grantHead: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
+  grantActions: { gap: spacing(2) },
+  form: { padding: spacing(4.5), gap: spacing(4) },
   consentRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing(3),
-    padding: spacing(3),
+    padding: spacing(3.5),
     borderRadius: radius.md,
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
-  grantActions: {
-    flexDirection: 'row',
-    gap: spacing(2),
-    paddingHorizontal: spacing(4),
-    paddingBottom: spacing(4),
+  box: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  hint: {
-    paddingHorizontal: spacing(4),
-    paddingBottom: spacing(3),
-  },
+  message: { flexDirection: 'row', alignItems: 'center', gap: spacing(2) },
 });

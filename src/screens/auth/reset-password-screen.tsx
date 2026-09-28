@@ -1,12 +1,12 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
-import { Button, Card, Field, Input, PageShell, SegmentedControl, Stack, spacing } from '@/components/ui';
+import { Button, Field, Input, PageShell, SegmentedControl, spacing } from '@/components/ui';
 import { env } from '@/lib/env';
 import { ovokClient } from '@/lib/ovok-client';
 import { mapAuthError } from '@/lib/takt/auth-errors';
 import { useLocale } from '@/lib/takt/l10n';
-import { AuthBanner, AuthHero, AuthLinkRow } from './auth-shared';
+import { AuthBanner, AuthBlock, AuthHero, AuthLinkRow } from './auth-shared';
 
 type ResetType = 'Patient' | 'Practitioner';
 
@@ -52,43 +52,43 @@ export default function ResetPasswordScreen() {
 
   return (
     <PageShell>
-      <Stack>
-        <AuthHero icon="key" title={t('authResetHeaderTitle')} description={t('authResetDescription')} />
+      <View style={{ gap: spacing(7) }}>
+        <AuthHero title={t('authResetHeaderTitle')} description={t('authResetDescription')} />
 
-        <Card>
-          <View style={{ padding: spacing(4), gap: spacing(3) }}>
-            <Field label={t('authResetTypeLabel')}>
-              <SegmentedControl
-                value={resetType}
-                onChange={(next) => setResetType(next as ResetType)}
-                options={[
-                  { value: 'Patient', label: t('authResetTypePatient') },
-                  { value: 'Practitioner', label: t('authResetTypePractitioner') },
-                ]}
-              />
-            </Field>
-            <Field label={t('authEmailLabel')} error={emailError}>
-              <Input
-                value={email}
-                onChangeText={setEmail}
-                invalid={Boolean(emailError)}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                textContentType="emailAddress"
-                autoComplete="email"
-                placeholder={t('authEmailPlaceholder')}
-                onSubmitEditing={() => void submit()}
-              />
-            </Field>
-            {sent ? <AuthBanner tone="success" message={t('authResetEmailSentBody')} /> : null}
-            {errorText ? <AuthBanner tone="destructive" message={errorText} /> : null}
-            <Button label={t('authResetPasswordTitle')} loading={busy} onPress={() => void submit()} />
-          </View>
-        </Card>
+        <AuthBlock index={2}>
+          <Field label={t('authResetTypeLabel')}>
+            <SegmentedControl
+              value={resetType}
+              onChange={(next) => setResetType(next as ResetType)}
+              options={[
+                { value: 'Patient', label: t('authResetTypePatient') },
+                { value: 'Practitioner', label: t('authResetTypePractitioner') },
+              ]}
+            />
+          </Field>
+          <Field label={t('authEmailLabel')} error={emailError}>
+            <Input
+              value={email}
+              onChangeText={setEmail}
+              invalid={Boolean(emailError)}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              autoComplete="email"
+              placeholder={t('authEmailPlaceholder')}
+              onSubmitEditing={() => void submit()}
+            />
+          </Field>
+          {sent ? <AuthBanner tone="success" message={t('authResetEmailSentBody')} /> : null}
+          {errorText ? <AuthBanner tone="destructive" message={errorText} /> : null}
+        </AuthBlock>
 
-        <AuthLinkRow label={t('authBackToSignIn')} onPress={() => router.push('/auth/sign-in' as never)} />
-      </Stack>
+        <AuthBlock index={4}>
+          <Button size="lg" accentIcon="arrow-forward" label={t('authResetPasswordTitle')} loading={busy} onPress={() => void submit()} />
+          <AuthLinkRow label={t('authBackToSignIn')} onPress={() => router.push('/auth/sign-in' as never)} />
+        </AuthBlock>
+      </View>
     </PageShell>
   );
 }

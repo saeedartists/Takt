@@ -1,8 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState, type ReactNode } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Platform, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
-import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+  ZoomIn,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -11,10 +20,17 @@ import {
   Card,
   CONTENT_MAX_WIDTH,
   Field,
+  INK,
+  IconButton,
   Input,
+  MIN_TOUCH_TARGET,
+  PAPER,
+  PageHeader,
   PageShell,
-  SectionHeader,
+  PillIcon,
   Stack,
+  Tile,
+  type IconName,
   motion,
   radius,
   spacing,
@@ -61,48 +77,139 @@ const expand = LinearTransition.springify()
   .damping(motion.spring.gentle.damping)
   .stiffness(motion.spring.gentle.stiffness);
 
-/** Selectable pill used for form, time, supply and refill amounts. */
+/** A chosen time pops in gently from 80%: settle spring, no overshoot. */
+const timeIn = ZoomIn.duration(motion.duration.base);
+
+// ponytail: on web, Reanimated leaves a chip stuck at position:absolute when layout + entering overlap; reflow is native-only.
+const chipLayout = Platform.OS === 'web' ? undefined : expand;
+
+/** Fill that eases between idle and selected instead of snapping. */
+const useSelectFill = (selected: boolean, idle: string, active: string) => {
+  const { duration } = useMotion();
+  const progress = useSharedValue(selected ? 1 : 0);
+  useEffect(() => {
+    progress.value = withTiming(selected ? 1 : 0, { duration: duration.base });
+  }, [duration.base, progress, selected]);
+  const style = useAnimatedStyle(() => ({ backgroundColor: interpolateColor(progress.value, [0, 1], [idle, active]) }));
+  // AnimatedPressable is an Animated component, so an animated style is fine in its style array.
+  return style as unknown as ViewStyle;
+};
+
+/**
+ * Selectable pill used for cadence, instruction, supply and refill amounts.
+ * Selected = ink. `onTone` when it sits on a pastel tile (tiles stay light in dark mode).
+ */
 export const Chip = ({
   label,
   selected = false,
   onPress,
   accessibilityLabel,
   trailing,
+  onTone = false,
 }: {
   label: string;
   selected?: boolean;
   onPress: () => void;
   accessibilityLabel?: string;
   trailing?: ReactNode;
+  onTone?: boolean;
 }) => {
   const { c } = useTokens();
+  const idle = onTone ? 'rgba(255,255,255,0.75)' : c.surfaceRaised;
+  const active = onTone ? INK : c.ink;
+  const fill = useSelectFill(selected, idle, active);
+  const fg = selected ? (onTone ? PAPER : c.onInk) : onTone ? INK : c.textPrimary;
   return (
     <AnimatedPressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ selected }}
-      hitSlop={4}
       onPress={onPress}
-      style={[
-        styles.chip,
-        {
-          backgroundColor: selected ? `${c.accent}20` : c.surfaceRaised,
-          borderColor: selected ? c.accent : c.separator,
-        },
-      ]}
+      style={[styles.chip, fill]}
     >
-      <Text
-        style={[
-          typography.subhead,
-          { color: selected ? c.accent : c.textSecondary, fontFamily: selected ? font.semibold : font.medium, fontVariant: ['tabular-nums'] },
-        ]}
-      >
+      {selected ? <Ionicons name="checkmark" size={16} color={fg} /> : null}
+      <Text style={[typography.callout, { color: fg, fontFamily: selected ? font.bold : font.semibold, fontVariant: ['tabular-nums'] }]}>
         {label}
       </Text>
       {trailing}
     </AnimatedPressable>
   );
 };
+
+const FORM_ICON: Record<(typeof FORM_PRESETS)[number] | 'Other', IconName | 'pill'> = {
+  Tablet: 'ellipse-outline',
+  Capsule: 'pill',
+  Drops: 'water-outline',
+  Inhaler: 'fitness-outline',
+  Syrup: 'beaker-outline',
+  Other: 'ellipsis-horizontal',
+};
+
+/** A form choice in the 3-column grid: icon over label, apricot and ink-edged when chosen. */
+const ChoiceTile = ({ label, icon, selected, onPress }: { label: string; icon: IconName | 'pill'; selected: boolean; onPress: () => void }) => {
+  const { c } = useTokens();
+  const fill = useSelectFill(selected, c.background, c.accentSoft);
+  const fg = selected ? INK : c.textPrimary;
+  return (
+    <AnimatedPressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      scaleTo={0.95}
+      style={[styles.choice, { borderColor: selected ? INK : 'transparent' }, fill]}
+    >
+      {selected ? (
+        <View style={styles.choiceCheck}>
+          <Ionicons name="checkmark-circle" size={20} color={INK} />
+        </View>
+      ) : null}
+      {icon === 'pill' ? <PillIcon size={26} color={fg} /> : <Ionicons name={icon} size={24} color={fg} />}
+      <Text numberOfLines={1} style={[typography.subhead, { color: fg, fontFamily: selected ? font.bold : font.semibold }]}>
+        {label}
+      </Text>
+    </AnimatedPressable>
+  );
+};
+
+/** Field for the form's cards and tiles: on a pastel tile the text stays ink. */
+const FormField = ({
+  label,
+  hint,
+  error,
+  onTone = false,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  error?: string | null;
+  onTone?: boolean;
+  children: ReactNode;
+}) => {
+  const { c } = useTokens();
+  if (!onTone) return <Field label={label} hint={hint} error={error}>{children}</Field>;
+  return (
+    <View style={{ gap: spacing(2) }}>
+      <Text style={[typography.subhead, { color: INK, fontFamily: font.bold }]}>{label}</Text>
+      {children}
+      {error ? (
+        <View accessibilityRole="alert" style={styles.errorRow}>
+          <Ionicons name="alert-circle" size={16} color={c.tones.rose.fg} />
+          <Text style={[typography.subhead, { color: c.tones.rose.fg, fontFamily: font.semibold, flex: 1 }]}>{error}</Text>
+        </View>
+      ) : hint ? (
+        <Text style={[typography.footnote, { color: INK, opacity: 0.78 }]}>{hint}</Text>
+      ) : null}
+    </View>
+  );
+};
+
+/** Card title inside a section: display face, optional icon. */
+const SectionTitle = ({ title, color }: { title: string; color: string }) => (
+  <Text accessibilityRole="header" style={[typography.title3, { color }]}>
+    {title}
+  </Text>
+);
 
 type Props = {
   mode: 'create' | 'edit';
@@ -122,6 +229,11 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
   const insets = useSafeAreaInsets();
 
   const [values, setValues] = useState<MedicationFormValues>(initialValues);
+  // Chips animate only when the user adds or removes one, not on first paint (the section already rises in).
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+  }, []);
   const [touched, setTouched] = useState<Partial<Record<keyof MedicationFormErrors, boolean>>>({});
   const [otherForm, setOtherForm] = useState(() => !isPreset(initialValues.form));
   const [addingTime, setAddingTime] = useState(false);
@@ -160,7 +272,6 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
     await onSubmit({ ...values, name: values.name.trim(), form: values.form.trim(), times: sortTimes(values.times) });
   };
 
-  const timeChips = [...values.times, ...TIME_PRESETS.filter((preset) => !values.times.includes(preset))];
   const asNeeded = values.cadence === 'as-needed';
 
   const cadenceOptions: { value: MedicationCadence; label: string }[] = [
@@ -171,11 +282,16 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
     { value: 'as-needed', label: t('cadenceAsNeeded') },
   ];
 
+  const stepSupply = (delta: number) => {
+    const next = Math.max(0, (Number.parseInt(values.supply, 10) || 0) + delta);
+    set('supply', String(next));
+  };
+
   const saveBar = (
     <View
       style={[
         styles.bar,
-        { backgroundColor: c.surface, borderTopColor: c.separator, paddingBottom: spacing(3) + insets.bottom },
+        { backgroundColor: c.background, borderTopColor: c.separator, paddingBottom: spacing(3) + insets.bottom },
       ]}
     >
       <View style={styles.barInner}>
@@ -185,7 +301,9 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
           </Text>
         ) : null}
         <Button
+          size="lg"
           label={mode === 'create' ? t('save') : t('saveChanges')}
+          icon={<Ionicons name="checkmark" size={22} color={c.onInk} />}
           onPress={() => void submit()}
           disabled={!isValid}
           loading={submitting}
@@ -195,319 +313,350 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
     </View>
   );
 
+  const sky = c.tones.sky;
+  const butter = c.tones.butter;
+
   return (
     <View style={[styles.screen, { backgroundColor: c.background }]}>
       <PageShell>
+        <PageHeader subtitle={mode === 'create' ? t('medicationSetupSubtitle') : undefined} />
         <Stack>
-          {/* Identity */}
+          {/* What: name, form, strength, and what the tablet looks like */}
           <Animated.View entering={enter(0)} layout={expand}>
-            <SectionHeader title={t('medicationIdentitySectionTitle')} />
-            <Card>
-              <View style={styles.cardBody}>
-                <Field label={t('medicationName')} error={shown('name')}>
-                  <Input
-                    value={values.name}
-                    onChangeText={(next) => set('name', next)}
-                    onBlur={() => touch('name')}
-                    placeholder={t('medicationNamePlaceholder')}
-                    invalid={Boolean(shown('name'))}
-                    autoCapitalize="words"
-                  />
-                </Field>
+            <Card style={styles.section}>
+              <SectionTitle title={t('medicationIdentitySectionTitle')} color={c.textPrimary} />
+              <Field label={t('medicationName')} error={shown('name')}>
+                <Input
+                  value={values.name}
+                  onChangeText={(next) => set('name', next)}
+                  onBlur={() => touch('name')}
+                  placeholder={t('medicationNamePlaceholder')}
+                  invalid={Boolean(shown('name'))}
+                  autoCapitalize="words"
+                />
+              </Field>
 
-                <Field label={t('medicationForm')}>
-                  <Animated.View layout={expand} style={styles.chips}>
-                    {FORM_PRESETS.map((preset) => (
-                      <Chip
-                        key={preset}
-                        label={t(FORM_LABEL_KEY[preset])}
-                        selected={!otherForm && values.form.toLowerCase() === preset.toLowerCase()}
-                        onPress={() => {
-                          setOtherForm(false);
-                          set('form', preset);
-                        }}
-                      />
-                    ))}
-                    <Chip
-                      label={t('formOther')}
-                      selected={otherForm}
+              <Field label={t('medicationForm')}>
+                <View style={styles.grid}>
+                  {FORM_PRESETS.map((preset) => (
+                    <ChoiceTile
+                      key={preset}
+                      label={t(FORM_LABEL_KEY[preset])}
+                      icon={FORM_ICON[preset]}
+                      selected={!otherForm && values.form.toLowerCase() === preset.toLowerCase()}
                       onPress={() => {
-                        setOtherForm(true);
-                        if (isPreset(values.form)) set('form', '');
+                        setOtherForm(false);
+                        set('form', preset);
                       }}
                     />
-                  </Animated.View>
-                  {otherForm ? (
-                    <Animated.View entering={FadeIn.duration(duration.fast)} exiting={FadeOut.duration(duration.fast)}>
-                      <Input
-                        value={values.form}
-                        onChangeText={(next) => set('form', next)}
-                        placeholder={t('medicationFormOtherPlaceholder')}
-                        autoFocus={!values.form}
-                      />
-                    </Animated.View>
-                  ) : null}
-                </Field>
-
-                <Field label={t('medicationStrength')}>
-                  <Input
-                    value={values.strength}
-                    onChangeText={(next) => set('strength', next)}
-                    placeholder={t('medicationStrengthPlaceholder')}
+                  ))}
+                  <ChoiceTile
+                    label={t('formOther')}
+                    icon={FORM_ICON.Other}
+                    selected={otherForm}
+                    onPress={() => {
+                      setOtherForm(true);
+                      if (isPreset(values.form)) set('form', '');
+                    }}
                   />
-                </Field>
+                </View>
+                {otherForm ? (
+                  <Animated.View entering={FadeIn.duration(duration.fast)} exiting={FadeOut.duration(duration.fast)}>
+                    <Input
+                      value={values.form}
+                      onChangeText={(next) => set('form', next)}
+                      placeholder={t('medicationFormOtherPlaceholder')}
+                      autoFocus={!values.form}
+                    />
+                  </Animated.View>
+                ) : null}
+              </Field>
+
+              <Field label={t('medicationStrength')}>
+                <Input
+                  value={values.strength}
+                  onChangeText={(next) => set('strength', next)}
+                  placeholder={t('medicationStrengthPlaceholder')}
+                />
+              </Field>
+
+              <View style={[styles.divider, { backgroundColor: c.separator }]} />
+
+              <View style={styles.previewRow}>
+                <MedicationGlyph appearance={{ shape: values.shape, color: values.color }} size={64} />
+                <View style={styles.grow}>
+                  <Text style={[typography.subhead, { color: c.textPrimary, fontFamily: font.semibold }]}>{t('appearance')}</Text>
+                  <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('appearanceHint')}</Text>
+                </View>
+              </View>
+              <View style={styles.chips}>
+                {SHAPE_OPTIONS.map((shape) => {
+                  const selected = values.shape === shape;
+                  return (
+                    <AnimatedPressable
+                      key={shape}
+                      accessibilityRole="button"
+                      accessibilityLabel={t(SHAPE_LABEL_KEY[shape])}
+                      accessibilityState={{ selected }}
+                      onPress={() => set('shape', shape)}
+                      style={[styles.shape, { borderColor: selected ? c.textPrimary : c.separator, borderWidth: selected ? 2 : 1.5 }]}
+                    >
+                      <MedicationGlyph appearance={{ shape, color: values.color }} size={32} />
+                      <Text style={[typography.subhead, { color: c.textPrimary, fontFamily: selected ? font.bold : font.medium }]}>
+                        {t(SHAPE_LABEL_KEY[shape])}
+                      </Text>
+                    </AnimatedPressable>
+                  );
+                })}
+              </View>
+              <View style={styles.chips} accessibilityRole="radiogroup">
+                {COLOR_OPTIONS.map((color) => {
+                  const selected = values.color === color;
+                  return (
+                    <AnimatedPressable
+                      key={color}
+                      accessibilityRole="radio"
+                      accessibilityLabel={color}
+                      accessibilityState={{ selected }}
+                      scaleTo={0.9}
+                      onPress={() => set('color', color)}
+                      style={[styles.swatchRing, { borderColor: selected ? c.textPrimary : 'transparent' }]}
+                    >
+                      <View style={[styles.swatch, { backgroundColor: color, borderColor: c.separator }]}>
+                        {selected ? <Ionicons name="checkmark" size={18} color={isPaleSwatch(color) ? INK : '#FFFFFF'} /> : null}
+                      </View>
+                    </AnimatedPressable>
+                  );
+                })}
               </View>
             </Card>
           </Animated.View>
 
-          {/* Appearance: what the tablet looks like */}
+          {/* When (sky): cadence, days, times, end date, how to take it */}
           <Animated.View entering={enter(1)} layout={expand}>
-            <SectionHeader title={t('appearance')} />
-            <Card>
-              <View style={styles.cardBody}>
-                <View style={styles.previewRow}>
-                  <MedicationGlyph appearance={{ shape: values.shape, color: values.color }} size={52} />
-                  <Text style={[typography.footnote, { color: c.textSecondary, flex: 1, minWidth: 0 }]}>{t('appearanceHint')}</Text>
-                </View>
+            <Tile tone="sky" style={styles.section}>
+              <SectionTitle title={t('medicationScheduleSectionTitle')} color={INK} />
+              <FormField onTone label={t('medicationCadence')} error={shown('days') ?? shown('interval')}>
                 <View style={styles.chips}>
-                  {SHAPE_OPTIONS.map((shape) => (
-                    <Chip key={shape} label={t(SHAPE_LABEL_KEY[shape])} selected={values.shape === shape} onPress={() => set('shape', shape)} />
+                  {cadenceOptions.map((option) => (
+                    <Chip
+                      key={option.value}
+                      onTone
+                      label={option.label}
+                      selected={values.cadence === option.value}
+                      onPress={() => set('cadence', option.value)}
+                    />
                   ))}
                 </View>
-                <View style={styles.chips} accessibilityRole="radiogroup">
-                  {COLOR_OPTIONS.map((color) => {
-                    const selected = values.color === color;
-                    return (
-                      <AnimatedPressable
-                        key={color}
-                        accessibilityRole="radio"
-                        accessibilityLabel={color}
-                        accessibilityState={{ selected }}
-                        hitSlop={4}
-                        onPress={() => set('color', color)}
-                        style={[styles.swatchRing, { borderColor: selected ? c.accent : 'transparent' }]}
-                      >
-                        <View style={[styles.swatch, { backgroundColor: color, borderColor: c.separator }]} />
-                      </AnimatedPressable>
-                    );
-                  })}
-                </View>
-              </View>
-            </Card>
-          </Animated.View>
 
-          {/* Schedule */}
-          <Animated.View entering={enter(2)} layout={expand}>
-            <SectionHeader title={t('medicationScheduleSectionTitle')} />
-            <Card>
-              <View style={styles.cardBody}>
-                <Field label={t('medicationCadence')} error={shown('days') ?? shown('interval')}>
-                  <Animated.View layout={expand} style={styles.chips}>
-                    {cadenceOptions.map((option) => (
-                      <Chip
-                        key={option.value}
-                        label={option.label}
-                        selected={values.cadence === option.value}
-                        onPress={() => set('cadence', option.value)}
-                      />
-                    ))}
+                {values.cadence === 'custom' ? (
+                  <Animated.View entering={FadeIn.duration(duration.base)} exiting={FadeOut.duration(duration.fast)} style={styles.expander}>
+                    <WeekdayPicker
+                      days={WEEKDAY_ORDER}
+                      selected={values.days}
+                      onToggle={toggleDay}
+                      labelFor={(day) => formatDayLabel(day, t)}
+                    />
                   </Animated.View>
+                ) : null}
 
-                  {values.cadence === 'custom' ? (
-                    <Animated.View entering={FadeIn.duration(duration.fast)} exiting={FadeOut.duration(duration.fast)} style={styles.expander}>
-                      <WeekdayPicker
-                        days={WEEKDAY_ORDER}
-                        selected={values.days}
-                        onToggle={toggleDay}
-                        labelFor={(day) => formatDayLabel(day, t)}
-                      />
-                    </Animated.View>
-                  ) : null}
-
-                  {values.cadence === 'interval' ? (
-                    <Animated.View entering={FadeIn.duration(duration.fast)} exiting={FadeOut.duration(duration.fast)} style={[styles.expander, { gap: spacing(3) }]}>
-                      <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('intervalDaysLabel')}</Text>
-                      <View style={styles.chips}>
-                        {INTERVAL_PRESETS.map((days) => (
-                          <Chip
-                            key={days}
-                            label={t('cadenceEveryDays').replace('{days}', days)}
-                            selected={values.intervalDays === days}
-                            onPress={() => {
-                              set('intervalDays', days);
-                              touch('interval');
-                            }}
-                          />
-                        ))}
-                        <View style={styles.smallInput}>
-                          <Input
-                            value={INTERVAL_PRESETS.includes(values.intervalDays) ? '' : values.intervalDays}
-                            onChangeText={(next) => {
-                              set('intervalDays', next.replace(/[^\d]/g, ''));
-                              touch('interval');
-                            }}
-                            keyboardType="number-pad"
-                            inputMode="numeric"
-                            placeholder={t('refillCustomPlaceholder')}
-                            accessibilityLabel={t('intervalDaysLabel')}
-                            style={styles.smallInputField}
-                          />
-                        </View>
-                      </View>
-                      <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('intervalStartLabel')}</Text>
-                      <TimeField
-                        mode="date"
-                        value={values.intervalStart}
-                        onChange={(next) => {
-                          set('intervalStart', next);
-                          touch('interval');
-                        }}
-                        accessibilityLabel={t('intervalStartLabel')}
-                      />
-                    </Animated.View>
-                  ) : null}
-                </Field>
-
-                {asNeeded ? (
-                  <Animated.View entering={FadeIn.duration(duration.fast)} exiting={FadeOut.duration(duration.fast)} style={{ gap: spacing(4) }}>
-                    <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('asNeededHint')}</Text>
-                    <Field label={t('maxPerDayLabel')} error={shown('maxPerDay')}>
-                      <Input
-                        value={values.maxPerDay}
-                        onChangeText={(next) => {
-                          set('maxPerDay', next.replace(/[^\d]/g, ''));
-                          touch('maxPerDay');
-                        }}
-                        keyboardType="number-pad"
-                        inputMode="numeric"
-                        placeholder="3"
-                        invalid={Boolean(shown('maxPerDay'))}
-                      />
-                    </Field>
-                  </Animated.View>
-                ) : (
-                  <Field label={t('medicationTimes')} hint={t('medicationTimesHint')} error={shown('times')}>
-                    <Animated.View layout={expand} style={styles.chips}>
-                      {timeChips.map((time) => {
-                        const selected = values.times.includes(time);
-                        return (
-                          <Chip
-                            key={time}
-                            label={time}
-                            selected={selected}
-                            accessibilityLabel={selected ? t('removeTimeLabel').replace('{time}', time) : time}
-                            onPress={() => (selected ? removeTime(time) : addTime(time))}
-                            trailing={selected ? <Ionicons name="close" size={14} color={c.accent} /> : null}
-                          />
-                        );
-                      })}
-                      {!addingTime ? (
+                {values.cadence === 'interval' ? (
+                  <Animated.View entering={FadeIn.duration(duration.base)} exiting={FadeOut.duration(duration.fast)} style={[styles.expander, { gap: spacing(3) }]}>
+                    <Text style={[typography.subhead, { color: sky.fg, fontFamily: font.semibold }]}>{t('intervalDaysLabel')}</Text>
+                    <View style={styles.chips}>
+                      {INTERVAL_PRESETS.map((days) => (
                         <Chip
-                          label={t('addTimeCta')}
+                          key={days}
+                          onTone
+                          label={t('cadenceEveryDays').replace('{days}', days)}
+                          selected={values.intervalDays === days}
+                          onPress={() => {
+                            set('intervalDays', days);
+                            touch('interval');
+                          }}
+                        />
+                      ))}
+                      <View style={styles.smallInput}>
+                        <Input
+                          value={INTERVAL_PRESETS.includes(values.intervalDays) ? '' : values.intervalDays}
+                          onChangeText={(next) => {
+                            set('intervalDays', next.replace(/[^\d]/g, ''));
+                            touch('interval');
+                          }}
+                          keyboardType="number-pad"
+                          inputMode="numeric"
+                          placeholder={t('refillCustomPlaceholder')}
+                          accessibilityLabel={t('intervalDaysLabel')}
+                          style={styles.smallInputField}
+                        />
+                      </View>
+                    </View>
+                    <Text style={[typography.subhead, { color: sky.fg, fontFamily: font.semibold }]}>{t('intervalStartLabel')}</Text>
+                    <TimeField
+                      mode="date"
+                      value={values.intervalStart}
+                      onChange={(next) => {
+                        set('intervalStart', next);
+                        touch('interval');
+                      }}
+                      accessibilityLabel={t('intervalStartLabel')}
+                    />
+                  </Animated.View>
+                ) : null}
+              </FormField>
+
+              {asNeeded ? (
+                <Animated.View entering={FadeIn.duration(duration.base)} exiting={FadeOut.duration(duration.fast)} style={{ gap: spacing(4) }}>
+                  <Text style={[typography.subhead, { color: sky.fg }]}>{t('asNeededHint')}</Text>
+                  <FormField onTone label={t('maxPerDayLabel')} error={shown('maxPerDay')}>
+                    <Input
+                      value={values.maxPerDay}
+                      onChangeText={(next) => {
+                        set('maxPerDay', next.replace(/[^\d]/g, ''));
+                        touch('maxPerDay');
+                      }}
+                      keyboardType="number-pad"
+                      inputMode="numeric"
+                      placeholder="3"
+                      invalid={Boolean(shown('maxPerDay'))}
+                    />
+                  </FormField>
+                </Animated.View>
+              ) : (
+                <FormField onTone label={t('medicationTimes')} hint={t('medicationTimesHint')} error={shown('times')}>
+                  <View style={styles.chips}>
+                    {values.times.map((time) => (
+                      <Animated.View key={`on-${time}`} entering={mounted.current ? timeIn : undefined} exiting={FadeOut.duration(duration.fast)} layout={chipLayout}>
+                        <AnimatedPressable
+                          accessibilityRole="button"
+                          accessibilityLabel={t('removeTimeLabel').replace('{time}', time)}
+                          onPress={() => removeTime(time)}
+                          style={styles.timeChip}
+                        >
+                          <Text style={[typography.title3, styles.timeText]}>{time}</Text>
+                          <Ionicons name="close-circle" size={22} color={sky.fg} />
+                        </AnimatedPressable>
+                      </Animated.View>
+                    ))}
+                    {TIME_PRESETS.filter((preset) => !values.times.includes(preset)).map((time) => (
+                      <Animated.View key={`off-${time}`} entering={mounted.current ? FadeIn.duration(duration.base) : undefined} exiting={FadeOut.duration(duration.fast)} layout={chipLayout}>
+                        <AnimatedPressable
+                          accessibilityRole="button"
+                          accessibilityLabel={time}
+                          onPress={() => addTime(time)}
+                          style={styles.timeSuggestion}
+                        >
+                          <Ionicons name="add" size={18} color={INK} />
+                          <Text style={[typography.callout, { color: INK, fontFamily: font.semibold, fontVariant: ['tabular-nums'] }]}>{time}</Text>
+                        </AnimatedPressable>
+                      </Animated.View>
+                    ))}
+                    {!addingTime ? (
+                      <Animated.View layout={chipLayout}>
+                        <AnimatedPressable
+                          accessibilityRole="button"
+                          accessibilityLabel={t('addTimeCta')}
                           onPress={() => {
                             setDraftTime(TIME_PRESETS.find((preset) => !values.times.includes(preset)) ?? '08:00');
                             setAddingTime(true);
                           }}
-                        />
-                      ) : null}
-                    </Animated.View>
-                    {addingTime ? (
-                      <Animated.View entering={FadeIn.duration(duration.fast)} exiting={FadeOut.duration(duration.fast)} style={styles.addRow}>
-                        <View style={styles.grow}>
-                          <TimeField mode="time" value={draftTime} onChange={setDraftTime} accessibilityLabel={t('selectTimeLabel')} autoFocus />
-                        </View>
-                        <Button size="sm" label={t('addTimeConfirm')} onPress={commitDraft} disabled={!isClockTime(draftTime)} />
-                        <AnimatedPressable
-                          accessibilityRole="button"
-                          accessibilityLabel={t('cancel')}
-                          onPress={() => setAddingTime(false)}
-                          style={[styles.iconButton, { backgroundColor: c.surfaceRaised, borderColor: c.separator }]}
+                          style={styles.addTime}
                         >
-                          <Ionicons name="close" size={18} color={c.textSecondary} />
+                          <Text style={[typography.callout, { color: INK, fontFamily: font.bold }]}>{t('addTimeCta')}</Text>
                         </AnimatedPressable>
                       </Animated.View>
                     ) : null}
-                  </Field>
-                )}
+                  </View>
+                  {addingTime ? (
+                    <Animated.View entering={FadeIn.duration(duration.fast)} exiting={FadeOut.duration(duration.fast)} style={styles.addRow}>
+                      <View style={styles.grow}>
+                        <TimeField mode="time" value={draftTime} onChange={setDraftTime} accessibilityLabel={t('selectTimeLabel')} autoFocus />
+                      </View>
+                      <Button onTone size="sm" fullWidth={false} label={t('addTimeConfirm')} onPress={commitDraft} disabled={!isClockTime(draftTime)} />
+                      <IconButton icon="close" accessibilityLabel={t('cancel')} onPress={() => setAddingTime(false)} />
+                    </Animated.View>
+                  ) : null}
+                </FormField>
+              )}
 
-                <Field label={t('endDateLabel')} hint={t('endDateHint')} error={shown('endDate')}>
-                  <TimeField
-                    mode="date"
-                    value={values.endDate}
-                    onChange={(next) => {
-                      set('endDate', next);
-                      touch('endDate');
-                    }}
-                    accessibilityLabel={t('endDateLabel')}
-                    invalid={Boolean(shown('endDate'))}
-                  />
-                </Field>
-              </View>
-            </Card>
-          </Animated.View>
+              <FormField onTone label={t('endDateLabel')} hint={t('endDateHint')} error={shown('endDate')}>
+                <TimeField
+                  mode="date"
+                  value={values.endDate}
+                  onChange={(next) => {
+                    set('endDate', next);
+                    touch('endDate');
+                  }}
+                  accessibilityLabel={t('endDateLabel')}
+                  invalid={Boolean(shown('endDate'))}
+                />
+              </FormField>
 
-          {/* How to take it */}
-          <Animated.View entering={enter(3)} layout={expand}>
-            <SectionHeader title={t('instructionLabel')} />
-            <Card>
-              <View style={styles.cardBody}>
+              <View style={[styles.divider, { backgroundColor: 'rgba(21,23,28,0.12)' }]} />
+
+              <FormField onTone label={t('instructionLabel')}>
                 <View style={styles.chips}>
                   {INSTRUCTION_OPTIONS.map((option) => (
                     <Chip
                       key={option}
+                      onTone
                       label={t(INSTRUCTION_LABEL_KEY[option])}
                       selected={values.instruction === option}
                       onPress={() => set('instruction', values.instruction === option ? '' : option)}
                     />
                   ))}
                 </View>
-                <Field label={t('instructionNoteLabel')}>
-                  <Input
-                    value={values.instructionNote}
-                    onChangeText={(next) => set('instructionNote', next)}
-                    placeholder={t('instructionNotePlaceholder')}
-                  />
-                </Field>
-              </View>
-            </Card>
+              </FormField>
+              <FormField onTone label={t('instructionNoteLabel')}>
+                <Input
+                  value={values.instructionNote}
+                  onChangeText={(next) => set('instructionNote', next)}
+                  placeholder={t('instructionNotePlaceholder')}
+                />
+              </FormField>
+            </Tile>
           </Animated.View>
 
-          {/* Supply */}
-          <Animated.View entering={enter(4)} layout={expand}>
-            <SectionHeader title={t('medicationSupplySectionTitle')} />
-            <Card>
-              <View style={styles.cardBody}>
-                <Field label={t('medicationSupplyOptional')} hint={supplyHint}>
+          {/* Supply (butter): a stepper, with quick pack sizes */}
+          <Animated.View entering={enter(2)} layout={expand}>
+            <Tile tone="butter" style={styles.section}>
+              <SectionTitle title={t('medicationSupplySectionTitle')} color={INK} />
+              <FormField onTone label={t('medicationSupplyOptional')} hint={supplyHint}>
+                <View style={styles.stepper}>
+                  <IconButton icon="remove" accessibilityLabel={t('supplyDecrease')} onPress={() => stepSupply(-1)} size={52} />
                   <Input
                     value={values.supply}
                     onChangeText={(next) => set('supply', next.replace(/[^\d]/g, ''))}
                     keyboardType="number-pad"
                     inputMode="numeric"
                     placeholder={t('medicationSupplyPlaceholder')}
+                    accessibilityLabel={t('medicationSupply')}
+                    style={styles.stepperInput}
                   />
-                  <View style={styles.chips}>
-                    {SUPPLY_PRESETS.map((count) => (
-                      <Chip key={count} label={count} selected={values.supply === count} onPress={() => set('supply', count)} />
-                    ))}
-                  </View>
-                </Field>
+                  <IconButton icon="add" kind="ink" accessibilityLabel={t('supplyIncrease')} onPress={() => stepSupply(1)} size={52} />
+                </View>
+                <View style={styles.chips}>
+                  {SUPPLY_PRESETS.map((count) => (
+                    <Chip key={count} onTone label={count} selected={values.supply === count} onPress={() => set('supply', count)} />
+                  ))}
+                </View>
+              </FormField>
 
-                {mode === 'edit' ? (
-                  <Field label={t('supplyLastRefilled')} error={shown('lastRefilled')}>
-                    <TimeField
-                      mode="date"
-                      value={values.lastRefilled}
-                      onChange={(next) => {
-                        set('lastRefilled', next);
-                        touch('lastRefilled');
-                      }}
-                      accessibilityLabel={t('selectDateLabel')}
-                      invalid={Boolean(shown('lastRefilled'))}
-                    />
-                  </Field>
-                ) : null}
-              </View>
-            </Card>
+              {mode === 'edit' ? (
+                <FormField onTone label={t('supplyLastRefilled')} error={shown('lastRefilled')}>
+                  <TimeField
+                    mode="date"
+                    value={values.lastRefilled}
+                    onChange={(next) => {
+                      set('lastRefilled', next);
+                      touch('lastRefilled');
+                    }}
+                    accessibilityLabel={t('selectDateLabel')}
+                    invalid={Boolean(shown('lastRefilled'))}
+                  />
+                </FormField>
+              ) : null}
+            </Tile>
           </Animated.View>
         </Stack>
       </PageShell>
@@ -521,39 +670,115 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
   );
 };
 
+/** Swatches pale enough to need an ink check mark. */
+const isPaleSwatch = (hex: string): boolean => {
+  const n = Number.parseInt(hex.slice(1), 16);
+  return 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) > 170;
+};
+
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  cardBody: { padding: spacing(4), gap: spacing(4) },
+  section: { padding: spacing(5), gap: spacing(4.5) },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), alignItems: 'center' },
   chip: {
-    minHeight: 40,
+    minHeight: MIN_TOUCH_TARGET,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(1.5),
-    paddingHorizontal: spacing(3),
-    paddingVertical: spacing(1.5),
+    paddingHorizontal: spacing(4),
     borderRadius: radius.full,
-    borderWidth: 1,
   },
-  previewRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
-  swatchRing: { width: 40, height: 40, borderRadius: radius.full, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  swatch: { width: 28, height: 28, borderRadius: radius.full, borderWidth: StyleSheet.hairlineWidth },
-  expander: { marginTop: spacing(1) },
-  addRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing(2) },
-  grow: { flex: 1, minWidth: 0 },
-  smallInput: { width: 96 },
-  smallInputField: { minHeight: 40, paddingVertical: 0 },
-  iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) },
+  choice: {
+    flexBasis: '31%',
+    flexGrow: 1,
+    minHeight: 80,
+    borderRadius: 20,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing(1.5),
+    paddingHorizontal: spacing(1),
+  },
+  choiceCheck: { position: 'absolute', top: spacing(2), right: spacing(2) },
+  divider: { height: StyleSheet.hairlineWidth },
+  previewRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3.5) },
+  shape: {
+    minHeight: MIN_TOUCH_TARGET,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(1),
+    paddingLeft: spacing(1),
+    paddingRight: spacing(3.5),
+    borderRadius: radius.full,
+  },
+  swatchRing: { width: 52, height: 52, borderRadius: radius.full, borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
+  swatch: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  expander: { marginTop: spacing(1) },
+  timeChip: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(2),
+    paddingLeft: spacing(4.5),
+    paddingRight: spacing(3),
+    borderRadius: radius.full,
+    backgroundColor: '#FFFFFF',
+  },
+  timeText: { color: INK, fontVariant: ['tabular-nums'] },
+  timeSuggestion: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(1),
+    paddingLeft: spacing(3),
+    paddingRight: spacing(4),
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+  },
+  addTime: {
+    minHeight: 52,
+    justifyContent: 'center',
+    paddingHorizontal: spacing(4),
+    borderRadius: radius.full,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(21,23,28,0.35)',
+  },
+  addRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(2) },
+  grow: { flex: 1, minWidth: 0 },
+  smallInput: { width: 104 },
+  smallInputField: { minHeight: MIN_TOUCH_TARGET, paddingVertical: 0 },
+  errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(1.5) },
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(2),
+    padding: spacing(1.5),
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+  },
+  stepperInput: {
+    flex: 1,
+    minWidth: 0,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    textAlign: 'center',
+    color: INK,
+    fontFamily: font.display,
+    fontSize: 32,
+    lineHeight: 38,
+  },
   bar: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: spacing(4),
+    paddingHorizontal: spacing(5),
     paddingTop: spacing(3),
   },
   barInner: {

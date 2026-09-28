@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
+import { TaktMark } from '@/components/ui';
 import { resolveSessionGate } from '@/lib/auth-session';
 import { CONSENT_STORAGE_KEY } from '@/lib/takt/constants';
 import { useTokens } from '@/theme/use-tokens';
@@ -51,7 +53,10 @@ export default function IndexRedirect() {
         backgroundColor: c.background,
       }}
     >
-      <ActivityIndicator />
+      <Animated.View entering={FadeIn.duration(320)} style={{ alignItems: 'center', gap: 24 }}>
+        <TaktMark size={64} />
+        <ActivityIndicator color={c.textSecondary} />
+      </Animated.View>
     </View>
   );
 }

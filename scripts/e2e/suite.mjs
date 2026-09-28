@@ -235,9 +235,11 @@ await step('History: correct the missed Metformin dose to Taken', async () => {
   await see(/^Fix a logged dose$/);
   // The headline number animates (count-up), which a frozen test clock never advances; read the real value from its a11y label.
   const pct = () => page.evaluate(() => [...document.querySelectorAll('[aria-label$="% taken on schedule"]')].map((e) => e.getAttribute('aria-label')).pop()?.match(/^(\d+)%/)?.[1]);
-  const chips = () => bodyMatch(/(\d+) Taken\s*(\d+) Skipped\s*(\d+) Missed/);
+  const chips = () => bodyMatch(/(\d+)\s*Taken\s*(\d+)\s*Missed\s*(\d+)\s*Skipped/);
   const before = await pct(); const cb = (await chips())?.slice(1).join('/');
-  await tapBtn(/^Taken$/, 'Metformin Taken segment', 1); await page.waitForTimeout(1800);
+  // Log rows open in place; the status control lives inside the opened row.
+  await tapBtn(/^Metformin, .*Missed$/, 'open Metformin missed row'); await page.waitForTimeout(500);
+  await tapBtn(/^Taken$/, 'Metformin Taken segment'); await page.waitForTimeout(1800);
   const after = await pct(); const ca = (await chips())?.slice(1).join('/') ?? 'no missed chip';
   if (before === after) throw new Error(`adherence unchanged at ${after}%`);
   return `adherence ${before}% → ${after}% (taken/skipped/missed ${cb} → ${ca})`;
@@ -285,7 +287,7 @@ await step('Reminders: change all preferences → summary updates', async () => 
 await step('Appearance: Dark theme applies', async () => {
   await tapBtn(/^Appearance, /, 'appearance'); await tapBtn(/^Dark$/, 'dark'); await page.waitForTimeout(700);
   const bg = await page.evaluate(() => { const e = document.elementFromPoint(200, 700); let n = e; while (n) { const c = getComputedStyle(n).backgroundColor; if (c && c !== 'rgba(0, 0, 0, 0)') return c; n = n.parentElement; } return ''; });
-  if (!/14, 18, 24/.test(bg)) throw new Error(`background ${bg}`);
+  if (!/15, 17, 21/.test(bg)) throw new Error(`background ${bg}`);
   return bg;
 });
 await step('Appearance: German, then back to English + System', async () => {

@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { Button, spacing, typography, useMotion, useTokens } from '@/components/ui';
 import { useLocale } from '@/lib/takt/l10n';
 
@@ -22,7 +22,7 @@ export function ConfirmExpander({
   onCancel: () => void;
   onConfirm: () => void;
   triggerLabel: string;
-  triggerKind?: 'secondary' | 'destructive';
+  triggerKind?: 'secondary' | 'outline' | 'destructive';
   confirmLabel?: string;
   body: string;
   loading?: boolean;
@@ -31,27 +31,36 @@ export function ConfirmExpander({
   const { c } = useTokens();
   const { t } = useLocale();
   const { duration } = useMotion();
+  // Timed, not sprung: a destructive confirm should settle, never bounce.
   return (
-    <Animated.View layout={LinearTransition}>
+    <Animated.View layout={LinearTransition.duration(duration.base)}>
       {open ? (
-        <Animated.View entering={FadeIn.duration(duration.fast)} style={{ gap: spacing(3) }}>
-          <Text style={[typography.subhead, { color: c.textPrimary }]}>{body}</Text>
+        <Animated.View
+          entering={FadeInDown.duration(duration.base)}
+          exiting={FadeOut.duration(duration.fast)}
+          style={styles.panel}
+        >
+          <Text style={[typography.body, { color: c.textPrimary }]}>{body}</Text>
           <View style={styles.confirmRow}>
-            <View style={{ flex: 1 }}>
+            <View style={styles.flex}>
               <Button kind="secondary" label={t('cancel')} onPress={onCancel} disabled={loading} />
             </View>
-            <View style={{ flex: 1 }}>
+            <View style={styles.flex}>
               <Button kind="destructive" label={confirmLabel ?? triggerLabel} onPress={onConfirm} loading={loading} />
             </View>
           </View>
         </Animated.View>
       ) : (
-        <Button kind={triggerKind} label={triggerLabel} onPress={onOpen} disabled={disabled} />
+        <Animated.View entering={FadeIn.duration(duration.fast)}>
+          <Button kind={triggerKind} label={triggerLabel} onPress={onOpen} disabled={disabled} />
+        </Animated.View>
       )}
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
+  panel: { gap: spacing(3) },
   confirmRow: { flexDirection: 'row', gap: spacing(2) },
+  flex: { flex: 1 },
 });

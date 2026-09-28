@@ -1,11 +1,13 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View, type TextInputProps } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import { useState, type ReactNode } from 'react';
+import { StyleSheet, Text, View, type TextInputProps } from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
   AnimatedPressable,
+  INK,
   Input,
   MIN_TOUCH_TARGET,
+  TaktMark,
   radius,
   spacing,
   typography,
@@ -16,29 +18,38 @@ import {
 import { useLocale } from '@/lib/takt/l10n';
 
 /*
- * Shared auth chrome: brand hero, password field with visibility toggle,
+ * Shared auth chrome: brand lead, password field with visibility toggle,
  * inline banner, and text links. Presentation only; screens keep their
  * own submit logic.
  */
 
-export const AuthHero = ({
-  icon,
-  title,
-  description,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  description: string;
-}) => {
+/** Brand lead: the Takt mark, a display headline and one calm line. */
+export const AuthHero = ({ title, description }: { title: string; description: string }) => {
   const { c } = useTokens();
+  const { reduce } = useMotion();
   return (
-    <View style={styles.hero}>
-      <View style={[styles.logoCircle, { backgroundColor: `${c.accent}1A`, borderColor: `${c.accent}33` }]}>
-        <Ionicons name={icon} size={32} color={c.accent} />
+    <Animated.View entering={reduce ? undefined : FadeInDown.duration(420)} style={styles.hero}>
+      <View style={styles.brand}>
+        <TaktMark size={44} />
+        <Text style={[styles.wordmark, { color: c.textPrimary }]}>
+          takt<Text style={{ color: c.accent }}>.</Text>
+        </Text>
       </View>
-      <Text style={[typography.title1, { color: c.textPrimary }]}>{title}</Text>
-      <Text style={[typography.subhead, { color: c.textSecondary, textAlign: 'center' }]}>{description}</Text>
-    </View>
+      <Text accessibilityRole="header" style={[typography.display, { color: c.textPrimary }]}>
+        {title}
+      </Text>
+      <Text style={[typography.body, { color: c.textSecondary, fontSize: 18, lineHeight: 26 }]}>{description}</Text>
+    </Animated.View>
+  );
+};
+
+/** Staggered block for a form section, so the page assembles in reading order. */
+export const AuthBlock = ({ index, children }: { index: number; children: ReactNode }) => {
+  const { enter } = useMotion();
+  return (
+    <Animated.View entering={enter(index)} style={styles.block}>
+      {children}
+    </Animated.View>
   );
 };
 
@@ -49,15 +60,19 @@ export const PasswordInput = ({ style, ...props }: TextInputProps & { invalid?: 
   const toggleLabel = visible ? t('authHidePassword') : t('authShowPassword');
   return (
     <View>
-      <Input {...props} secureTextEntry={!visible} style={[{ paddingRight: MIN_TOUCH_TARGET }, style]} />
-      <Pressable
+      <Input {...props} secureTextEntry={!visible} style={[{ paddingRight: MIN_TOUCH_TARGET + spacing(3) }, style]} />
+      <AnimatedPressable
         accessibilityRole="button"
         accessibilityLabel={toggleLabel}
+        haptic="light"
+        scaleTo={0.9}
         onPress={() => setVisible((v) => !v)}
         style={styles.eye}
       >
-        <Ionicons name={visible ? 'eye-off-outline' : 'eye-outline'} size={20} color={c.textSecondary} />
-      </Pressable>
+        <View style={[styles.eyeCircle, { backgroundColor: c.surfaceRaised }]}>
+          <Ionicons name={visible ? 'eye-off-outline' : 'eye-outline'} size={20} color={c.textPrimary} />
+        </View>
+      </AnimatedPressable>
     </View>
   );
 };
@@ -65,68 +80,67 @@ export const PasswordInput = ({ style, ...props }: TextInputProps & { invalid?: 
 export const AuthBanner = ({ tone, message }: { tone: 'destructive' | 'success'; message: string }) => {
   const { c } = useTokens();
   const { duration } = useMotion();
-  const color = tone === 'success' ? c.success : c.destructive;
+  const t = tone === 'success' ? c.tones.sage : c.tones.rose;
   return (
     <Animated.View
       entering={FadeIn.duration(duration.base)}
       accessibilityRole="alert"
-      style={[styles.banner, { backgroundColor: `${color}14`, borderColor: `${color}33` }]}
+      style={[styles.banner, { backgroundColor: t.bg }]}
     >
-      <Ionicons name={tone === 'success' ? 'checkmark-circle-outline' : 'alert-circle-outline'} size={18} color={color} />
-      <Text style={[typography.footnote, { color: c.textPrimary, flex: 1 }]}>{message}</Text>
+      <Ionicons name={tone === 'success' ? 'checkmark-circle' : 'alert-circle'} size={20} color={t.fg} />
+      <Text style={[typography.subhead, { color: INK, flex: 1 }]}>{message}</Text>
     </Animated.View>
   );
 };
 
 /** "Prompt? Link" row, e.g. "New to Takt? Create account". */
-export const AuthLinkRow = ({ prompt, label, onPress }: { prompt?: string; label: string; onPress: () => void }) => {
+export const AuthLinkRow = ({
+  prompt,
+  label,
+  onPress,
+  align = 'center',
+}: {
+  prompt?: string;
+  label: string;
+  onPress: () => void;
+  align?: 'center' | 'flex-end';
+}) => {
   const { c } = useTokens();
   return (
-    <View style={styles.linkRow}>
-      {prompt ? <Text style={[typography.subhead, { color: c.textSecondary }]}>{prompt}</Text> : null}
+    <View style={[styles.linkRow, { justifyContent: align }]}>
+      {prompt ? <Text style={[typography.body, { color: c.textSecondary }]}>{prompt}</Text> : null}
       <AnimatedPressable accessibilityRole="link" accessibilityLabel={label} onPress={onPress} style={styles.link}>
-        <Text style={[typography.subhead, { color: c.accent, fontFamily: font.semibold }]}>{label}</Text>
+        <Text style={[typography.body, styles.linkText, { color: c.textPrimary, fontFamily: font.semibold }]}>{label}</Text>
       </AnimatedPressable>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  hero: {
-    alignItems: 'center',
-    paddingVertical: spacing(3),
-    gap: spacing(1.5),
-  },
-  logoCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: radius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    marginBottom: spacing(1),
-  },
+  hero: { gap: spacing(3), paddingTop: spacing(2) },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: spacing(2.5), marginBottom: spacing(3) },
+  wordmark: { fontFamily: font.displayHeavy, fontSize: 28, lineHeight: 32, letterSpacing: -1 },
+  block: { gap: spacing(4) },
   eye: {
     position: 'absolute',
-    right: 0,
+    right: spacing(1),
     top: 0,
     bottom: 0,
     width: MIN_TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  eyeCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing(2),
-    padding: spacing(3),
+    gap: spacing(2.5),
+    padding: spacing(3.5),
     borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
   },
   linkRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     flexWrap: 'wrap',
     gap: spacing(1.5),
   },
@@ -135,4 +149,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing(1),
   },
+  linkText: { textDecorationLine: 'underline' },
 });
