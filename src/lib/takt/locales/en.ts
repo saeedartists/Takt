@@ -35,7 +35,6 @@ export const en = {
     tourReportTitle: 'Ready for your doctor',
     tourReportBody: 'Before a visit, share a clear report of your doses as a PDF.',
     weekRouteTitle: 'Your week',
-    weekRangeHint: 'The last 7 days, up to today',
     weekHeroLine: '{taken} of {total} doses taken',
     weekVerdictAll: 'Every dose taken. A steady week.',
     weekVerdictSteady: 'A steady week.',

@@ -7,7 +7,7 @@ import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { planToInput, useRecordDose, useUpdateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
 import { useLocale } from '@/lib/takt/l10n';
 import { useReminderPreferences } from '@/lib/takt/preferences';
-import { scheduleSnoozeReminder, useReminderResponseRouting, useReminderSync } from '@/lib/takt/reminders';
+import { scheduleSnoozeReminder, useReminderResponseRouting, useReminderSync, useWeeklySummarySync } from '@/lib/takt/reminders';
 import { buildDoseOccurrencesForDay, courseEnded } from '@/lib/takt/schedule';
 import { TAKT_EXT } from '@/lib/takt/constants';
 import { isoDateKey, startOfDay } from '@/lib/takt/time';
@@ -74,6 +74,7 @@ export default function TabsLayout() {
     return keys;
   }, [events.data?.entry]);
   useReminderSync(plans.plans, Boolean(patientRef) && !plans.isLoading, confirmedDoseKeys);
+  useWeeklySummarySync();
 
   const dueNowCount = useMemo(() => {
     const now = new Date();

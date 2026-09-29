@@ -361,6 +361,17 @@ export default function RemindersSettingsScreen() {
                 }))}
               />
             </Pref>
+
+            <Pref label={t('weeklySummaryPrefLabel')} hint={t('weeklySummaryPrefHint')}>
+              <AnimatedSegmentedControl
+                value={prefs.data?.weeklySummary === false ? 'off' : 'on'}
+                onChange={(next) => void prefs.setWeeklySummary(next === 'on')}
+                options={[
+                  { value: 'on', label: t('voiceReminderOn') },
+                  { value: 'off', label: t('voiceReminderOff') },
+                ]}
+              />
+            </Pref>
           </Card>
           {prefs.saveError ? <ErrorState description={t('saveReminderPrefError')} /> : null}
         </Animated.View>

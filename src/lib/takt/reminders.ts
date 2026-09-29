@@ -55,6 +55,11 @@ const readNativeCopy = async () =>
 const channelFor = (sound: boolean): string | undefined =>
   Platform.OS === 'android' ? (sound ? CHANNEL_ID : SILENT_CHANNEL_ID) : undefined;
 const MAX_PENDING_NOTIFICATIONS = 60;
+/** The one repeating "Your week" notification: fixed id, so rescheduling replaces rather than duplicates. */
+const WEEKLY_SUMMARY_ID = 'takt-weekly-summary';
+const WEEKLY_SUMMARY_KIND = 'weekly-summary';
+/** Normal-importance channel: the weekly note must not ring like a dose alarm or bypass Do Not Disturb. */
+const WEEKLY_CHANNEL_ID = 'takt-weekly-summary';
 const REMINDER_PERMISSION_STATE_KEY = 'takt:reminder-permission-state:v1';
 const REMINDER_DIAGNOSTICS_KEY = 'takt:reminder-diagnostics:v1';
 const REMINDER_SNOOZE_GUARD_KEY = 'takt:reminder-snooze-guard:v1';
@@ -544,6 +549,8 @@ const reconcileSchedule = async (
   const stale: string[] = [];
   for (const request of pending) {
     const data = request.content.data as Partial<ReminderNotificationData> | undefined;
+    // The weekly summary has its own sync (syncWeeklySummaryReminder); never touch it here.
+    if ((data as { kind?: string } | undefined)?.kind === WEEKLY_SUMMARY_KIND || request.identifier === WEEKLY_SUMMARY_ID) continue;
     const ours = storedIds.has(request.identifier) || data?.kind === 'dose' || data?.kind === 'follow-up';
     if (!ours) continue; // snoozes and test reminders
     if (data?.key && wanted.has(data.key)) {
@@ -817,6 +824,78 @@ export const useReminderSync = (plans: MedicationPlan[], enabled: boolean, confi
   }, [enabled, sync]);
 };
 
+export type WeeklySummaryCopy = {
+  title: string;
+  body: string;
+  /** Android channel name. */
+  channel: string;
+};
+
+/**
+ * One repeating local notification, Sundays 18:00 local time, that opens /week.
+ * Idempotent: an existing one with the same text and sound is left alone. Never prompts
+ * for permission (the consent screen does that). Copy carries no medication names, so
+ * `hideNamesInReminders` needs no special case. Quiet: the system default sound (or none
+ * when reminder sound is off), never the alarm sound, never AlarmKit.
+ */
+export const syncWeeklySummaryReminder = async (enabled: boolean, copy: WeeklySummaryCopy): Promise<void> => {
+  // ponytail: expo-notifications has no web scheduler
+  if (Platform.OS === 'web') return;
+  const pending = await Notifications.getAllScheduledNotificationsAsync().catch(() => []);
+  const existing = pending.find((request) => request.identifier === WEEKLY_SUMMARY_ID);
+  if (!enabled) {
+    if (existing) await Notifications.cancelScheduledNotificationAsync(WEEKLY_SUMMARY_ID).catch(() => undefined);
+    return;
+  }
+  const prefs = await readReminderPreferences();
+  const key = [copy.title, copy.body, String(prefs.sound)].join('|');
+  if ((existing?.content.data as { key?: string } | undefined)?.key === key) return;
+  if ((await readReminderPermissionStatus()) !== 'granted') return;
+
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync(WEEKLY_CHANNEL_ID, {
+      name: copy.channel,
+      importance: Notifications.AndroidImportance.DEFAULT,
+    });
+  }
+  // Same identifier replaces the pending one on both platforms.
+  await Notifications.scheduleNotificationAsync({
+    identifier: WEEKLY_SUMMARY_ID,
+    content: {
+      title: copy.title,
+      body: copy.body,
+      sound: prefs.sound ? 'default' : false,
+      data: { route: '/week', kind: WEEKLY_SUMMARY_KIND, key },
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+      weekday: 1, // Sunday
+      hour: 18,
+      minute: 0,
+      channelId: Platform.OS === 'android' ? WEEKLY_CHANNEL_ID : undefined,
+    },
+  });
+};
+
+/** Keeps the weekly summary notification in line with the preference, language and sound setting. */
+export const useWeeklySummarySync = (): void => {
+  const { t } = useLocale();
+  const prefs = useReminderPreferences();
+  const enabled = prefs.data?.weeklySummary;
+  const sound = prefs.data?.sound;
+  useEffect(() => {
+    if (enabled === undefined) return;
+    void syncWeeklySummaryReminder(enabled, {
+      title: t('weeklyNotificationTitle'),
+      body: t('weeklyNotificationBody'),
+      channel: t('weeklyNotificationChannel'),
+    }).catch(() => undefined);
+  }, [enabled, sound, t]);
+};
+
+/** Plain routes a notification may open directly (the weekly summary, the refill reminder). */
+const DIRECT_ROUTES = ['/week', '/refills'] as const;
+
 export type ReminderTarget = {
   route: '/(tabs)/today';
   doseKey?: string;
@@ -874,9 +953,18 @@ export const useReminderResponseRouting = (router: ReminderRouter, handlers?: Re
 
   const handle = useCallback(
     (response: Notifications.NotificationResponse, navigate: 'push' | 'replace') => {
+      const id = `${response.notification.request.identifier}|${response.actionIdentifier}`;
+      const route = (response.notification.request.content.data as Record<string, unknown> | undefined)?.route;
+      const direct = DIRECT_ROUTES.find((r) => r === route);
+      if (direct) {
+        if (handled.current.has(id)) return;
+        handled.current.add(id);
+        void appendDiagnosticEvent('notification.opened', direct);
+        router[navigate](direct as never);
+        return;
+      }
       const target = parseReminderNavigation(response);
       if (!target) return;
-      const id = `${response.notification.request.identifier}|${response.actionIdentifier}`;
       if (handled.current.has(id)) return;
       handled.current.add(id);
 

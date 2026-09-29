@@ -9,7 +9,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.actimi.takt",
-      "buildNumber": "6",
+      "buildNumber": "7",
       "infoPlist": {
         "CFBundleDisplayName": "Takt Health",
         "ITSAppUsesNonExemptEncryption": false,

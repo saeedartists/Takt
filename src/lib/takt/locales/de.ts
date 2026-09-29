@@ -35,7 +35,6 @@ export const de = {
     tourReportTitle: 'Bereit für den Arzttermin',
     tourReportBody: 'Teilen Sie vor einem Termin einen übersichtlichen Einnahmebericht als PDF.',
     weekRouteTitle: 'Ihre Woche',
-    weekRangeHint: 'Die letzten 7 Tage bis heute',
     weekHeroLine: '{taken} von {total} Dosen genommen',
     weekVerdictAll: 'Jede Dosis genommen. Eine ruhige Woche.',
     weekVerdictSteady: 'Eine ruhige Woche.',

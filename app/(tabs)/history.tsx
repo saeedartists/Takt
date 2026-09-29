@@ -519,6 +519,28 @@ export default function HistoryScreen() {
               </View>
 
               <Animated.View entering={enter(4)}>
+                <Card style={styles.weekLinkCard}>
+                  <AnimatedPressable
+                    accessibilityRole="link"
+                    accessibilityLabel={`${t('weekRouteTitle')}, ${t('weekHistoryRowHint')}`}
+                    haptic="light"
+                    scaleTo={0.98}
+                    onPress={() => router.push('/week')}
+                    style={styles.weekLink}
+                  >
+                    <View style={[styles.weekLinkIcon, { backgroundColor: lilac.bg }]}>
+                      <Ionicons name="sparkles-outline" size={20} color={lilac.fg} />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>{t('weekRouteTitle')}</Text>
+                      <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('weekHistoryRowHint')}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={c.textTertiary} />
+                  </AnimatedPressable>
+                </Card>
+              </Animated.View>
+
+              <Animated.View entering={enter(4)}>
                 <MonthCalendar
                   month={month}
                   days={monthDays}
@@ -1074,6 +1096,9 @@ const styles = StyleSheet.create({
   statTile: { borderRadius: radius.lg, padding: spacing(3.5), gap: spacing(0.5) },
   statNumber: { fontFamily: font.display, fontSize: 28, lineHeight: 33, letterSpacing: -0.6 },
   weekCard: { padding: spacing(5), gap: spacing(1) },
+  weekLinkCard: { padding: 0 },
+  weekLink: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), padding: spacing(4), minHeight: 64 },
+  weekLinkIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   dayLabel: { paddingHorizontal: spacing(1) },
   logRow: { borderRadius: radius.xl, borderWidth: 2, padding: spacing(3.5), gap: spacing(3.5) },
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },

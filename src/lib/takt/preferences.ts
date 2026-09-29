@@ -24,6 +24,8 @@ export type ReminderPreferences = {
   hideNamesInReminders: boolean;
   /** Hours after the scheduled time before an unlogged dose counts as missed (brief §12: 4 by default). */
   graceHours: GraceHours;
+  /** A quiet "Your week" notification every Sunday at 18:00. */
+  weeklySummary: boolean;
 };
 
 const QUERY_KEY = ['takt', 'preferences', 'reminders'] as const;
@@ -41,6 +43,7 @@ const sanitize = (input: Partial<ReminderPreferences> | undefined): ReminderPref
   hideNamesInReminders: input?.hideNamesInReminders === true,
   voice: typeof input?.voice === 'boolean' ? input.voice : true,
   alarm: typeof input?.alarm === 'boolean' ? input.alarm : true,
+  weeklySummary: typeof input?.weeklySummary === 'boolean' ? input.weeklySummary : true,
   graceHours: GRACE_OPTIONS.includes(input?.graceHours as GraceHours)
     ? (input?.graceHours as GraceHours)
     : (DEFAULT_GRACE_HOURS as GraceHours),
@@ -90,6 +93,7 @@ export const useReminderPreferences = () => {
     setFollowUpMinutes: (followUpMinutes: FollowUpMinutes) => mutation.mutateAsync({ followUpMinutes }),
     setVoice: (voice: boolean) => mutation.mutateAsync({ voice }),
     setAlarm: (alarm: boolean) => mutation.mutateAsync({ alarm }),
+    setWeeklySummary: (weeklySummary: boolean) => mutation.mutateAsync({ weeklySummary }),
     isSaving: mutation.isPending,
     saveError: mutation.error,
   };
