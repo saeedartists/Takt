@@ -425,7 +425,11 @@ export const useRecordDose = () => {
       if (input.action === 'taken' && input.medicationRef) {
         const medicationId = input.medicationRef.split('/')[1];
         if (medicationId) {
-          await deductSupply(medicationId);
+          // The refill reminder names the medicine; the name lives on the Medication resource.
+          const label = await ovokFetch<{ code?: { text?: string } }>(`/fhir/R4/Medication/${medicationId}`)
+            .then((med) => med.code?.text)
+            .catch(() => undefined);
+          await deductSupply(medicationId, label);
         }
       }
 

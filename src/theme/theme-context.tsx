@@ -10,6 +10,9 @@ import {
 } from 'react';
 import { useColorScheme } from 'react-native';
 import {
+  applyTextScale,
+  TEXT_SCALES,
+  type TextScale,
   categoryColors as defaultCategoryColors,
   getSemanticColors,
   paletteConfigs,
@@ -20,6 +23,7 @@ import {
 
 const STORAGE_THEME_MODE_KEY = 'takt:theme-mode:v1';
 const STORAGE_PALETTE_KEY = 'takt:theme-palette:v1';
+const STORAGE_TEXT_SCALE_KEY = 'takt:text-scale:v1';
 
 type ThemeContextValue = {
   themeMode: ThemeMode;
@@ -33,6 +37,9 @@ type ThemeContextValue = {
   categoryColors: CategoryColors;
   /** False until the persisted mode/palette have been read. */
   hydrated: boolean;
+  /** Appearance → Text size. Changing it rewrites the type ramp and re-renders every themed screen. */
+  textScale: TextScale;
+  setTextScale: (scale: TextScale) => Promise<void>;
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -42,6 +49,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [themeMode, setThemeModeState] = useState<ThemeMode>('system');
   const [palette, setPaletteState] = useState<ThemePalette>('amber');
   const [hydrated, setHydrated] = useState(false);
+  const [textScale, setTextScaleState] = useState<TextScale>(1);
 
   useEffect(() => {
     let active = true;
@@ -51,6 +59,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           AsyncStorage.getItem(STORAGE_THEME_MODE_KEY),
           AsyncStorage.getItem(STORAGE_PALETTE_KEY),
         ]);
+        const savedScale = Number(await AsyncStorage.getItem(STORAGE_TEXT_SCALE_KEY));
+        if (active && TEXT_SCALES.includes(savedScale as TextScale) && savedScale !== 1) {
+          applyTextScale(savedScale as TextScale);
+          setTextScaleState(savedScale as TextScale);
+        }
         if (!active) return;
         if (savedMode === 'light' || savedMode === 'dark' || savedMode === 'system') {
           setThemeModeState(savedMode);
@@ -80,6 +93,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setPalette = useCallback(async (nextPalette: ThemePalette) => {
     setPaletteState(nextPalette);
     await AsyncStorage.setItem(STORAGE_PALETTE_KEY, nextPalette);
+  }, []);
+
+  const setTextScale = useCallback(async (next: TextScale) => {
+    applyTextScale(next);
+    setTextScaleState(next);
+    await AsyncStorage.setItem(STORAGE_TEXT_SCALE_KEY, String(next));
   }, []);
 
   const isDark = useMemo(() => {
@@ -115,8 +134,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       paletteConfig,
       categoryColors: dynamicCategoryColors,
       hydrated,
+      textScale,
+      setTextScale,
     }),
-    [themeMode, palette, setThemeMode, setPalette, isDark, scheme, c, paletteConfig, dynamicCategoryColors, hydrated],
+    [themeMode, palette, setThemeMode, setPalette, isDark, scheme, c, paletteConfig, dynamicCategoryColors, hydrated, textScale, setTextScale],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
@@ -144,6 +165,8 @@ export function useTheme(): ThemeContextValue {
         medication: c.accent,
       },
       hydrated: true,
+      textScale: 1,
+      setTextScale: async () => undefined,
     };
   }
 

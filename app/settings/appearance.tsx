@@ -23,6 +23,7 @@ import {
   type ThemePalette,
 } from '@/components/ui';
 import { useLocale } from '@/lib/takt/l10n';
+import { TEXT_SCALES } from '@/theme/tokens';
 
 const PALETTES = Object.keys(paletteConfigs) as ThemePalette[];
 const MODES: ThemeMode[] = ['system', 'light', 'dark'];
@@ -164,7 +165,7 @@ function PalettePreview() {
 export default function AppearanceSettingsScreen() {
   const { c, isDark } = useTokens();
   const { enter } = useMotion();
-  const { themeMode, setThemeMode, palette, setPalette } = useTheme();
+  const { themeMode, setThemeMode, palette, setPalette, textScale, setTextScale } = useTheme();
   const { locale, setLocale, t } = useLocale();
 
   const modeLabel = (mode: ThemeMode) =>
@@ -179,7 +180,38 @@ export default function AppearanceSettingsScreen() {
           </Text>
         </Animated.View>
 
+        {/* Text size first: for older eyes it matters more than colour. */}
         <Animated.View entering={enter(1)} style={styles.group}>
+          <GroupLabel>{t('textSizeTitle')}</GroupLabel>
+          <View accessibilityRole="radiogroup" style={styles.modeRow}>
+            {TEXT_SCALES.map((scale, i) => {
+              const selected = textScale === scale;
+              const label = [t('textSizeStandard'), t('textSizeLarge'), t('textSizeLargest')][i] ?? '';
+              return (
+                <OptionCard
+                  key={scale}
+                  selected={selected}
+                  onPress={() => void setTextScale(scale)}
+                  label={label}
+                  radiusSize={radius.lg}
+                  style={[styles.modeCard, { backgroundColor: c.surface }]}
+                >
+                  {/* The "Aa" is drawn at a fixed size per option so the choice reads at a glance. */}
+                  <Text allowFontScaling={false} style={{ fontFamily: font.display, fontSize: 18 + i * 6, lineHeight: 34, color: c.textPrimary }}>
+                    Aa
+                  </Text>
+                  <Text style={[typography.subhead, { color: c.textPrimary, fontFamily: selected ? font.bold : font.semibold }]}>{label}</Text>
+                </OptionCard>
+              );
+            })}
+          </View>
+          <Card style={styles.sample}>
+            <Text style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>{t('textSizeSample')}</Text>
+            <Text style={[typography.body, { color: c.textSecondary }]}>{t('textSizeHint')}</Text>
+          </Card>
+        </Animated.View>
+
+        <Animated.View entering={enter(2)} style={styles.group}>
           <GroupLabel>{t('themePalette')}</GroupLabel>
           <View accessibilityRole="radiogroup" style={styles.paletteGrid}>
             {PALETTES.map((key) => {
@@ -209,11 +241,11 @@ export default function AppearanceSettingsScreen() {
           <Text style={[typography.footnote, { color: c.textTertiary }]}>{t('themePaletteHint')}</Text>
         </Animated.View>
 
-        <Animated.View entering={enter(2)}>
+        <Animated.View entering={enter(3)}>
           <PalettePreview />
         </Animated.View>
 
-        <Animated.View entering={enter(3)} style={styles.group}>
+        <Animated.View entering={enter(4)} style={styles.group}>
           <GroupLabel>{t('themeMode')}</GroupLabel>
           <View accessibilityRole="radiogroup" style={styles.modeRow}>
             {MODES.map((mode) => (
@@ -240,7 +272,7 @@ export default function AppearanceSettingsScreen() {
           <Text style={[typography.footnote, { color: c.textTertiary }]}>{t('themeModeHint')}</Text>
         </Animated.View>
 
-        <Animated.View entering={enter(4)} style={styles.group}>
+        <Animated.View entering={enter(5)} style={styles.group}>
           <GroupLabel>{t('language')}</GroupLabel>
           <AnimatedSegmentedControl
             track="surface"
@@ -302,6 +334,7 @@ const styles = StyleSheet.create({
   previewDot: { width: 8, height: 8, borderRadius: 4 },
   previewActive: { width: 44, height: 28, borderRadius: 14 },
   modeRow: { flexDirection: 'row', gap: spacing(2.5) },
+  sample: { padding: spacing(4), gap: spacing(1) },
   modeCard: { flex: 1, padding: spacing(2.5), gap: spacing(2), alignItems: 'center', minHeight: 48 },
   swatch: {
     alignSelf: 'stretch',

@@ -336,6 +336,28 @@ export const typography = {
   metricSm: { fontFamily: font.display, fontSize: 26, lineHeight: 31, letterSpacing: -0.6 },
 } as const;
 
+/*
+ * Larger text (Appearance → Text size). The ramp above is the "standard"
+ * size; applyTextScale rewrites it in place so every `typography.x` read
+ * at render time follows. Reading styles grow by the full factor, display
+ * styles by half of it so titles don't crowd the screen. Styles copied into
+ * a StyleSheet at module load keep their standard size (a known ceiling).
+ */
+export type TextScale = 1 | 1.15 | 1.3;
+export const TEXT_SCALES: TextScale[] = [1, 1.15, 1.3];
+const baseTypography = JSON.parse(JSON.stringify(typography)) as Record<string, { fontSize: number; lineHeight: number }>;
+const DISPLAY_STYLES = new Set(['display', 'largeTitle', 'title1', 'title2', 'metric', 'metricSm']);
+export const applyTextScale = (scale: TextScale): void => {
+  const target = typography as unknown as Record<string, { fontSize: number; lineHeight: number }>;
+  for (const [name, base] of Object.entries(baseTypography)) {
+    const k = DISPLAY_STYLES.has(name) ? 1 + (scale - 1) / 2 : scale;
+    const style = target[name];
+    if (!style) continue;
+    style.fontSize = Math.round(base.fontSize * k);
+    style.lineHeight = Math.round(base.lineHeight * k);
+  }
+};
+
 /** spacing(n) = n * 4. Screen margin 20, tile gap 12, section gap 32. */
 export const spacing = (n: number): number => n * 4;
 
