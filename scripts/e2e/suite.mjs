@@ -53,6 +53,7 @@ await step('Accept consent → Today onboarding', async () => {
   if (await btnCount(/./) && await H.has(/I agree/)) {}
   const cb = page.getByRole('checkbox').filter({ visible: true }); if (await cb.count()) await cb.first().click();
   await tapBtn(/^I agree and continue$/, 'accept'); await page.waitForTimeout(1500);
+  await tapBtn(/^Skip$/, 'tour skip'); await page.waitForTimeout(1200);
   if (!page.url().includes('/today')) throw new Error(`url ${page.url()}`);
   await see(/^Add first medication$/); await see(/^Step 1 of 2$/);
 });

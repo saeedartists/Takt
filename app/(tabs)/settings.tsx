@@ -284,7 +284,19 @@ export default function SettingsTabScreen() {
         </Animated.View>
         </View>
 
-        <Section index={6} title={t('legal')}>
+        <Section index={6} title={t('helpSection')}>
+          <ListGroup>
+            <ListRow
+              isFirst
+              title={t('replayTour')}
+              subtitle={t('replayTourSubtitle')}
+              leading={<RowIcon name="sparkles-outline" />}
+              onPress={() => router.push('/tour' as never)}
+            />
+          </ListGroup>
+        </Section>
+
+        <Section index={7} title={t('legal')}>
           <ListGroup>
             <ListRow
               isFirst
@@ -307,7 +319,7 @@ export default function SettingsTabScreen() {
         </Section>
 
         {env.ovokMockEnabled ? null : (
-          <Section index={7}>
+          <Section index={8}>
             <ConfirmExpander
               open={confirmSignOut}
               onOpen={() => setConfirmSignOut(true)}
@@ -321,7 +333,7 @@ export default function SettingsTabScreen() {
         )}
 
         {showDeveloper ? (
-          <Section index={8} title={t('developerSection')}>
+          <Section index={9} title={t('developerSection')}>
             <ListGroup>
               {DEVELOPER_BOARDS.map((board, index) => (
                 <ListRow
