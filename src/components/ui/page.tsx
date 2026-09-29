@@ -105,8 +105,8 @@ const styles = StyleSheet.create({
     maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: 'center',
   },
-  // Room for the floating tab bar (64 tall) and its fade.
-  contentTabs: { paddingTop: spacing(3), paddingBottom: 124 },
+  // The docked tab bar sits below the scroll view; just leave breathing room.
+  contentTabs: { paddingTop: spacing(3), paddingBottom: spacing(8) },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

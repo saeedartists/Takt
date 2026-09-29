@@ -3,22 +3,15 @@ import type { Tabs } from 'expo-router';
 import { useEffect, type ComponentProps } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
-  FadeIn,
-  FadeOut,
-  LinearTransition,
+  interpolate,
   useAnimatedStyle,
   useSharedValue,
-  withSequence,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
-// react-native-svg's Defs typing omits children (same workaround as sparkline.tsx).
-const SvgDefs = Defs as unknown as React.ComponentType<{ children?: React.ReactNode }>;
-
-import { font, motion, radius, spacing, typography } from '../../theme/tokens';
+import { CONTENT_MAX_WIDTH, INK, font, spacing } from '../../theme/tokens';
 import { useMotion } from '../../theme/use-motion';
 import { useTokens } from '../../theme/use-tokens';
 import { triggerHaptic } from './animated-pressable';
@@ -35,36 +28,29 @@ const ICONS: Record<string, { on: IconName; off: IconName }> = {
 };
 
 /*
- * FloatingTabBar — an ink capsule floating 16pt off the screen edges.
- * The active tab grows into a pastel pill carrying its name; the width
- * change is a layout transition, so the pill appears to slide between
- * tabs. Inactive tabs keep a small label (icons alone fail older eyes).
+ * Tab bar — docked to the bottom edge like a native iOS bar: a surface
+ * strip with a hairline, four equal tabs, icon over label. The active tab
+ * gets a soft pastel indicator behind its icon that grows in, and its
+ * label turns ink and bold (state is never colour alone). Content ends
+ * above the bar instead of scrolling under it.
  */
 export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) {
   const { c } = useTokens();
   const insets = useSafeAreaInsets();
-  const { reduce } = useMotion();
-  const layout = reduce ? undefined : LinearTransition.springify().damping(22).stiffness(220);
 
   return (
-    <View pointerEvents="box-none" style={[styles.host, { paddingBottom: Math.max(insets.bottom - 10, spacing(3)) }]}>
-      {/* Content scrolls away under a soft paper fade instead of a hard edge. */}
-      <View pointerEvents="none" style={styles.fade}>
-        <Svg width="100%" height="100%" preserveAspectRatio="none">
-          <SvgDefs>
-            <LinearGradient id="tabFade" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={c.background} stopOpacity={0} />
-              <Stop offset="0.55" stopColor={c.background} stopOpacity={0.92} />
-              <Stop offset="1" stopColor={c.background} stopOpacity={1} />
-            </LinearGradient>
-          </SvgDefs>
-          <Rect x="0" y="0" width="100%" height="100%" fill="url(#tabFade)" />
-        </Svg>
-      </View>
-      <View
-        accessibilityRole="tablist"
-        style={[styles.bar, { backgroundColor: c.chrome }, Platform.OS === 'web' ? styles.webShadow : styles.shadow]}
-      >
+    <View
+      accessibilityRole="tablist"
+      style={[
+        styles.bar,
+        {
+          backgroundColor: c.surface,
+          borderTopColor: c.separator,
+          paddingBottom: Math.max(insets.bottom, spacing(2)),
+        },
+      ]}
+    >
+      <View style={styles.row}>
         {state.routes.map((route, index) => {
           const focused = state.index === index;
           const options = descriptors[route.key]?.options ?? {};
@@ -88,42 +74,38 @@ export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) 
           };
 
           return (
-            <Animated.View key={route.key} layout={layout} style={focused ? styles.activeSlot : styles.slot}>
-              <Pressable
-                accessibilityRole="tab"
-                accessibilityState={{ selected: focused }}
-                accessibilityLabel={badge ? `${label}, ${badge}` : label}
-                onPress={onPress}
-                {...(Platform.OS === 'web' ? ({ href: `/${route.name}` } as object) : null)}
-                onLongPress={() => navigation.emit({ type: 'tabLongPress', target: route.key })}
-                style={({ pressed }) => [
-                  focused ? styles.activePill : styles.item,
-                  focused && { backgroundColor: c.accentSoft },
-                  pressed && !focused && { opacity: 0.6 },
-                ]}
-              >
-                <TabIcon name={focused ? icons.on : icons.off} focused={focused} color={focused ? '#15171C' : c.onChrome} size={focused ? 19 : 21} />
-                {focused ? (
-                  <Animated.Text
-                    entering={reduce ? undefined : FadeIn.delay(90).duration(180)}
-                    exiting={reduce ? undefined : FadeOut.duration(90)}
-                    numberOfLines={1}
-                    style={[typography.subhead, { color: '#15171C', fontFamily: font.bold }]}
-                  >
-                    {label}
-                  </Animated.Text>
+            <Pressable
+              key={route.key}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: focused }}
+              accessibilityLabel={badge ? `${label}, ${badge}` : label}
+              onPress={onPress}
+              {...(Platform.OS === 'web' ? ({ href: `/${route.name}` } as object) : null)}
+              onLongPress={() => navigation.emit({ type: 'tabLongPress', target: route.key })}
+              style={({ pressed }) => [styles.item, pressed && !focused && { opacity: 0.55 }]}
+            >
+              <TabIndicator focused={focused} tint={c.accentSoft}>
+                {route.name === 'medications' ? (
+                  <PillIcon size={22} color={focused ? INK : c.textSecondary} filled={focused} />
                 ) : (
-                  <Text numberOfLines={1} style={[styles.label, { color: c.onChrome }]}>
-                    {label}
-                  </Text>
+                  <Ionicons name={focused ? icons.on : icons.off} size={22} color={focused ? INK : c.textSecondary} />
                 )}
                 {badge != null && !focused ? (
-                  <View style={[styles.badge, { backgroundColor: c.accentSoft, borderColor: c.chrome }]}>
-                    <Text style={[styles.badgeText, { color: '#15171C' }]}>{badge}</Text>
+                  <View style={[styles.badge, { backgroundColor: c.accent, borderColor: c.surface }]}>
+                    <Text style={[styles.badgeText, { color: '#FFFFFF' }]}>{badge}</Text>
                   </View>
                 ) : null}
-              </Pressable>
-            </Animated.View>
+              </TabIndicator>
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.label,
+                  { color: focused ? c.textPrimary : c.textSecondary, fontFamily: focused ? font.bold : font.medium },
+                ]}
+              >
+                {label}
+              </Text>
+            </Pressable>
           );
         })}
       </View>
@@ -131,87 +113,70 @@ export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) 
   );
 }
 
-/** Icon that gives a small, damped "tick" when its tab becomes active. */
-function TabIcon({ name, focused, color, size }: { name: IconName; focused: boolean; color: string; size: number }) {
-  const scale = useSharedValue(1);
+/*
+ * The pastel pill behind the active icon: it widens from the icon's size
+ * and fades in (no overshoot), and the icon gives one small lift.
+ */
+function TabIndicator({ focused, tint, children }: { focused: boolean; tint: string; children: React.ReactNode }) {
+  const { reduce } = useMotion();
+  const t = useSharedValue(focused ? 1 : 0);
+
   useEffect(() => {
-    if (focused) {
-      scale.value = withSequence(withTiming(0.82, { duration: 90 }), withSpring(1, motion.spring.snappy));
-    }
-  }, [focused, scale]);
-  const animated = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+    t.value = reduce
+      ? focused
+        ? 1
+        : 0
+      : focused
+        ? withSpring(1, { damping: 22, stiffness: 260, overshootClamping: true })
+        : withTiming(0, { duration: 140 });
+  }, [focused, reduce, t]);
+
+  const pill = useAnimatedStyle(() => ({
+    opacity: t.value,
+    transform: [{ scaleX: interpolate(t.value, [0, 1], [0.5, 1]) }],
+  }));
+
   return (
-    <Animated.View style={animated}>
-      {name === 'medical' || name === 'medical-outline' ? (
-        <PillIcon size={size} color={color} filled={focused} />
-      ) : (
-        <Ionicons name={name} size={size} color={color} />
-      )}
-    </Animated.View>
+    <View style={styles.iconWrap}>
+      <Animated.View pointerEvents="none" style={[styles.indicator, { backgroundColor: tint }, pill]} />
+      {children}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  host: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: spacing(5),
-    paddingTop: spacing(6),
-    alignItems: 'center',
-  },
-  fade: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
   bar: {
-    width: '100%',
-    maxWidth: 420,
-    height: 64,
-    borderRadius: radius.full,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: spacing(2),
+  },
+  row: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
+    width: '100%',
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: 'center',
+    paddingHorizontal: spacing(2),
   },
-  shadow: {
-    shadowColor: '#15171C',
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 12,
-  },
-  webShadow: { boxShadow: '0 12px 32px -12px rgba(21,23,28,0.45)' } as object,
-  // Inactive tabs share what the active pill leaves; the pill sizes to its label.
-  slot: { flex: 1, alignItems: 'center' },
-  activeSlot: { flexGrow: 0, flexShrink: 0 },
   item: {
-    minWidth: 52,
-    height: 48,
+    flex: 1,
+    minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
-    paddingHorizontal: spacing(1),
+    gap: 3,
   },
-  activePill: {
-    height: 48,
-    borderRadius: radius.full,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(1.5),
-    paddingLeft: spacing(3.5),
-    paddingRight: spacing(4),
-  },
-  label: { fontFamily: font.semibold, fontSize: 12, lineHeight: 15 },
+  iconWrap: { width: 60, height: 32, alignItems: 'center', justifyContent: 'center' },
+  indicator: { position: 'absolute', width: 60, height: 32, borderRadius: 16 },
+  label: { fontSize: 12, lineHeight: 15 },
   badge: {
     position: 'absolute',
-    top: 0,
+    top: -2,
     right: 8,
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
   },
-  badgeText: { fontFamily: font.bold, fontSize: 11, lineHeight: 14 },
+  badgeText: { fontFamily: font.bold, fontSize: 10, lineHeight: 12 },
 });

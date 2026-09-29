@@ -25,7 +25,7 @@ type FloatingUndoToastProps = {
   onUndo: () => void;
   onDismiss: () => void;
   durationMs?: number;
-  /** Distance from the bottom edge; the default clears the floating tab bar. */
+  /** Distance from the bottom of the screen area (the docked tab bar is below it). */
   bottomOffset?: number;
 };
 
@@ -42,7 +42,7 @@ export function FloatingUndoToast({
   onUndo,
   onDismiss,
   durationMs = 8000,
-  bottomOffset = 104,
+  bottomOffset = 16,
 }: FloatingUndoToastProps) {
   const { c, isDark } = useTokens();
   const { reduce } = useMotion();
