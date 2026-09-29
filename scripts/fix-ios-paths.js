@@ -47,11 +47,37 @@ for (const [file, from, to] of patches) {
 
 // Xcode 27 sandboxes build scripts by default, which blocks Node from writing main.jsbundle
 // in Release archives ("Sandbox: node deny file-write-create"). Local only, like the path fixes.
+// Also stamps the build number: `expo prebuild` resolves ios.buildNumber correctly but still
+// writes CURRENT_PROJECT_VERSION = 1 into a freshly generated project, which would make every
+// archive reuse the same build number. Re-run this after every `expo prebuild`.
 const pbxproj = path.join(root, 'ios/TaktHealth.xcodeproj/project.pbxproj');
 if (fs.existsSync(pbxproj)) {
-  const text = fs.readFileSync(pbxproj, 'utf8');
+  const buildNumber = String(require(path.join(root, 'app.json')).expo.ios.buildNumber);
+
+  let text = fs.readFileSync(pbxproj, 'utf8');
+  if (/CURRENT_PROJECT_VERSION = \d+;/.test(text)) {
+    const stamped = text.replace(/CURRENT_PROJECT_VERSION = \d+;/g, `CURRENT_PROJECT_VERSION = ${buildNumber};`);
+    if (stamped !== text) {
+      fs.writeFileSync(pbxproj, stamped);
+      console.log(`fix-ios-paths: set CURRENT_PROJECT_VERSION to ${buildNumber} in the Xcode project`);
+    }
+  } else {
+    console.warn('fix-ios-paths: no CURRENT_PROJECT_VERSION found; the project template may have changed');
+  }
+
+  text = fs.readFileSync(pbxproj, 'utf8');
   if (text.includes('ENABLE_USER_SCRIPT_SANDBOXING = YES;')) {
     fs.writeFileSync(pbxproj, text.split('ENABLE_USER_SCRIPT_SANDBOXING = YES;').join('ENABLE_USER_SCRIPT_SANDBOXING = NO;'));
     console.log('fix-ios-paths: disabled user script sandboxing in the Xcode project');
+  } else if (!text.includes('ENABLE_USER_SCRIPT_SANDBOXING')) {
+    // Absent means Xcode 27 would apply its own default, so pin it next to the build number.
+    const pinned = text.replace(
+      /(CURRENT_PROJECT_VERSION = \d+;)/g,
+      '$1\n\t\t\t\tENABLE_USER_SCRIPT_SANDBOXING = NO;',
+    );
+    if (pinned !== text) {
+      fs.writeFileSync(pbxproj, pinned);
+      console.log('fix-ios-paths: pinned ENABLE_USER_SCRIPT_SANDBOXING = NO in the Xcode project');
+    }
   }
 }
