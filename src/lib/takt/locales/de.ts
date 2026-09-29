@@ -18,6 +18,7 @@ export const de = {
     careRouteTitle: 'Betreuung',
     careContactRouteTitle: 'Kontakt',
     careAppointmentRouteTitle: 'Termin',
+    weekRouteTitle: 'Ihre Woche',
     privacyOnDeviceTitle: 'Nur auf diesem Telefon',
     privacyOnDeviceBody: 'Ihr Gesundheitstagebuch (Befinden, Beschwerden, Notizen) und Ihre Betreuung (Kontakte und Termine) werden nur auf diesem Gerät gespeichert. Sie werden nie hochgeladen und beim Widerruf der Einwilligung gelöscht.',
     // Care team & appointments (on-device)

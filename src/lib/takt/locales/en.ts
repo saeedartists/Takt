@@ -18,6 +18,7 @@ export const en = {
     careRouteTitle: 'Care team',
     careContactRouteTitle: 'Contact',
     careAppointmentRouteTitle: 'Appointment',
+    weekRouteTitle: 'Your week',
     privacyOnDeviceTitle: 'Kept only on this phone',
     privacyOnDeviceBody: 'Your health diary (mood, symptoms, notes) and your care team (contacts and appointments) are stored on this device only. They are never uploaded, and they are deleted when you withdraw consent.',
     // Care team & appointments (on-device)
