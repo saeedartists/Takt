@@ -48,7 +48,8 @@ export function WeekStripPicker({
   const { locale } = useLocale();
   // App locale, not device locale: "both languages complete on every reachable screen".
   const tag = locale === 'de' ? 'de-DE' : 'en-US';
-  const today = useMemo(() => startOfDay(new Date()), []);
+  // Recomputed every render: memoising it once left "today" stuck on yesterday after midnight.
+  const today = startOfDay(new Date());
   const selectedKey = isoDateKey(selectedDate);
 
   const weekDays = useMemo(() => {
