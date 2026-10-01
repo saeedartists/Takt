@@ -29,3 +29,7 @@ build-artifacts/
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+
+# store marketing assets - not part of the app build
+store-assets/
+scripts/store-shots/

@@ -40,6 +40,17 @@
         "EXPO_PUBLIC_OVOK_MOCK": "0",
         "EXPO_PUBLIC_OVOK_API_URL": "https://api.ovok.com"
       }
+    },
+    "play-internal": {
+      "distribution": "store",
+      "channel": "preview",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_OVOK_MOCK": "1"
+      }
     }
   },
   "submit": {
