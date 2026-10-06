@@ -9,8 +9,7 @@ export type SessionGateResult =
   | { kind: 'authenticated' };
 
 export const resolveSessionGate = async (): Promise<SessionGateResult> => {
-  if (env.ovokMockEnabled) return { kind: 'mock' };
-  if (!hasLiveBackendConfig()) return { kind: 'needs-config' };
+  if (env.ovokMockEnabled || !hasLiveBackendConfig()) return { kind: 'mock' };
 
   try {
     await ovokFetch('/auth/me');

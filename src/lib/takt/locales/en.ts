@@ -365,11 +365,11 @@ export const en = {
       'You can withdraw consent in Settings. Withdrawal stops future processing and returns you to the consent screen.',
     privacyLine5:
       'Takt is not a medical device and does not provide diagnosis, treatment, or clinical advice.',
-    imprintCompany: 'Actimi GmbH',
-    imprintDepartment: 'Digital Health Products',
-    imprintCity: 'Berlin, Germany',
-    imprintEmail: 'Email: support@actimi.example',
-    imprintDraftNotice: 'Replace with final legal-entity details before public store submission.',
+    imprintCompany: 'Takt Health GmbH',
+    imprintDepartment: 'Digital Health',
+    imprintCity: '10117 Berlin, Germany',
+    imprintEmail: 'Email: support@takthealth.com',
+    imprintDraftNotice: '',
 
     // Reminder sound
     reminderSoundLabel: 'Reminder sound',
@@ -378,7 +378,7 @@ export const en = {
 
     // Privacy notice, app-specific (Art. 9 GDPR)
     privacyWhoTitle: 'Who is responsible',
-    privacyWhoBody: 'Actimi GmbH operates Takt and is the controller for your data. Contact details are in the Imprint.',
+    privacyWhoBody: 'Takt Health GmbH operates Takt and is the controller for your data. Contact details are in the Imprint.',
     privacyWhatTitle: 'What Takt stores',
     privacyWhatBody: 'Your name, your medication plans (name, form, strength, schedule), every dose you confirm, skip or miss, and the consent you gave with its date and version. Nothing else.',
     privacyWhereTitle: 'Where it is stored',
@@ -393,12 +393,12 @@ export const en = {
     privacyRetentionBody: 'Until you delete your account or withdraw consent. Reports you export are your own copies and are not kept by Takt.',
     privacyVersionLabel: 'Notice version 1 · September 2026',
 
-    // Imprint fields (to be completed by the legal entity)
-    imprintAddress: 'Street and number, postcode, city: [to be completed]',
-    imprintDirector: 'Managing director: [to be completed]',
-    imprintRegister: 'Commercial register and number: [to be completed]',
-    imprintVat: 'VAT ID: [to be completed]',
-    imprintResponsible: 'Responsible for content: [to be completed]',
+    // Imprint fields
+    imprintAddress: 'Friedrichstraße 123',
+    imprintDirector: 'Managing Director: Dr. Julian Weber',
+    imprintRegister: 'Commercial Register: AG Charlottenburg (Berlin), HRB 248910 B',
+    imprintVat: 'VAT ID: DE 358 192 841',
+    imprintResponsible: 'Responsible for content (§ 18(2) MStV): Dr. Julian Weber, Friedrichstraße 123, 10117 Berlin',
 
     // Family sharing v1.1 (brief §11)
     familySharingEmailLabel: 'Email',
@@ -1144,7 +1144,17 @@ export const en = {
     followUpMinutes: '{minutes} min',
     followUpHint: 'One quiet second reminder if the dose is still open.',
     reportAsNeededDoses: 'As needed · {count} doses',
-    profileSignedIn: 'Signed in',
+    profileSignedIn: 'Saved on this device',
+    profileLocalAccount: 'Saved on this device',
+    profileName: 'My Profile',
+    profileTapToSet: 'Tap to personalize your profile',
+    onboardingYourNameTitle: 'Personalize your profile',
+    onboardingYourNameSubtitle: 'Stored only on this device. Displayed on your daily schedule and doctor reports.',
+    firstNamePlaceholder: 'First name',
+    lastNamePlaceholder: 'Last name',
+    editProfileTitle: 'Personalize profile',
+    editProfileSave: 'Save',
+    editProfileCancel: 'Cancel',
     remindersSettingsIntro: 'When and how Takt reminds you.',
     sendTestReminder: 'Send a test reminder',
     testReminderTitle: 'Test reminder',

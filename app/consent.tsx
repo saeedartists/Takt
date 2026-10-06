@@ -8,6 +8,7 @@ import {
   Button,
   Card,
   INK,
+  Input,
   PageShell,
   TaktMark,
   font,
@@ -19,7 +20,7 @@ import {
   type ToneName,
 } from '@/components/ui';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
-import { useEnsurePatient, useRecordConsent } from '@/lib/hooks/use-takt-mutations';
+import { useEnsurePatient, useRecordConsent, useUpdatePatient } from '@/lib/hooks/use-takt-mutations';
 import { CONSENT_STORAGE_KEY, TOUR_SEEN_STORAGE_KEY } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
 import { requestReminderPermissionsAtConsent } from '@/lib/takt/reminders';
@@ -37,7 +38,10 @@ export default function ConsentScreen() {
   const { enter, stagger, reduce } = useMotion();
   const patient = usePrimaryPatient();
   const ensurePatient = useEnsurePatient();
+  const updatePatient = useUpdatePatient();
   const consent = useRecordConsent();
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const submit = async () => {
@@ -45,9 +49,16 @@ export default function ConsentScreen() {
 
     try {
       const existing = patient.data;
-      const patientRef = existing
-        ? `Patient/${existing.id}`
-        : `Patient/${(await ensurePatient.mutateAsync()).id}`;
+      let patientRef: string;
+      if (existing?.id) {
+        if (firstName.trim() || lastName.trim()) {
+          await updatePatient.mutateAsync({ id: existing.id, given: firstName, family: lastName });
+        }
+        patientRef = `Patient/${existing.id}`;
+      } else {
+        const created = await ensurePatient.mutateAsync({ given: firstName, family: lastName });
+        patientRef = `Patient/${created.id}`;
+      }
 
       await consent.mutateAsync(patientRef);
       await requestReminderPermissionsAtConsent();
@@ -112,7 +123,40 @@ export default function ConsentScreen() {
           ))}
         </Card>
 
-        <Animated.View entering={enter(5)} style={styles.note}>
+        <Animated.View entering={enter(5)}>
+          <Card>
+            <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
+              <Text style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>
+                {t('onboardingYourNameTitle')}
+              </Text>
+              <Text style={[typography.subhead, { color: c.textSecondary }]}>
+                {t('onboardingYourNameSubtitle')}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: spacing(2.5), marginTop: spacing(1) }}>
+                <View style={{ flex: 1 }}>
+                  <Input
+                    placeholder={t('firstNamePlaceholder')}
+                    value={firstName}
+                    onChangeText={setFirstName}
+                    autoCapitalize="words"
+                    returnKeyType="next"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Input
+                    placeholder={t('lastNamePlaceholder')}
+                    value={lastName}
+                    onChangeText={setLastName}
+                    autoCapitalize="words"
+                    returnKeyType="done"
+                  />
+                </View>
+              </View>
+            </View>
+          </Card>
+        </Animated.View>
+
+        <Animated.View entering={enter(6)} style={styles.note}>
           <Ionicons name="information-circle-outline" size={20} color={c.textSecondary} />
           <View style={[styles.flex, { gap: spacing(1.5) }]}>
             <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('safetyNote')}</Text>

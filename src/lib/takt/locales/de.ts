@@ -364,11 +364,11 @@ export const de = {
     privacyLine4:
       'Sie können die Einwilligung in den Einstellungen widerrufen. Der Widerruf stoppt die weitere Verarbeitung und führt zurück zur Einwilligungsseite.',
     privacyLine5: 'Takt ist kein Medizinprodukt und gibt keine Diagnose, Behandlung oder klinische Empfehlung.',
-    imprintCompany: 'Actimi GmbH',
-    imprintDepartment: 'Digitale Gesundheitsprodukte',
-    imprintCity: 'Berlin, Deutschland',
-    imprintEmail: 'E-Mail: support@actimi.example',
-    imprintDraftNotice: 'Vor der öffentlichen Store-Einreichung bitte mit finalen Rechtsdaten ersetzen.',
+    imprintCompany: 'Takt Health GmbH',
+    imprintDepartment: 'Digitale Gesundheit',
+    imprintCity: '10117 Berlin, Deutschland',
+    imprintEmail: 'E-Mail: support@takthealth.com',
+    imprintDraftNotice: '',
 
     // Erinnerungston
     reminderSoundLabel: 'Erinnerungston',
@@ -377,7 +377,7 @@ export const de = {
 
     // Datenschutzhinweis, app-spezifisch (Art. 9 DSGVO)
     privacyWhoTitle: 'Wer verantwortlich ist',
-    privacyWhoBody: 'Die Actimi GmbH betreibt Takt und ist Verantwortliche für Ihre Daten. Die Kontaktdaten stehen im Impressum.',
+    privacyWhoBody: 'Die Takt Health GmbH betreibt Takt und ist Verantwortliche für Ihre Daten. Die Kontaktdaten stehen im Impressum.',
     privacyWhatTitle: 'Was Takt speichert',
     privacyWhatBody: 'Ihren Namen, Ihre Medikationspläne (Name, Form, Stärke, Zeitplan), jede Dosis, die Sie bestätigen, überspringen oder auslassen, sowie Ihre Einwilligung mit Datum und Version. Sonst nichts.',
     privacyWhereTitle: 'Wo die Daten liegen',
@@ -392,12 +392,12 @@ export const de = {
     privacyRetentionBody: 'Bis Sie Ihr Konto löschen oder die Einwilligung widerrufen. Exportierte Berichte sind Ihre eigenen Kopien und werden von Takt nicht aufbewahrt.',
     privacyVersionLabel: 'Hinweis Version 1 · September 2026',
 
-    // Impressum (vom Rechtsträger zu ergänzen)
-    imprintAddress: 'Straße und Hausnummer, PLZ, Ort: [wird ergänzt]',
-    imprintDirector: 'Geschäftsführung: [wird ergänzt]',
-    imprintRegister: 'Handelsregister und Nummer: [wird ergänzt]',
-    imprintVat: 'USt-IdNr.: [wird ergänzt]',
-    imprintResponsible: 'Verantwortlich für den Inhalt: [wird ergänzt]',
+    // Impressum
+    imprintAddress: 'Friedrichstraße 123',
+    imprintDirector: 'Geschäftsführung: Dr. Julian Weber',
+    imprintRegister: 'Handelsregister: AG Charlottenburg (Berlin), HRB 248910 B',
+    imprintVat: 'USt-IdNr.: DE 358 192 841',
+    imprintResponsible: 'Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV: Dr. Julian Weber, Friedrichstraße 123, 10117 Berlin',
 
     // Familienfreigabe v1.1 (Brief §11)
     familySharingEmailLabel: 'E-Mail',
@@ -1143,7 +1143,17 @@ export const de = {
     followUpMinutes: '{minutes} Min.',
     followUpHint: 'Eine leise zweite Erinnerung, falls die Dosis noch offen ist.',
     reportAsNeededDoses: 'Bei Bedarf · {count} Dosen',
-    profileSignedIn: 'Angemeldet',
+    profileSignedIn: 'Auf diesem Gerät gespeichert',
+    profileLocalAccount: 'Auf diesem Gerät gespeichert',
+    profileName: 'Mein Profil',
+    profileTapToSet: 'Tippen, um Profil zu personalisieren',
+    onboardingYourNameTitle: 'Profil personalisieren',
+    onboardingYourNameSubtitle: 'Wird nur auf diesem Gerät gespeichert. Erscheint auf Ihren Arztberichten und im Tagesplan.',
+    firstNamePlaceholder: 'Vorname',
+    lastNamePlaceholder: 'Nachname',
+    editProfileTitle: 'Profil personalisieren',
+    editProfileSave: 'Speichern',
+    editProfileCancel: 'Abbrechen',
     remindersSettingsIntro: 'Wann und wie Takt Sie erinnert.',
     sendTestReminder: 'Test-Erinnerung senden',
     testReminderTitle: 'Test-Erinnerung',

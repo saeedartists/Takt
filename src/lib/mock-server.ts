@@ -211,10 +211,10 @@ const projectSettings: Record<string, { value: boolean; versionId: string }> = {
 };
 
 const currentUser = {
-  id: 'user-mock-1',
-  email: 'demo@ovok.local',
-  name: 'Demo User',
-  isAdmin: true,
+  id: 'user-takt-1',
+  email: '',
+  name: 'User',
+  isAdmin: false,
 };
 
 const routes: MockRoute[] = [
@@ -346,31 +346,54 @@ const routes: MockRoute[] = [
   },
 ];
 
-const isMockEnabled = (): boolean => env.ovokMockEnabled;
+const isMockEnabled = (): boolean => env.ovokMockEnabled || !env.ovokTenantCode;
 
-/** True when the in-memory demo data is serving this app's API calls. */
+/** True when the in-memory client-side data is serving this app's API calls. */
 export const isOvokMockActive = (): boolean => isMockEnabled();
 
 let installed = false;
 
 /*
- * On a device the demo data survives restarts, so medications added while testing keep their
- * reminders (a reseed would drop them and the reminder sync would cancel every reminder).
- * Web keeps the reseed-on-reload behaviour the e2e suite relies on.
+ * On a device the local data survives restarts, so medications added keep their
+ * reminders and schedules intact across app launches.
  */
-const PERSIST_KEY = 'takt:mock-store:v1';
+const PERSIST_KEY = 'takt:local-store:v2';
 const persistStore = Platform.OS !== 'web';
+
+const isLegacyDemoResource = (r: FhirResource): boolean => {
+  if (r.id === 'pat-001' || r.id === 'pat-002') return true;
+  const s = JSON.stringify(r);
+  return s.includes('Okonkwo') || s.includes('Halvorsen') || s.includes('demo@ovok.local');
+};
 
 const restoreStore = async (): Promise<void> => {
   if (!persistStore) return;
   try {
-    const raw = await AsyncStorage.getItem(PERSIST_KEY);
+    // Purge any legacy demo primary patient pointer
+    const oldPrimary = await AsyncStorage.getItem('takt:primary-patient-id:v1');
+    if (oldPrimary === 'pat-001' || oldPrimary === 'pat-002') {
+      await AsyncStorage.removeItem('takt:primary-patient-id:v1');
+    }
+
+    let raw = await AsyncStorage.getItem(PERSIST_KEY);
+    if (!raw) {
+      // Check for legacy v1 store and purge demo items if migrating
+      const v1 = await AsyncStorage.getItem('takt:mock-store:v1');
+      if (v1) {
+        raw = v1;
+        await AsyncStorage.removeItem('takt:mock-store:v1');
+      }
+    }
     if (!raw) return;
     const saved = JSON.parse(raw) as { nextId: number; resources: Record<string, FhirResource[]> };
     store.clear();
     for (const [resourceType, resources] of Object.entries(saved.resources)) {
       const b = bucket(resourceType);
-      for (const r of resources) b.set(r.id, r);
+      for (const r of resources) {
+        if (!isLegacyDemoResource(r)) {
+          b.set(r.id, r);
+        }
+      }
     }
     nextIdCounter = Math.max(nextIdCounter, saved.nextId);
   } catch {

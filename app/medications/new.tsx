@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { MedicationForm } from '@/components/takt/medication-form';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
-import { useCreateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
+import { useCreateMedicationPlan, useEnsurePatient } from '@/lib/hooks/use-takt-mutations';
 import { useLocale } from '@/lib/takt/l10n';
 import {
   EMPTY_MEDICATION_FORM,
@@ -32,6 +32,7 @@ export default function AddMedicationScreen() {
   const { t } = useLocale();
   const params = useLocalSearchParams<PrefillParams>();
   const patient = usePrimaryPatient();
+  const ensurePatient = useEnsurePatient();
   const createPlan = useCreateMedicationPlan();
   const [error, setError] = useState<string | null>(null);
 
@@ -54,10 +55,15 @@ export default function AddMedicationScreen() {
   }, [params]);
 
   const submit = async (values: MedicationFormValues) => {
-    const patientRef = patient.data ? `Patient/${patient.data.id}` : null;
+    let patientRef = patient.data ? `Patient/${patient.data.id}` : null;
     if (!patientRef) {
-      setError(t('noPatientProfileYet'));
-      return;
+      try {
+        const created = await ensurePatient.mutateAsync();
+        patientRef = `Patient/${created.id}`;
+      } catch {
+        setError(t('noPatientProfileYet'));
+        return;
+      }
     }
     setError(null);
     try {

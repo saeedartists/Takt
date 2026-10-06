@@ -493,18 +493,46 @@ export const useUndoDose = () => {
 
 export const useEnsurePatient = () => {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async () => {
+  return useMutation<{ id: string; resourceType: 'Patient' }, Error, { given?: string; family?: string } | void>({
+    mutationFn: async (nameInput) => {
+      const given = nameInput?.given?.trim();
+      const family = nameInput?.family?.trim();
+      const nameArray = given || family ? [{ given: given ? [given] : [], family: family ?? '' }] : [];
       const patient = await ovokFetch<{ id: string; resourceType: 'Patient' }>('/fhir/R4/Patient', {
         method: 'POST',
         body: JSON.stringify({
           resourceType: 'Patient',
-          name: [{ given: ['Takt'], family: 'User' }],
+          ...(nameArray.length > 0 ? { name: nameArray } : {}),
           gender: 'unknown',
         }),
       });
       await AsyncStorage.setItem(PRIMARY_PATIENT_STORAGE_KEY, patient.id);
       return patient;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['takt', 'patient'] });
+    },
+  });
+};
+
+export const useUpdatePatient = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, given, family }: { id: string; given?: string; family?: string }) => {
+      const trimmedGiven = given?.trim();
+      const trimmedFamily = family?.trim();
+      const name =
+        trimmedGiven || trimmedFamily ? [{ given: trimmedGiven ? [trimmedGiven] : [], family: trimmedFamily ?? '' }] : [];
+      const updated = await ovokFetch<{ id: string; resourceType: 'Patient' }>(`/fhir/R4/Patient/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          resourceType: 'Patient',
+          id,
+          name,
+          gender: 'unknown',
+        }),
+      });
+      return updated;
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['takt', 'patient'] });

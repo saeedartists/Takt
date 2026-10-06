@@ -6,7 +6,10 @@ import Animated from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Badge,
+  Button,
+  Card,
   INK,
+  Input,
   ListGroup,
   ListRow,
   PageHeader,
@@ -30,6 +33,7 @@ import { ConfirmExpander } from '@/components/takt/confirm-expander';
 import { useConsentStatus } from '@/lib/hooks/use-consent-status';
 import { useAccountEmail, useFamilySharingGrants } from '@/lib/hooks/use-family-sharing-grants';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
+import { useEnsurePatient, useUpdatePatient } from '@/lib/hooks/use-takt-mutations';
 import { ovokClient } from '@/lib/ovok-client';
 import { useLocale } from '@/lib/takt/l10n';
 import { useReminderPreferences } from '@/lib/takt/preferences';
@@ -40,19 +44,6 @@ import { env } from '@/lib/env';
 
 type PermissionStatus = Awaited<ReturnType<typeof readReminderPermissionStatus>>;
 type MessageKey = Parameters<ReturnType<typeof useLocale>['t']>[0];
-
-/** Internal QA boards. Rendered only in dev / mock builds. */
-const DEVELOPER_BOARDS: { key: MessageKey; route: string; icon: IconName }[] = [
-  { key: 'reminderTestTitle', route: '/settings/reminder-test', icon: 'notifications-outline' },
-  { key: 'reminderCertTitle', route: '/settings/reminder-certification', icon: 'ribbon-outline' },
-  { key: 'reportReviewTitle', route: '/settings/report-review', icon: 'document-text-outline' },
-  { key: 'sessionQaTitle', route: '/settings/session-security', icon: 'key-outline' },
-  { key: 'consentAuditTitle', route: '/settings/consent-audit', icon: 'lock-closed-outline' },
-  { key: 'isolationTitle', route: '/settings/isolation', icon: 'cube-outline' },
-  { key: 'releaseHubTitle', route: '/settings/release-hub', icon: 'sparkles-outline' },
-  { key: 'readinessTitle', route: '/settings/readiness', icon: 'checkmark-circle-outline' },
-  { key: 'a11yPassTitle', route: '/settings/accessibility-pass', icon: 'accessibility-outline' },
-];
 
 /** Plain ink glyph in a quiet circle: list rows stay calm next to the pastel tiles. */
 function RowIcon({ name }: { name: IconName }) {
@@ -189,7 +180,34 @@ export default function SettingsTabScreen() {
     ? t('careSettingsNext').replace('{date}', formatVisitWhen(nextVisit, localeApi))
     : t('careSettingsEmpty');
 
-  const showDeveloper = __DEV__;
+  const ensurePatient = useEnsurePatient();
+  const updatePatient = useUpdatePatient();
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editLastName, setEditLastName] = useState('');
+
+  const openEditProfile = () => {
+    setEditFirstName(name?.given?.[0] ?? '');
+    setEditLastName(name?.family ?? '');
+    setEditingProfile((prev) => !prev);
+  };
+
+  const saveProfile = async () => {
+    if (patient.data?.id) {
+      await updatePatient.mutateAsync({
+        id: patient.data.id,
+        given: editFirstName,
+        family: editLastName,
+      });
+    } else {
+      await ensurePatient.mutateAsync({
+        given: editFirstName,
+        family: editLastName,
+      });
+    }
+    setEditingProfile(false);
+  };
+
   const version = Constants.expoConfig?.version ?? '0.0.0';
   const runtimeVersion = Constants.expoConfig?.runtimeVersion;
   const build = typeof runtimeVersion === 'string' ? runtimeVersion : Constants.expoConfig?.ios?.buildNumber;
@@ -201,22 +219,59 @@ export default function SettingsTabScreen() {
       <Stack>
         {/* Profile: lilac is the "you / profile" tone. */}
         <Animated.View entering={enter(0)}>
-          <Tile tone="lilac" style={styles.profile}>
+          <Tile tone="lilac" onPress={openEditProfile} accessibilityLabel={t('editProfileTitle')} style={styles.profile}>
             <View style={styles.avatar}>
               <Text style={[typography.title3, { color: INK }]}>{initials || '·'}</Text>
             </View>
             <View style={styles.profileText}>
               <Text numberOfLines={1} style={[typography.title3, { color: INK }]}>
-                {fullName || t('profileSignedIn')}
+                {fullName || t('profileName')}
               </Text>
-              {email || fullName ? (
-                <Text numberOfLines={1} style={[typography.subhead, { color: c.tones.lilac.fg }]}>
-                  {email ?? t('profileSignedIn')}
-                </Text>
-              ) : null}
+              <Text numberOfLines={1} style={[typography.subhead, { color: c.tones.lilac.fg }]}>
+                {fullName ? t('profileLocalAccount') : t('profileTapToSet')}
+              </Text>
             </View>
+            <Ionicons name="pencil-outline" size={20} color={c.tones.lilac.fg} />
           </Tile>
         </Animated.View>
+
+        {editingProfile ? (
+          <Animated.View entering={enter(1)}>
+            <Card>
+              <View style={{ padding: spacing(4), gap: spacing(3) }}>
+                <Text style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>
+                  {t('editProfileTitle')}
+                </Text>
+                <View style={{ flexDirection: 'row', gap: spacing(2) }}>
+                  <View style={{ flex: 1 }}>
+                    <Input
+                      placeholder={t('firstNamePlaceholder')}
+                      value={editFirstName}
+                      onChangeText={setEditFirstName}
+                      autoCapitalize="words"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Input
+                      placeholder={t('lastNamePlaceholder')}
+                      value={editLastName}
+                      onChangeText={setEditLastName}
+                      autoCapitalize="words"
+                    />
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: spacing(2), justifyContent: 'flex-end' }}>
+                  <Button kind="ghost" label={t('editProfileCancel')} onPress={() => setEditingProfile(false)} />
+                  <Button
+                    label={t('editProfileSave')}
+                    onPress={() => void saveProfile()}
+                    loading={updatePatient.isPending || ensurePatient.isPending}
+                  />
+                </View>
+              </View>
+            </Card>
+          </Animated.View>
+        ) : null}
 
         <View style={styles.grid}>
           <View style={styles.gridRow}>
@@ -332,24 +387,6 @@ export default function SettingsTabScreen() {
           </Section>
         )}
 
-        {showDeveloper ? (
-          <Section index={9} title={t('developerSection')}>
-            <ListGroup>
-              {DEVELOPER_BOARDS.map((board, index) => (
-                <ListRow
-                  key={board.route}
-                  isFirst={index === 0}
-                  title={t(board.key)}
-                  leading={<RowIcon name={board.icon} />}
-                  onPress={() => router.push(board.route as never)}
-                />
-              ))}
-            </ListGroup>
-            <Text style={[typography.footnote, styles.footnote, { color: c.textTertiary }]}>
-              {t('developerSectionFootnote')}
-            </Text>
-          </Section>
-        ) : null}
 
         <View style={styles.footer}>
           <Text style={[typography.footnote, { color: c.textTertiary, textAlign: 'center' }]}>{t('safetyNote')}</Text>

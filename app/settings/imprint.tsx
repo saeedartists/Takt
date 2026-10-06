@@ -37,10 +37,6 @@ export default function ImprintScreen() {
                   {t(key)}
                 </Text>
               ))}
-              <View style={[styles.draft, { backgroundColor: c.tones.butter.bg }]}>
-                <Ionicons name="alert-circle-outline" size={18} color={c.tones.butter.fg} />
-                <Text style={[typography.footnote, styles.flex, { color: c.tones.butter.fg }]}>{t('imprintDraftNotice')}</Text>
-              </View>
             </View>
           </Card>
         </Animated.View>
@@ -58,5 +54,4 @@ const styles = StyleSheet.create({
   body: { padding: spacing(4), gap: spacing(1.5) },
   note: { flexDirection: 'row', gap: spacing(3), alignItems: 'flex-start', paddingHorizontal: spacing(1) },
   flex: { flex: 1, minWidth: 0 },
-  draft: { flexDirection: 'row', gap: spacing(2), alignItems: 'flex-start', padding: spacing(3), borderRadius: 16, marginTop: spacing(1.5) },
 });

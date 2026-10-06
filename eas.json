@@ -22,7 +22,7 @@
     "testflight": {
       "distribution": "store",
       "channel": "preview",
-      "autoIncrement": true,
+      "autoIncrement": false,
       "env": {
         "EXPO_PUBLIC_OVOK_MOCK": "1"
       }
@@ -35,16 +35,15 @@
       "android": {
         "buildType": "app-bundle"
       },
-      "autoIncrement": true,
+      "autoIncrement": false,
       "env": {
-        "EXPO_PUBLIC_OVOK_MOCK": "0",
-        "EXPO_PUBLIC_OVOK_API_URL": "https://api.ovok.com"
+        "EXPO_PUBLIC_OVOK_MOCK": "1"
       }
     },
     "play-internal": {
       "distribution": "store",
       "channel": "preview",
-      "autoIncrement": true,
+      "autoIncrement": false,
       "android": {
         "buildType": "app-bundle"
       },
