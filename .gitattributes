@@ -1,0 +1,6 @@
+store-assets/** export-ignore
+store-assets export-ignore
+scripts/store-shots/** export-ignore
+scripts/store-shots export-ignore
+docs/** export-ignore
+docs export-ignore
