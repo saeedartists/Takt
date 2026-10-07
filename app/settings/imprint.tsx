@@ -16,6 +16,7 @@ const LINES: MessageKey[] = [
   'imprintVat',
   'imprintEmail',
   'imprintResponsible',
+  'imprintDispute',
 ];
 
 export default function ImprintScreen() {

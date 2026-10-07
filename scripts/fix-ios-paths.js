@@ -61,8 +61,15 @@ if (fs.existsSync(pbxproj)) {
       fs.writeFileSync(pbxproj, stamped);
       console.log(`fix-ios-paths: set CURRENT_PROJECT_VERSION to ${buildNumber} in the Xcode project`);
     }
-  } else {
-    console.warn('fix-ios-paths: no CURRENT_PROJECT_VERSION found; the project template may have changed');
+  }
+  const appVersion = String(require(path.join(root, 'app.json')).expo.version);
+  text = fs.readFileSync(pbxproj, 'utf8');
+  if (/MARKETING_VERSION = [^;]+;/.test(text)) {
+    const stampedVer = text.replace(/MARKETING_VERSION = [^;]+;/g, `MARKETING_VERSION = ${appVersion};`);
+    if (stampedVer !== text) {
+      fs.writeFileSync(pbxproj, stampedVer);
+      console.log(`fix-ios-paths: set MARKETING_VERSION to ${appVersion} in the Xcode project`);
+    }
   }
 
   text = fs.readFileSync(pbxproj, 'utf8');
@@ -78,6 +85,24 @@ if (fs.existsSync(pbxproj)) {
     if (pinned !== text) {
       fs.writeFileSync(pbxproj, pinned);
       console.log('fix-ios-paths: pinned ENABLE_USER_SCRIPT_SANDBOXING = NO in the Xcode project');
+    }
+  }
+
+  const infoPlist = path.join(root, 'ios/TaktHealth/Info.plist');
+  if (fs.existsSync(infoPlist)) {
+    const appVersion = String(require(path.join(root, 'app.json')).expo.version);
+    let info = fs.readFileSync(infoPlist, 'utf8');
+    let updated = info.replace(
+      /(<key>CFBundleVersion<\/key>\s*<string>)[^<]+(<\/string>)/,
+      `$1${buildNumber}$2`
+    );
+    updated = updated.replace(
+      /(<key>CFBundleShortVersionString<\/key>\s*<string>)[^<]+(<\/string>)/,
+      `$1${appVersion}$2`
+    );
+    if (updated !== info) {
+      fs.writeFileSync(infoPlist, updated);
+      console.log(`fix-ios-paths: set CFBundleVersion to ${buildNumber} and CFBundleShortVersionString to ${appVersion} in Info.plist`);
     }
   }
 }

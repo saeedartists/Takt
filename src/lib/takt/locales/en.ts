@@ -61,7 +61,8 @@ export const en = {
     weeklyNotificationBody: 'A short look back at how your week went.',
     weeklyNotificationChannel: 'Weekly check-in',
     privacyOnDeviceTitle: 'Kept only on this phone',
-    privacyOnDeviceBody: 'Your health diary (mood, symptoms, notes) and your care team (contacts and appointments) are stored on this device only. They are never uploaded, and they are deleted when you withdraw consent.',
+    privacyOnDeviceBody:
+      'All your medication schedules, dose histories, notes, and profile details are stored locally on this device only. They are never uploaded to any server and remain entirely under your personal control.',
     // Care team & appointments (on-device)
     careNextVisit: 'Next visit',
     careToday: 'Today',
@@ -193,7 +194,7 @@ export const en = {
     imprint: 'Imprint',
     consentTitle: 'Health-data consent',
     consentBody:
-      'Takt stores your medication schedule and dose logs as health data. You can withdraw consent in Settings at any time.',
+      'Takt stores your medication schedule and dose logs locally on this device. No data is sent to external servers. You can withdraw consent in Settings at any time.',
     acceptConsent: 'I agree and continue',
     declineConsent: 'Not now',
     report: 'Doctor report',
@@ -357,18 +358,18 @@ export const en = {
     languageActiveEn: 'English active',
     privacyIntroTitle: 'Privacy notice (Takt)',
     privacyLine1:
-      'Takt processes medication schedules and dose logs as special-category health data under GDPR Article 9(2)(a), based on explicit consent.',
+      'Takt operates 100% locally on your device. Actimi GmbH does not collect, transmit, or store any personal or health data on any external server.',
     privacyLine2:
-      'Data minimisation: Takt stores only what is needed for reminders and adherence reporting (medications, schedules, taken/skipped/missed events, consent records).',
-    privacyLine3: 'No adverts, no data selling, and no third-party analytics SDK on health screens.',
+      'Data minimisation: All medication schedules, dose histories, and profile details are stored solely in your device’s local memory.',
+    privacyLine3: 'No adverts, no data collection, no data sales, and no third-party tracking or analytics SDKs.',
     privacyLine4:
-      'You can withdraw consent in Settings. Withdrawal stops future processing and returns you to the consent screen.',
+      'Complete control: You can edit or delete your data at any time in Settings, or remove everything by uninstalling the app.',
     privacyLine5:
       'Takt is not a medical device and does not provide diagnosis, treatment, or clinical advice.',
-    imprintCompany: 'Takt Health GmbH',
+    imprintCompany: 'Actimi GmbH',
     imprintDepartment: 'Digital Health',
-    imprintCity: '10117 Berlin, Germany',
-    imprintEmail: 'Email: support@takthealth.com',
+    imprintCity: '70186 Stuttgart, Germany',
+    imprintEmail: 'Email: info@actimi.com · Phone: +49 1523 1391031',
     imprintDraftNotice: '',
 
     // Reminder sound
@@ -376,31 +377,46 @@ export const en = {
     reminderSoundOn: 'Sound',
     reminderSoundOff: 'Silent',
 
-    // Privacy notice, app-specific (Art. 9 GDPR)
+    // Privacy notice, app-specific (German law / DSGVO / On-Device)
     privacyWhoTitle: 'Who is responsible',
-    privacyWhoBody: 'Takt Health GmbH operates Takt and is the controller for your data. Contact details are in the Imprint.',
-    privacyWhatTitle: 'What Takt stores',
-    privacyWhatBody: 'Your name, your medication plans (name, form, strength, schedule), every dose you confirm, skip or miss, and the consent you gave with its date and version. Nothing else.',
-    privacyWhereTitle: 'Where it is stored',
-    privacyWhereBody: 'On the Ovok health platform in the European Union, isolated per organisation, in the FHIR format used by healthcare systems. Preferences such as language, snooze length and supply counts stay on this device only.',
+    privacyWhoBody:
+      'Actimi GmbH (Albert-Schäffle-Str. 119, 70186 Stuttgart, Germany; Email: info@actimi.com) provides the Takt application. Because Takt operates 100% offline and locally on your device, Actimi GmbH does not collect, receive, or store any of your personal or health data on any server.',
+    privacyWhatTitle: 'What is stored',
+    privacyWhatBody:
+      'Your profile name, medication plans (name, form, strength, schedule), confirmed or skipped dose logs, and personal notes. All of this information is stored exclusively in the local app storage on your device.',
+    privacyWhereTitle: 'Where data is stored',
+    privacyWhereBody:
+      '100% locally on your smartphone. Takt uses no cloud servers, no remote databases, and requires no user account. Your data never leaves your device unless you choose to export a report.',
     privacyWhyTitle: 'Why, and on what basis',
-    privacyWhyBody: 'Medication data is health data under Article 9 GDPR. Takt processes it only to remind you, to keep your record and to produce the report you choose to share, based on the explicit consent you gave at first launch (Art. 9(2)(a) GDPR).',
+    privacyWhyBody:
+      'Your medication data is stored and processed locally on your device solely to trigger on-device reminder alarms, log your confirmed doses, and generate reports you personally choose to export. Under GDPR (Art. 6(1)(a) & Art. 9(2)(a)) and § 25(2) TDDDG, this local on-device operation is based on your explicit consent given when launching the app. No data is collected or stored on servers by Actimi GmbH.',
     privacyNotTitle: 'What Takt does not do',
-    privacyNotBody: 'No advertising, no sale of data, no analytics or tracking on health screens, no transfer outside the EEA, no advertising identifiers. Reminders are scheduled on your phone, not sent from a server.',
+    privacyNotBody:
+      'No data collection, no accounts, no advertising, no tracking or analytics SDKs, and no transmission to external servers or third parties. Medication alarms are scheduled locally by your mobile operating system.',
     privacyRightsTitle: 'Your rights',
-    privacyRightsBody: 'You can access, correct and delete your data and withdraw consent at any time in Settings. Withdrawal takes effect immediately and stops further processing. You may also lodge a complaint with a data-protection authority.',
-    privacyRetentionTitle: 'How long',
-    privacyRetentionBody: 'Until you delete your account or withdraw consent. Reports you export are your own copies and are not kept by Takt.',
-    privacyVersionLabel: 'Notice version 1 · September 2026',
+    privacyRightsBody:
+      'You maintain complete sovereignty over your data. You can edit or delete entries anytime in Settings, or remove all data completely by clearing app data or uninstalling the app. You also have the right to lodge a complaint with a competent data protection authority (such as the State Commissioner for Data Protection and Freedom of Information Baden-Württemberg).',
+    privacyRetentionTitle: 'Retention and deletion',
+    privacyRetentionBody:
+      'Your entries remain stored on your device only for as long as you keep the app installed. Actimi GmbH holds zero copies of your data.',
+    privacyVersionLabel: 'Privacy Notice · Actimi GmbH · October 2026',
 
     // Imprint fields
-    imprintAddress: 'Friedrichstraße 123',
-    imprintDirector: 'Managing Director: Dr. Julian Weber',
-    imprintRegister: 'Commercial Register: AG Charlottenburg (Berlin), HRB 248910 B',
-    imprintVat: 'VAT ID: DE 358 192 841',
-    imprintResponsible: 'Responsible for content (§ 18(2) MStV): Dr. Julian Weber, Friedrichstraße 123, 10117 Berlin',
+    imprintAddress: 'Albert-Schäffle-Str. 119',
+    imprintDirector: 'Managing Directors: Dr. Maximilian Weiß, Dietrich Charisius',
+    imprintRegister: 'Register Court: Amtsgericht Stuttgart, HRB 779927',
+    imprintVat: 'VAT ID (§ 27a UStG): DE346066138',
+    imprintResponsible: 'Responsible for content (§ 18(2) MStV): Dr. Maximilian Weiß, Albert-Schäffle-Str. 119, 70186 Stuttgart',
+    imprintDispute: 'Online dispute resolution (OS): https://ec.europa.eu/consumers/odr. We are neither obliged nor willing to participate in dispute resolution proceedings before a consumer arbitration board.',
 
     // Family sharing v1.1 (brief §11)
+    familySharingComingSoonBadge: 'Preview · Coming Soon',
+    familySharingComingSoonTitle: 'Family Sharing Preview',
+    familySharingComingSoonDescription:
+      'We are developing a secure, privacy-first way for trusted family members or caregivers to check your medication status without compromising your on-device privacy. This feature will be available in an upcoming update.',
+    familySharingPreviewNoticeTitle: 'Feature in Development',
+    familySharingPreviewNoticeBody:
+      'The invitation controls below are shown as a preview. To protect your privacy while the end-to-end sync architecture is finalized, invitations are currently disabled and will be unlocked in a future release.',
     familySharingEmailLabel: 'Email',
     familySharingEmailRequired: 'A valid email address is required to invite a relative.',
     familySharingConsentCheckbox: 'I consent to {name} seeing my medication times and whether I confirmed each dose today. I can withdraw this at any time in Settings.',
@@ -520,8 +536,8 @@ export const en = {
     pdfExportDone: 'PDF ready to share.',
     pdfWebPrintNote: 'Sharing isn’t available in the browser — use the print dialog to save as PDF.',
     consentPermissionsHint: 'Takt also asks for notification permission to deliver dose reminders at your chosen times.',
-    consentPillarStandardTitle: 'FHIR R4 health standard',
-    consentPillarStandardDescription: 'Your schedule and dose logs are stored as FHIR R4 health records.',
+    consentPillarStandardTitle: 'Kept only on your phone',
+    consentPillarStandardDescription: 'Your schedule and dose logs stay locally on this device only. Never uploaded.',
     consentPillarRemindersTitle: 'Calm, dignified reminders',
     consentPillarRemindersDescription: 'Scheduled reminders with generous grace windows, so you never feel rushed.',
     consentPillarReportTitle: 'Ready for your doctor visit',

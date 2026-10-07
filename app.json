@@ -3,13 +3,13 @@
     "name": "Takt Health",
     "slug": "saeed",
     "scheme": "takt",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.actimi.takt",
-      "buildNumber": "8",
+      "buildNumber": "9",
       "infoPlist": {
         "CFBundleDisplayName": "Takt Health",
         "ITSAppUsesNonExemptEncryption": false,
@@ -22,7 +22,7 @@
       "permissions": [
         "SCHEDULE_EXACT_ALARM"
       ],
-      "versionCode": 5,
+      "versionCode": 6,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#15171C"

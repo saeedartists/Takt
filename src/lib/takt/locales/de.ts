@@ -61,7 +61,8 @@ export const de = {
     weeklyNotificationBody: 'Ein kurzer Rückblick darauf, wie Ihre Woche war.',
     weeklyNotificationChannel: 'Wochenrückblick',
     privacyOnDeviceTitle: 'Nur auf diesem Telefon',
-    privacyOnDeviceBody: 'Ihr Gesundheitstagebuch (Befinden, Beschwerden, Notizen) und Ihre Betreuung (Kontakte und Termine) werden nur auf diesem Gerät gespeichert. Sie werden nie hochgeladen und beim Widerruf der Einwilligung gelöscht.',
+    privacyOnDeviceBody:
+      'Alle Ihre Medikationspläne, Dosisprotokolle, Notizen und Profilangaben werden ausschließlich lokal auf diesem Gerät gespeichert. Sie werden zu keinem Zeitpunkt an externe Server übertragen und verbleiben vollständig unter Ihrer Kontrolle.',
     // Care team & appointments (on-device)
     careNextVisit: 'Nächster Termin',
     careToday: 'Heute',
@@ -193,7 +194,7 @@ export const de = {
     imprint: 'Impressum',
     consentTitle: 'Einwilligung zu Gesundheitsdaten',
     consentBody:
-      'Takt speichert Ihren Medikationsplan und Einnahmeprotokolle als Gesundheitsdaten. Sie können die Einwilligung jederzeit in den Einstellungen widerrufen.',
+      'Takt speichert Ihren Medikationsplan und Ihre Dosisprotokolle lokal auf diesem Gerät. Es werden keine Daten an externe Server übertragen. Sie können Ihre Einwilligung jederzeit in den Einstellungen widerrufen.',
     acceptConsent: 'Ich stimme zu und fahre fort',
     declineConsent: 'Jetzt nicht',
     report: 'Arztbericht',
@@ -357,17 +358,17 @@ export const de = {
     languageActiveEn: 'Englisch aktiv',
     privacyIntroTitle: 'Datenschutzhinweis (Takt)',
     privacyLine1:
-      'Takt verarbeitet Medikationspläne und Einnahmeprotokolle als besondere Gesundheitsdaten nach Art. 9 Abs. 2 lit. a DSGVO auf Basis einer ausdrücklichen Einwilligung.',
+      'Takt arbeitet zu 100 % lokal auf Ihrem Endgerät. Die Actimi GmbH erhebt, überträgt und speichert keinerlei personenbezogene Daten oder Gesundheitsdaten auf externen Servern.',
     privacyLine2:
-      'Datenminimierung: Takt speichert nur Daten, die für Erinnerungen und Adhärenzberichte nötig sind (Medikamente, Zeitpläne, genommen/ausgelassen/verpasst-Ereignisse, Einwilligungen).',
-    privacyLine3: 'Keine Werbung, kein Datenverkauf und keine Drittanbieter-Analytics auf Gesundheitsseiten.',
+      'Datenminimierung: Alle Medikationspläne, Einnahmeprotokolle und Profilangaben werden ausschließlich im lokalen Gerätespeicher abgelegt.',
+    privacyLine3: 'Keine Werbung, kein Datenverkauf, kein Tracking und keine Drittanbieter-Analysedienste.',
     privacyLine4:
-      'Sie können die Einwilligung in den Einstellungen widerrufen. Der Widerruf stoppt die weitere Verarbeitung und führt zurück zur Einwilligungsseite.',
+      'Volle Kontrolle: Sie können Ihre Daten jederzeit in den Einstellungen anpassen oder durch Deinstallation der App rückstandslos löschen.',
     privacyLine5: 'Takt ist kein Medizinprodukt und gibt keine Diagnose, Behandlung oder klinische Empfehlung.',
-    imprintCompany: 'Takt Health GmbH',
+    imprintCompany: 'Actimi GmbH',
     imprintDepartment: 'Digitale Gesundheit',
-    imprintCity: '10117 Berlin, Deutschland',
-    imprintEmail: 'E-Mail: support@takthealth.com',
+    imprintCity: '70186 Stuttgart, Deutschland',
+    imprintEmail: 'E-Mail: info@actimi.com · Telefon: +49 1523 1391031',
     imprintDraftNotice: '',
 
     // Erinnerungston
@@ -375,31 +376,46 @@ export const de = {
     reminderSoundOn: 'Mit Ton',
     reminderSoundOff: 'Lautlos',
 
-    // Datenschutzhinweis, app-spezifisch (Art. 9 DSGVO)
+    // Datenschutzhinweis, app-spezifisch (Deutsches Recht / DSGVO / Lokal auf dem Gerät)
     privacyWhoTitle: 'Wer verantwortlich ist',
-    privacyWhoBody: 'Die Takt Health GmbH betreibt Takt und ist Verantwortliche für Ihre Daten. Die Kontaktdaten stehen im Impressum.',
-    privacyWhatTitle: 'Was Takt speichert',
-    privacyWhatBody: 'Ihren Namen, Ihre Medikationspläne (Name, Form, Stärke, Zeitplan), jede Dosis, die Sie bestätigen, überspringen oder auslassen, sowie Ihre Einwilligung mit Datum und Version. Sonst nichts.',
+    privacyWhoBody:
+      'Die Actimi GmbH (Albert-Schäffle-Str. 119, 70186 Stuttgart, Deutschland; E-Mail: info@actimi.com) stellt die App Takt bereit. Da Takt vollständig lokal auf Ihrem Endgerät arbeitet, erhebt, empfängt oder speichert die Actimi GmbH zu keinem Zeitpunkt personenbezogene Daten oder Gesundheitsdaten auf externen Servern.',
+    privacyWhatTitle: 'Was gespeichert wird',
+    privacyWhatBody:
+      'Ihr Profilname, Ihre Medikationspläne (Name, Darreichungsform, Stärke, Zeitplan), bestätigte oder ausgelassene Dosen sowie Notizen. Alle diese Angaben werden ausschließlich im geschützten lokalen Speicher Ihres Endgeräts abgelegt.',
     privacyWhereTitle: 'Wo die Daten liegen',
-    privacyWhereBody: 'Auf der Gesundheitsplattform Ovok in der Europäischen Union, pro Organisation getrennt, im FHIR-Format des Gesundheitswesens. Einstellungen wie Sprache, Erinnerungsdauer und Vorratszahlen bleiben nur auf diesem Gerät.',
+    privacyWhereBody:
+      'Ausschließlich lokal auf Ihrem Smartphone. Takt nutzt keine Cloud-Server, keine externen Datenbanken und erfordert kein Benutzerkonto. Ihre Daten verlassen Ihr Gerät zu keinem Zeitpunkt.',
     privacyWhyTitle: 'Wozu, und auf welcher Grundlage',
-    privacyWhyBody: 'Medikationsdaten sind Gesundheitsdaten nach Art. 9 DSGVO. Takt verarbeitet sie ausschließlich, um Sie zu erinnern, Ihr Protokoll zu führen und den Bericht zu erstellen, den Sie selbst weitergeben. Grundlage ist Ihre ausdrückliche Einwilligung beim ersten Start (Art. 9 Abs. 2 lit. a DSGVO).',
+    privacyWhyBody:
+      'Die lokale Speicherung und Verarbeitung erfolgt einzig zu dem Zweck, Ihnen lokale Erinnerungen auf Ihrem Gerät anzuzeigen, Ihr Einnahmeprotokoll zu führen und Berichte zu erstellen, die Sie selbst exportieren möchten. Rechtsgrundlage nach DSGVO (Art. 6 Abs. 1 lit. a, Art. 9 Abs. 2 lit. a) und § 25 Abs. 2 TDDDG ist Ihre ausdrückliche Einwilligung beim ersten Start der App. Die Actimi GmbH erhebt und speichert zu keinem Zeitpunkt Daten auf Servern.',
     privacyNotTitle: 'Was Takt nicht tut',
-    privacyNotBody: 'Keine Werbung, kein Datenverkauf, keine Analyse- oder Tracking-Dienste auf Gesundheitsbildschirmen, keine Übermittlung außerhalb des EWR, keine Werbe-IDs. Erinnerungen werden auf Ihrem Telefon geplant, nicht von einem Server gesendet.',
+    privacyNotBody:
+      'Keine Datenerhebung, keine Benutzerkonten, keine Werbung, keine Analyse- oder Tracking-Dienste und keine Weitergabe an Dritte. Erinnerungen werden direkt vom Betriebssystem Ihres Telefons lokal geplant und ausgelöst.',
     privacyRightsTitle: 'Ihre Rechte',
-    privacyRightsBody: 'Sie können Ihre Daten jederzeit einsehen, berichtigen und löschen sowie Ihre Einwilligung in den Einstellungen widerrufen. Der Widerruf wirkt sofort und beendet die weitere Verarbeitung. Sie können sich außerdem bei einer Datenschutzaufsichtsbehörde beschweren.',
-    privacyRetentionTitle: 'Wie lange',
-    privacyRetentionBody: 'Bis Sie Ihr Konto löschen oder die Einwilligung widerrufen. Exportierte Berichte sind Ihre eigenen Kopien und werden von Takt nicht aufbewahrt.',
-    privacyVersionLabel: 'Hinweis Version 1 · September 2026',
+    privacyRightsBody:
+      'Sie behalten jederzeit die volle Souveränität über Ihre Daten. Sie können Einträge in den Einstellungen ändern oder sämtliche Daten durch Löschen des App-Speichers bzw. Deinstallation der App restlos entfernen. Sie haben das Recht, sich an eine zuständige Datenschutzaufsichtsbehörde (z. B. den LfDI Baden-Württemberg) zu wenden.',
+    privacyRetentionTitle: 'Speicherdauer und Löschung',
+    privacyRetentionBody:
+      'Ihre Daten verbleiben nur so lange auf Ihrem Smartphone, wie Sie die App installiert haben. Die Actimi GmbH speichert keine Kopien Ihrer Daten.',
+    privacyVersionLabel: 'Datenschutzhinweis · Actimi GmbH · Oktober 2026',
 
     // Impressum
-    imprintAddress: 'Friedrichstraße 123',
-    imprintDirector: 'Geschäftsführung: Dr. Julian Weber',
-    imprintRegister: 'Handelsregister: AG Charlottenburg (Berlin), HRB 248910 B',
-    imprintVat: 'USt-IdNr.: DE 358 192 841',
-    imprintResponsible: 'Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV: Dr. Julian Weber, Friedrichstraße 123, 10117 Berlin',
+    imprintAddress: 'Albert-Schäffle-Str. 119',
+    imprintDirector: 'Geschäftsführung: Dr. Maximilian Weiß, Dietrich Charisius',
+    imprintRegister: 'Registergericht: Amtsgericht Stuttgart, HRB 779927',
+    imprintVat: 'USt-IdNr. (§ 27a UStG): DE346066138',
+    imprintResponsible: 'Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV: Dr. Maximilian Weiß, Albert-Schäffle-Str. 119, 70186 Stuttgart',
+    imprintDispute: 'Online-Streitbeilegung (OS): https://ec.europa.eu/consumers/odr. Wir sind weder verpflichtet noch bereit, an einem Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.',
 
     // Familienfreigabe v1.1 (Brief §11)
+    familySharingComingSoonBadge: 'Vorschau · In Kürze',
+    familySharingComingSoonTitle: 'Familienfreigabe · Vorschau',
+    familySharingComingSoonDescription:
+      'Wir entwickeln eine sichere, datenschutzkonforme Möglichkeit für vertraute Angehörige oder Betreuungspersonen, Ihren Einnahmestatus einzusehen – ohne Ihre lokale Datenprivatsphäre zu gefährden. Diese Funktion wird in einem kommenden Update freigeschaltet.',
+    familySharingPreviewNoticeTitle: 'Funktion in Entwicklung',
+    familySharingPreviewNoticeBody:
+      'Die nachfolgenden Eingabefelder dienen zur Vorschau. Zum Schutz Ihrer Privatsphäre während der Fertigstellung der Ende-zu-Ende-Architektur sind Einladungen derzeit deaktiviert und werden in einem kommenden Update aktiviert.',
     familySharingEmailLabel: 'E-Mail',
     familySharingEmailRequired: 'Zum Einladen wird eine gültige E-Mail-Adresse benötigt.',
     familySharingConsentCheckbox: 'Ich willige ein, dass {name} meine Einnahmezeiten sieht und ob ich jede Dosis heute bestätigt habe. Ich kann das jederzeit in den Einstellungen widerrufen.',
@@ -519,8 +535,8 @@ export const de = {
     pdfExportDone: 'PDF bereit zum Teilen.',
     pdfWebPrintNote: 'Teilen ist im Browser nicht verfügbar – speichern Sie den Bericht über den Druckdialog als PDF.',
     consentPermissionsHint: 'Takt fragt außerdem nach Benachrichtigungsrechten, um Dosis-Erinnerungen zu Ihren Zeiten auszuliefern.',
-    consentPillarStandardTitle: 'FHIR-R4-Gesundheitsstandard',
-    consentPillarStandardDescription: 'Ihr Einnahmeplan und Ihre Dosisprotokolle werden als FHIR-R4-Gesundheitsdaten gespeichert.',
+    consentPillarStandardTitle: 'Nur auf diesem Gerät',
+    consentPillarStandardDescription: 'Ihr Einnahmeplan und Ihre Dosisprotokolle bleiben ausschließlich auf diesem Telefon. Kein Server-Upload.',
     consentPillarRemindersTitle: 'Ruhige, respektvolle Erinnerungen',
     consentPillarRemindersDescription: 'Geplante Erinnerungen mit großzügigen Zeitfenstern, damit Sie sich nie gehetzt fühlen.',
     consentPillarReportTitle: 'Bereit für den Arztbesuch',

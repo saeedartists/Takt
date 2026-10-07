@@ -188,12 +188,32 @@ export default function FamilySharingScreen() {
               </Animated.View>
             </View>
             <View style={styles.heroText}>
-              <Text accessibilityRole="header" style={[typography.title2, { color: INK }]}>
-                {t('familySharingHeroTitle')}
-              </Text>
+              <View style={styles.heroBadgeRow}>
+                <Text accessibilityRole="header" style={[typography.title2, { color: INK }]}>
+                  {t('familySharingHeroTitle')}
+                </Text>
+                <Badge label={t('familySharingComingSoonBadge')} tone="info" size="sm" />
+              </View>
               <Text style={[typography.subhead, { color: c.tones.sage.fg }]}>{t('familySharingSubtitle')}</Text>
             </View>
           </Tile>
+        </Animated.View>
+
+        <Animated.View entering={enter(0)}>
+          <Card style={{ backgroundColor: c.tones.lilac.bg, borderColor: c.tones.lilac.solid, borderWidth: 1 }}>
+            <View style={styles.comingSoonBanner}>
+              <View style={styles.comingSoonHeader}>
+                <Ionicons name="sparkles" size={20} color={c.tones.lilac.fg} />
+                <Badge label={t('familySharingComingSoonBadge')} tone="info" size="sm" />
+              </View>
+              <Text style={[typography.headline, { color: c.textPrimary }]}>
+                {t('familySharingComingSoonTitle')}
+              </Text>
+              <Text style={[typography.callout, { color: c.textSecondary, lineHeight: 20 }]}>
+                {t('familySharingComingSoonDescription')}
+              </Text>
+            </View>
+          </Card>
         </Animated.View>
 
         <Animated.View entering={enter(1)}>
@@ -301,80 +321,74 @@ export default function FamilySharingScreen() {
 
         <Animated.View entering={enter(3)} layout={LinearTransition.duration(duration.base)}>
           <SectionHeader title={t('familySharingAddTitle')} />
-          <Card>
-            <View style={styles.form}>
-              <Field label={t('familySharingFirstNameLabel')}>
-                <Input value={givenName} onChangeText={setGivenName} placeholder={t('familySharingFirstNamePlaceholder')} autoCapitalize="words" />
-              </Field>
-              <Field label={t('familySharingLastNameLabel')}>
-                <Input value={familyName} onChangeText={setFamilyName} placeholder={t('familySharingLastNamePlaceholder')} autoCapitalize="words" />
-              </Field>
-              <Field
-                label={t('familySharingEmailLabel')}
-                error={email.trim() && !isEmail(email) ? t('familySharingEmailRequired') : hasDuplicate ? t('familySharingDuplicateHint') : undefined}
-              >
-                <Input
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder={t('familySharingEmailOptionalPlaceholder')}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="email-address"
-                  textContentType="emailAddress"
-                  invalid={Boolean(email.trim()) && !isEmail(email)}
-                />
-              </Field>
-              <Field label={t('familySharingRelationshipLabel')}>
-                <AnimatedSegmentedControl
-                  value={relationshipCode}
-                  onChange={(next) => setRelationshipCode(next as (typeof RELATIONSHIP_OPTIONS)[number]['value'])}
-                  options={RELATIONSHIP_OPTIONS.map((option) => ({ value: option.value, label: t(option.labelKey) }))}
-                />
-              </Field>
+          <View style={styles.previewContainer}>
+            <View
+              style={styles.blurredContent}
+              pointerEvents="none"
+              aria-hidden={true}
+              accessibilityElementsHidden={true}
+              importantForAccessibility="no-hide-descendants"
+            >
+              <Card>
+                <View style={styles.form}>
+                  <Field label={t('familySharingFirstNameLabel')}>
+                    <Input value={givenName} onChangeText={setGivenName} placeholder={t('familySharingFirstNamePlaceholder')} autoCapitalize="words" editable={false} />
+                  </Field>
+                  <Field label={t('familySharingLastNameLabel')}>
+                    <Input value={familyName} onChangeText={setFamilyName} placeholder={t('familySharingLastNamePlaceholder')} autoCapitalize="words" editable={false} />
+                  </Field>
+                  <Field label={t('familySharingEmailLabel')}>
+                    <Input
+                      value={email}
+                      onChangeText={setEmail}
+                      placeholder={t('familySharingEmailOptionalPlaceholder')}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="email-address"
+                      textContentType="emailAddress"
+                      editable={false}
+                    />
+                  </Field>
+                  <Field label={t('familySharingRelationshipLabel')}>
+                    <AnimatedSegmentedControl
+                      value={relationshipCode}
+                      onChange={(next) => setRelationshipCode(next as (typeof RELATIONSHIP_OPTIONS)[number]['value'])}
+                      options={RELATIONSHIP_OPTIONS.map((option) => ({ value: option.value, label: t(option.labelKey) }))}
+                    />
+                  </Field>
 
-              {/* Unbundled, affirmative Article 9 consent for this one relative. */}
-              <AnimatedPressable
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: consented }}
-                accessibilityLabel={consentText}
-                haptic="light"
-                scaleTo={0.98}
-                onPress={() => setConsented((value) => !value)}
-                style={[styles.consentRow, { backgroundColor: c.surfaceSubtle, borderColor: consented ? c.textPrimary : c.separator }]}
-              >
-                <View style={[styles.box, { borderColor: c.textPrimary, backgroundColor: consented ? c.ink : 'transparent' }]}>
-                  {consented ? (
-                    <Animated.View entering={reduce ? undefined : ZoomIn.duration(180)}>
-                      <Ionicons name="checkmark" size={18} color={c.onInk} />
-                    </Animated.View>
-                  ) : null}
+                  {/* Unbundled, affirmative Article 9 consent for this one relative. */}
+                  <View style={[styles.consentRow, { backgroundColor: c.surfaceSubtle, borderColor: c.separator }]}>
+                    <View style={[styles.box, { borderColor: c.textPrimary, backgroundColor: 'transparent' }]} />
+                    <Text style={[typography.subhead, styles.flex, { color: c.textSecondary }]}>{consentText}</Text>
+                  </View>
+
+                  <Button
+                    size="lg"
+                    label={t('familySharingGrantCta')}
+                    icon={<Ionicons name="mail-outline" size={20} color={c.textTertiary} />}
+                    disabled
+                  />
                 </View>
-                <Text style={[typography.subhead, styles.flex, { color: c.textPrimary }]}>{consentText}</Text>
-              </AnimatedPressable>
-
-              {submitError ? (
-                <Animated.View entering={FadeIn.duration(duration.base)} accessibilityRole="alert" style={styles.message}>
-                  <Ionicons name="alert-circle" size={18} color={c.destructive} />
-                  <Text style={[typography.subhead, styles.flex, { color: c.destructive }]}>{submitError}</Text>
-                </Animated.View>
-              ) : null}
-              {successMessage ? (
-                <Animated.View entering={FadeIn.duration(duration.base)} style={styles.message}>
-                  <Ionicons name="checkmark-circle" size={18} color={c.success} />
-                  <Text style={[typography.subhead, styles.flex, { color: c.textPrimary }]}>{successMessage}</Text>
-                </Animated.View>
-              ) : null}
-
-              <Button
-                size="lg"
-                label={t('familySharingGrantCta')}
-                icon={<Ionicons name="mail-outline" size={20} color={canSubmit ? c.onInk : c.textTertiary} />}
-                loading={grantMutation.isPending}
-                disabled={!canSubmit || revokeMutation.isPending}
-                onPress={() => void submitGrant()}
-              />
+              </Card>
             </View>
-          </Card>
+
+            {/* Frosted / half-blurry preview overlay */}
+            <View style={styles.overlayWrapper} pointerEvents="box-none">
+              <View style={[styles.frostedOverlayCard, { backgroundColor: c.surface, borderColor: c.separator }]}>
+                <View style={[styles.frostedIconWrap, { backgroundColor: c.tones.lilac.bg }]}>
+                  <Ionicons name="sparkles" size={24} color={c.tones.lilac.fg} />
+                </View>
+                <Text style={[typography.headline, { color: c.textPrimary, textAlign: 'center' }]}>
+                  {t('familySharingPreviewNoticeTitle')}
+                </Text>
+                <Text style={[typography.footnote, { color: c.textSecondary, textAlign: 'center', lineHeight: 18 }]}>
+                  {t('familySharingPreviewNoticeBody')}
+                </Text>
+                <Badge label={t('familySharingComingSoonBadge')} tone="info" size="sm" />
+              </View>
+            </View>
+          </View>
         </Animated.View>
 
         {revokedGrants.length > 0 ? (
@@ -473,4 +487,40 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   message: { flexDirection: 'row', alignItems: 'center', gap: spacing(2) },
+  heroBadgeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing(2) },
+  comingSoonBanner: { padding: spacing(4), gap: spacing(2) },
+  comingSoonHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing(2) },
+  previewContainer: { position: 'relative' },
+  blurredContent: { opacity: 0.35 },
+  overlayWrapper: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing(4),
+    zIndex: 10,
+  },
+  frostedOverlayCard: {
+    padding: spacing(5),
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    alignItems: 'center',
+    gap: spacing(2.5),
+    maxWidth: 320,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 14,
+    elevation: 6,
+  },
+  frostedIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

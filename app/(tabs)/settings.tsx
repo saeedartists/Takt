@@ -305,7 +305,7 @@ export default function SettingsTabScreen() {
               tone="sage"
               icon="people-outline"
               title={t('familySharingRouteTitle')}
-              value={familySummary}
+              value={t('familySharingComingSoonBadge')}
               onPress={() => router.push('/settings/family-sharing' as never)}
             />
             <SettingsTile
