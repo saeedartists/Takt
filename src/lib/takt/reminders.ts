@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Linking, PermissionsAndroid, Platform } from 'react-native';
+import { Alert, AppState, Linking, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { addDays, atClockTime, isoDateKey, startOfDay } from './time';
 import { useLocale } from './l10n';
@@ -10,7 +10,9 @@ import type { IntakeInstruction, MedicationPlan } from './types';
 import { readReminderPreferences, useReminderPreferences } from './preferences';
 import {
   alarmsAvailable,
+  canScheduleExactAlarms,
   cancelAlarm,
+  openExactAlarmSettings,
   listAlarms,
   getAlarmAuthorization,
   requestAlarmAuthorization,
@@ -33,16 +35,16 @@ const nativeCopy = {
   en: {
     channel: 'Dose reminders',
     channelSilent: 'Dose reminders (silent)',
-    exactTitle: 'Exact alarm permission',
-    exactMessage: 'Takt needs exact alarms so a reminder arrives at the dose time, not minutes later.',
+    exactTitle: 'Get reminders on time',
+    exactMessage: 'Without this, Android can delay dose reminders by up to an hour. On the next screen, turn on "Allow setting alarms and reminders" for Takt.',
     allow: 'Allow',
     deny: 'Not now',
   },
   de: {
     channel: 'Dosis-Erinnerungen',
     channelSilent: 'Dosis-Erinnerungen (lautlos)',
-    exactTitle: 'Berechtigung für exakte Alarme',
-    exactMessage: 'Takt braucht exakte Alarme, damit eine Erinnerung genau zur Einnahmezeit kommt und nicht Minuten später.',
+    exactTitle: 'Erinnerungen pünktlich erhalten',
+    exactMessage: 'Ohne diese Einstellung kann Android Dosis-Erinnerungen bis zu einer Stunde verzögern. Aktiviere auf dem nächsten Bildschirm „Wecker und Erinnerungen erlauben“ für Takt.',
     allow: 'Erlauben',
     deny: 'Jetzt nicht',
   },
@@ -52,7 +54,7 @@ const readNativeCopy = async () =>
   (await AsyncStorage.getItem(LOCALE_STORAGE_KEY)) === 'de' ? nativeCopy.de : nativeCopy.en;
 
 /** Android routes sound through the channel, so silent reminders need their own channel. */
-const channelFor = (sound: boolean): string | undefined =>
+export const channelFor = (sound: boolean): string | undefined =>
   Platform.OS === 'android' ? (sound ? CHANNEL_ID : SILENT_CHANNEL_ID) : undefined;
 const MAX_PENDING_NOTIFICATIONS = 60;
 /** The one repeating "Your week" notification: fixed id, so rescheduling replaces rather than duplicates. */
@@ -296,9 +298,9 @@ const writeMetrics = async (metrics: ReminderMetrics): Promise<void> => {
 
 export const readReminderMetrics = readMetrics;
 
-export const trackReminderScheduled = async (): Promise<void> => {
+export const trackReminderScheduled = async (count = 1): Promise<void> => {
   const metrics = await readMetrics();
-  metrics.totalScheduled += 1;
+  metrics.totalScheduled += count;
   metrics.lastUpdated = new Date().toISOString();
   await writeMetrics(metrics);
 };
@@ -428,43 +430,35 @@ const ensureChannel = async (): Promise<void> => {
   await Notifications.setNotificationChannelAsync(SILENT_CHANNEL_ID, { ...base, name: copy.channelSilent, sound: null });
 };
 
-const getScheduleExactAlarmPermission = (): string | null => {
-  const candidate = (PermissionsAndroid.PERMISSIONS as Record<string, string | undefined>)
-    .SCHEDULE_EXACT_ALARM;
-  return candidate ?? null;
-};
-
+/** Android 12+: may reminders fire on time? Old builds without the native check count as yes. */
 const checkExactAlarmPermission = async (): Promise<boolean> => {
   if (Platform.OS !== 'android') return true;
-  if (typeof Platform.Version !== 'number' || Platform.Version < 31) return true;
-
-  const exactAlarmPermission = getScheduleExactAlarmPermission();
-  if (!exactAlarmPermission) {
-    await appendDiagnosticEvent('schedule.reconcile.warning', 'exact-alarm-permission-unavailable');
-    return false;
-  }
-
-  const hasPermission = await PermissionsAndroid.check(exactAlarmPermission as any);
-  if (hasPermission) return true;
-
-  try {
-    const copy = await readNativeCopy();
-    const result = await PermissionsAndroid.request(exactAlarmPermission as any, {
-      title: copy.exactTitle,
-      message: copy.exactMessage,
-      buttonPositive: copy.allow,
-      buttonNegative: copy.deny,
-    });
-
-    return result === PermissionsAndroid.RESULTS.GRANTED;
-  } catch {
-    return false;
-  }
+  return canScheduleExactAlarms() ?? true;
 };
 
-const openExactAlarmSettings = async (): Promise<void> => {
+const openExactAlarmSettingsPage = async (): Promise<void> => {
   if (Platform.OS !== 'android') return;
-  await Linking.openSettings();
+  if (!openExactAlarmSettings()) await Linking.openSettings();
+};
+
+const EXACT_ALARM_PROMPT_KEY = 'takt:exact-alarm-prompted-at:v1';
+
+/**
+ * Android 14+ installs start without exact alarms, so reminders drift by up to an hour.
+ * Ask with our own explanation, then send the user to the system switch. At most once a day,
+ * and only once notifications themselves are allowed (the consent screen asks for those).
+ */
+const promptExactAlarmIfNeeded = async (): Promise<void> => {
+  if (Platform.OS !== 'android' || (await checkExactAlarmPermission())) return;
+  if ((await readReminderPermissionStatus()) !== 'granted') return;
+  const last = await readJson<number>(EXACT_ALARM_PROMPT_KEY, 0);
+  if (Date.now() - last < 24 * 60 * 60 * 1000) return;
+  await writeJson(EXACT_ALARM_PROMPT_KEY, Date.now());
+  const copy = await readNativeCopy();
+  Alert.alert(copy.exactTitle, copy.exactMessage, [
+    { text: copy.deny, style: 'cancel' },
+    { text: copy.allow, onPress: () => void openExactAlarmSettingsPage() },
+  ]);
 };
 
 export const useExactAlarmPermission = () => {
@@ -495,7 +489,7 @@ export const useExactAlarmPermission = () => {
     hasPermission,
     loading,
     requestPermission: refresh,
-    openSettings: openExactAlarmSettings,
+    openSettings: openExactAlarmSettingsPage,
   };
 };
 
@@ -520,10 +514,7 @@ const reconcileSchedule = async (
   }
 
   const hasExactAlarm = await checkExactAlarmPermission();
-  if (!hasExactAlarm) {
-    await appendDiagnosticEvent('schedule.reconcile.blocked', 'exact-alarm-denied');
-    await appendDiagnosticEvent('schedule.reconcile.warning', 'using-inexact-alarms');
-  }
+  if (!hasExactAlarm) await appendDiagnosticEvent('schedule.reconcile.warning', 'exact-alarm-denied:using-inexact-alarms');
 
   await ensureChannel();
   await ensureCategory(copy);
@@ -536,8 +527,10 @@ const reconcileSchedule = async (
   const useAlarms = Platform.OS === 'ios' && prefs.alarm && prefs.sound && alarmAuth === 'authorized';
   const sound = (seed: ReminderSeed): string | false =>
     prefs.sound && !(useAlarms && seed.kind === 'dose') ? ALARM_SOUND : false;
+  // The exact flag is part of the key: Android keeps an alarm inexact until it is scheduled again,
+  // so granting "Alarms & reminders" must re-add every pending reminder.
   const keyOf = (seed: ReminderSeed): string =>
-    [seed.kind, seed.doseKey, seed.triggerAt.toISOString(), String(sound(seed)), seed.title, seed.body].join('|');
+    [seed.kind, seed.doseKey, seed.triggerAt.toISOString(), String(sound(seed)), seed.title, seed.body, hasExactAlarm ? 'exact' : 'inexact'].join('|');
   const wanted = new Map(seeds.map((seed) => [keyOf(seed), seed]));
 
   // Diff, don't rebuild: reconciles run on every resume and data refresh, and cancelling and
@@ -591,10 +584,10 @@ const reconcileSchedule = async (
     });
 
     nextIds.push(id);
-    await trackReminderScheduled();
   }
 
   await writeScheduledIds(nextIds);
+  if (wanted.size) await trackReminderScheduled(wanted.size);
   await reconcileAlarms(useAlarms ? seeds : [], copy).catch((error: unknown) =>
     appendDiagnosticEvent('alarms.unavailable', `error:${String(error)}`),
   );
@@ -767,6 +760,7 @@ export const useReminderSync = (plans: MedicationPlan[], enabled: boolean, confi
     if (!enabled || Platform.OS === 'web') return;
 
     await ensureAlarmAuthorization().catch(() => undefined);
+    await promptExactAlarmIfNeeded().catch(() => undefined);
     const wasRebooted = await checkForReboot();
     if (wasRebooted) {
       await appendDiagnosticEvent('schedule.resumed-after-reboot');

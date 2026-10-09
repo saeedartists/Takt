@@ -645,6 +645,8 @@ export const en = {
     notificationStatusUnavailable: 'Unavailable',
     notificationsWebHint: 'Reminders are delivered by the mobile app, not the browser.',
     openSystemSettings: 'Open system settings',
+    exactAlarmOffHint: 'On-time reminders are off. Android may deliver dose reminders up to an hour late.',
+    exactAlarmTurnOn: 'Turn on on-time reminders',
     careSection: 'Care',
     developerSection: 'Developer',
     developerSectionFootnote: 'Internal release tooling. Shown only in development and demo builds.',

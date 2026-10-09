@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeInDown, LinearTransition, ZoomIn } from 'react-native-reanimated';
 import {
@@ -255,7 +255,7 @@ export default function FamilySharingScreen() {
                   : t('familySharingInvitedWaiting').replace('{email}', grant.email ?? '');
 
                 return (
-                  <Animated.View key={grant.id} entering={FadeInDown.duration(duration.base)} layout={LinearTransition.duration(duration.base)}>
+                  <Animated.View key={grant.id} entering={FadeInDown.duration(duration.base)} layout={Platform.OS === 'ios' ? LinearTransition.duration(duration.base) : undefined}>
                     <Card>
                       <View style={styles.grantBody}>
                         <View style={styles.grantHead}>
@@ -319,7 +319,7 @@ export default function FamilySharingScreen() {
           )}
         </Animated.View>
 
-        <Animated.View entering={enter(3)} layout={LinearTransition.duration(duration.base)}>
+        <Animated.View entering={enter(3)} layout={Platform.OS === 'ios' ? LinearTransition.duration(duration.base) : undefined}>
           <SectionHeader title={t('familySharingAddTitle')} />
           <View style={styles.previewContainer}>
             <View

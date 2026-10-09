@@ -11,8 +11,8 @@ dist/
 web-build/
 
 # native build dirs (CNG managed)
-android/
-ios/
+/android/
+/ios/
 
 # environment / secrets
 .env

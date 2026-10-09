@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, Platform } from 'react-native';
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import {
   AnimatedPressable,
@@ -35,9 +35,13 @@ import type { MedicationPlan } from '@/lib/takt/types';
 /** Two weeks of cover reads as "all stocked"; below that the hero names the next refill. */
 const STOCKED_DAYS = 14;
 
-const reflow = LinearTransition.springify()
-  .damping(motion.spring.settle.damping)
-  .stiffness(motion.spring.settle.stiffness);
+// ponytail: iOS only. On Android (Fabric) Reanimated layout transitions leave views at stale
+// positions, e.g. the course-end field drawn over the custom-time Add button.
+const reflow = Platform.OS === 'ios'
+  ? LinearTransition.springify()
+      .damping(motion.spring.settle.damping)
+      .stiffness(motion.spring.settle.stiffness)
+  : undefined;
 
 type Row = { plan: MedicationPlan; supply: SupplySnapshot | null };
 

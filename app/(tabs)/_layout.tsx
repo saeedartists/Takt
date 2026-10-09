@@ -134,7 +134,7 @@ export default function TabsLayout() {
   }, [router]);
 
   return (
-    <Tabs tabBar={(props) => <FloatingTabBar {...props} />} screenOptions={{ headerShown: false }}>
+    <Tabs tabBar={(props) => <FloatingTabBar {...props} />} screenOptions={{ headerShown: false, freezeOnBlur: true }}>
       <Tabs.Screen
         name="today"
         options={{

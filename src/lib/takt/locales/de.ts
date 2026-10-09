@@ -644,6 +644,8 @@ export const de = {
     notificationStatusUnavailable: 'Nicht verfügbar',
     notificationsWebHint: 'Erinnerungen werden von der Mobil-App ausgeliefert, nicht vom Browser.',
     openSystemSettings: 'Systemeinstellungen öffnen',
+    exactAlarmOffHint: 'Pünktliche Erinnerungen sind aus. Android kann Dosis-Erinnerungen bis zu einer Stunde verzögern.',
+    exactAlarmTurnOn: 'Pünktliche Erinnerungen einschalten',
     careSection: 'Betreuung',
     developerSection: 'Entwickler',
     developerSectionFootnote: 'Interne Release-Werkzeuge. Nur in Entwicklungs- und Demo-Builds sichtbar.',

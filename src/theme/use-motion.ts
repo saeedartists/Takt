@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { FadeInDown, useReducedMotion } from 'react-native-reanimated';
+import { Platform } from 'react-native';
+import { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 
 import { motion } from './tokens';
 
@@ -24,11 +25,14 @@ export const useMotion = () => {
       duration: reduce ? { fast: 0, base: 0, slow: 0 } : motion.duration,
       stagger,
       /** Standard list-item entrance: `<Animated.View entering={enter(i)}>`. */
+      // ponytail: Android gets a plain short fade; a spring per list item on every tab switch made it lag.
       enter: (index = 0) =>
-        FadeInDown.delay(stagger(index))
-          .springify()
-          .damping(motion.spring.gentle.damping)
-          .stiffness(motion.spring.gentle.stiffness),
+        Platform.OS === 'android'
+          ? FadeIn.delay(stagger(index)).duration(180)
+          : FadeInDown.delay(stagger(index))
+              .springify()
+              .damping(motion.spring.gentle.damping)
+              .stiffness(motion.spring.gentle.stiffness),
     };
   }, [reduce]);
 };

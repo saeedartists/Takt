@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack as RouterStack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, Platform } from 'react-native';
 import Animated, { LinearTransition, ZoomIn } from 'react-native-reanimated';
 import {
   AnimatedNumber,
@@ -48,9 +48,13 @@ import { buildHistory, parseDateOnly } from '@/lib/takt/schedule';
 import { LOW_SUPPLY_THRESHOLD, getSupplySnapshot, type SupplySnapshot } from '@/lib/takt/supply-tracker';
 import type { MedicationAdministrationResource, MedicationPlan } from '@/lib/takt/types';
 
-const expand = LinearTransition.springify()
-  .damping(motion.spring.gentle.damping)
-  .stiffness(motion.spring.gentle.stiffness);
+// ponytail: iOS only. On Android (Fabric) Reanimated layout transitions leave views at stale
+// positions, e.g. the course-end field drawn over the custom-time Add button.
+const expand = Platform.OS === 'ios'
+  ? LinearTransition.springify()
+      .damping(motion.spring.gentle.damping)
+      .stiffness(motion.spring.gentle.stiffness)
+  : undefined;
 
 /** The tablet settles in: a small, unhurried scale from 85%, no overshoot. */
 const heroGlyphIn = ZoomIn.springify()

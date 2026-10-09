@@ -41,3 +41,15 @@ export const listAlarms = async (): Promise<string[]> => (native ? native.list()
 export const cancelAlarm = async (id: string): Promise<void> => {
   if (native) await native.cancel(id);
 };
+
+// Android only: exact-alarm special access (Android 12+), without which reminders can arrive up to an hour late.
+const exactAlarm = requireOptionalNativeModule<{
+  canScheduleExactAlarms(): boolean;
+  openExactAlarmSettings(): boolean;
+}>('TaktExactAlarm');
+
+/** True when scheduled reminders fire on time; null when this build cannot tell (web, iOS, old builds). */
+export const canScheduleExactAlarms = (): boolean | null => exactAlarm?.canScheduleExactAlarms() ?? null;
+
+/** Opens the system "Alarms & reminders" page for Takt. False when there is no such page. */
+export const openExactAlarmSettings = (): boolean => exactAlarm?.openExactAlarmSettings() ?? false;

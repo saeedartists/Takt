@@ -73,15 +73,18 @@ const FORM_LABEL_KEY = {
 const isPreset = (form: string): boolean =>
   FORM_PRESETS.some((preset) => preset.toLowerCase() === form.trim().toLowerCase());
 
-const expand = LinearTransition.springify()
-  .damping(motion.spring.gentle.damping)
-  .stiffness(motion.spring.gentle.stiffness);
+// ponytail: iOS only. On Android (Fabric) Reanimated layout transitions leave views at stale
+// positions, e.g. the course-end field drawn over the custom-time Add button.
+const expand = Platform.OS === 'ios'
+  ? LinearTransition.springify()
+      .damping(motion.spring.gentle.damping)
+      .stiffness(motion.spring.gentle.stiffness)
+  : undefined;
 
 /** A chosen time pops in gently from 80%: settle spring, no overshoot. */
 const timeIn = ZoomIn.duration(motion.duration.base);
 
-// ponytail: on web, Reanimated leaves a chip stuck at position:absolute when layout + entering overlap; reflow is native-only.
-const chipLayout = Platform.OS === 'web' ? undefined : expand;
+const chipLayout = expand;
 
 /** Fill that eases between idle and selected instead of snapping. */
 const useSelectFill = (selected: boolean, idle: string, active: string) => {

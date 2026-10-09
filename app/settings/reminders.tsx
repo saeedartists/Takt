@@ -28,10 +28,12 @@ import {
 } from '@/components/ui';
 import { useLocale } from '@/lib/takt/l10n';
 import { FOLLOW_UP_OPTIONS, GRACE_OPTIONS, useReminderPreferences, type FollowUpMinutes, type GraceHours } from '@/lib/takt/preferences';
-import { ALARM_SOUND, readReminderPermissionStatus } from '@/lib/takt/reminders';
+import { ALARM_SOUND, channelFor, readReminderPermissionStatus } from '@/lib/takt/reminders';
 import {
   alarmsAvailable,
+  canScheduleExactAlarms,
   getAlarmAuthorization,
+  openExactAlarmSettings,
   requestAlarmAuthorization,
   scheduleAlarm,
   type AlarmAuthorization,
@@ -143,6 +145,7 @@ export default function RemindersSettingsScreen() {
   const [permission, setPermission] = useState<PermissionStatus>('unavailable');
   const [test, setTest] = useState<'idle' | 'sent' | 'error'>('idle');
   const [alarmAuth, setAlarmAuth] = useState<AlarmAuthorization>('unavailable');
+  const [exactAlarms, setExactAlarms] = useState<boolean | null>(null);
   const params = useLocalSearchParams<{ test?: string }>();
 
   // Re-read on focus and when the app returns from the system settings sheet.
@@ -156,6 +159,7 @@ export default function RemindersSettingsScreen() {
         void getAlarmAuthorization().then((next) => {
           if (active) setAlarmAuth(next);
         });
+        setExactAlarms(canScheduleExactAlarms());
       };
       refresh();
       const sub = AppState.addEventListener('change', (state) => {
@@ -178,7 +182,13 @@ export default function RemindersSettingsScreen() {
           // Same shape as a dose reminder, so the spoken reminder is tested too.
           data: { route: '/(tabs)/today', kind: 'dose', doseKey: 'test', requestRef: 'test', label: t('testReminderLabel') },
         },
-        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 5, repeats: false },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+          seconds: 5,
+          repeats: false,
+          // Same Android channel as a dose reminder, so the test hears the real sound and importance.
+          channelId: channelFor(prefs.data?.sound !== false),
+        },
       });
       // The real alarm too, a few seconds later, so the silent-mode ring can be checked with the app closed.
       if (prefs.data?.sound !== false && prefs.data?.alarm !== false && alarmAuth === 'authorized') {
@@ -256,6 +266,22 @@ export default function RemindersSettingsScreen() {
                 icon={<Ionicons name="open-outline" size={16} color={status.tone !== 'surface' ? PAPER : c.onInk} />}
                 onPress={() => void Linking.openSettings()}
               />
+            ) : exactAlarms === false ? (
+              <>
+                <Text style={[typography.footnote, { color: status.tone === 'surface' ? c.textSecondary : INK }]}>
+                  {t('exactAlarmOffHint')}
+                </Text>
+                <Button
+                  kind="primary"
+                  size="sm"
+                  onTone={status.tone !== 'surface'}
+                  label={t('exactAlarmTurnOn')}
+                  icon={<Ionicons name="alarm-outline" size={16} color={status.tone !== 'surface' ? PAPER : c.onInk} />}
+                  onPress={() => {
+                    if (!openExactAlarmSettings()) void Linking.openSettings();
+                  }}
+                />
+              </>
             ) : null}
           </Tile>
         </Animated.View>
