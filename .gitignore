@@ -34,3 +34,6 @@ yarn-error.*
 store-assets/
 scripts/store-shots/
 
+
+# Gradle output of local native modules
+modules/*/android/build/

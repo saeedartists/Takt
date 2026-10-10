@@ -246,7 +246,12 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
     setValues((prev) => ({ ...prev, [key]: value }));
   const touch = (key: keyof MedicationFormErrors) => setTouched((prev) => ({ ...prev, [key]: true }));
 
-  const errors = useMemo(() => validateMedicationForm(values, t), [values, t]);
+  // A time still open in the picker counts as added, so closing the form or tapping Save never drops it.
+  const finalTimes = useMemo(
+    () => (addingTime && isClockTime(draftTime) ? sortTimes([...new Set([...values.times, draftTime])]) : sortTimes(values.times)),
+    [addingTime, draftTime, values.times],
+  );
+  const errors = useMemo(() => validateMedicationForm({ ...values, times: finalTimes }, t), [values, finalTimes, t]);
   const isValid = Object.keys(errors).length === 0;
   const shown = (key: keyof MedicationFormErrors) => (touched[key] ? errors[key] : undefined);
 
@@ -272,7 +277,7 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
   const submit = async () => {
     setTouched({ name: true, times: true, days: true, lastRefilled: true, interval: true, endDate: true, maxPerDay: true });
     if (!isValid || submitting) return;
-    await onSubmit({ ...values, name: values.name.trim(), form: values.form.trim(), times: sortTimes(values.times) });
+    await onSubmit({ ...values, name: values.name.trim(), form: values.form.trim(), times: finalTimes });
   };
 
   const asNeeded = values.cadence === 'as-needed';
