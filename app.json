@@ -9,7 +9,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.actimi.takt",
-      "buildNumber": "10",
+      "buildNumber": "11",
       "infoPlist": {
         "CFBundleDisplayName": "Takt Health",
         "ITSAppUsesNonExemptEncryption": false,
@@ -22,7 +22,7 @@
       "permissions": [
         "SCHEDULE_EXACT_ALARM"
       ],
-      "versionCode": 7,
+      "versionCode": 8,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#15171C"
