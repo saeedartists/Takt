@@ -20,6 +20,14 @@ module.exports = [
       'site/**',
       'downloads/**',
       'server/dist/**',
+      /*
+       * The server is its own Node/ESM workspace with its own tsc + vitest
+       * (see server/package.json). The app's rule set is React Native
+       * specific, and its import resolver needs the server's dependencies
+       * installed — which the app's CI job does not do. The server is covered
+       * by the server job (typecheck + 59 tests) instead.
+       */
+      'server/**',
     ],
   },
   {
@@ -57,12 +65,6 @@ module.exports = [
     files: ['scripts/**/*.js'],
     languageOptions: {
       globals: { __dirname: 'readonly', process: 'readonly', require: 'readonly', module: 'writable', console: 'readonly' },
-    },
-  },
-  {
-    files: ['server/**/*.ts'],
-    rules: {
-      'import/no-extraneous-dependencies': 'off',
     },
   },
 ];
