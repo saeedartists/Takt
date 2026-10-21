@@ -4,11 +4,12 @@ import { useEffect, useState, type ComponentProps } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable, Button, CONTENT_MAX_WIDTH, Input, font, radius, spacing, typography, useTokens } from '@/components/ui';
-import { Chip } from '@/components/takt/medication-form';
+import { Chip } from '@/components/takt/form/_form-fields';
 import { TimeField } from '@/components/takt/time-field';
 import { planToInput, useUpdateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
 import { useLocale } from '@/lib/takt/l10n';
 import { normalizeDateInput, parseSupply } from '@/lib/takt/medication-form';
+import { isoDateKey } from '@/lib/takt/time';
 import { getSupplyCount, setSupplyCount } from '@/lib/takt/supply-tracker';
 import type { MedicationPlan } from '@/lib/takt/types';
 
@@ -29,6 +30,13 @@ export const duplicateParams = (plan: MedicationPlan): Record<string, string> =>
       cadence: plan.cadence,
       days: plan.dayOfWeek.join(','),
       intervalDays: plan.intervalDays ? String(plan.intervalDays) : undefined,
+      intervalStart: plan.intervalStart,
+      // A duplicate starts fresh: copying a past start date would backdate missed doses into history.
+      startDate: plan.startDate && plan.startDate >= isoDateKey(new Date()) ? plan.startDate : undefined,
+      endDate: plan.endDate,
+      dosageQuantity: plan.dosageQuantity !== undefined ? String(plan.dosageQuantity) : undefined,
+      dosageUnit: plan.dosageUnit,
+      maxPerDay: plan.maxPerDay !== undefined ? String(plan.maxPerDay) : undefined,
       instruction: plan.instruction,
       instructionNote: plan.instructionNote,
       shape: plan.appearance?.shape,

@@ -47,26 +47,13 @@ import { useLocale } from '@/lib/takt/l10n';
 import { reminderDoseKey, scheduleSnoozeReminder } from '@/lib/takt/reminders';
 import { addDays, isoDateKey, startOfDay } from '@/lib/takt/time';
 import type { DoseOccurrence, DoseState, MedicationPlan, SkipReason } from '@/lib/takt/types';
-
-const SNOOZE_OPTIONS = [5, 10, 15, 30];
-
-const isPersisted = (dose: DoseOccurrence): boolean =>
-  Boolean(dose.eventId) && !dose.eventId!.startsWith('optimistic-');
-
-const canUndo = (dose: DoseOccurrence): boolean => {
-  if (!dose.eventTimestamp || !isPersisted(dose)) return false;
-  if (!['taken', 'skipped'].includes(dose.state)) return false;
-  const ageMs = Date.now() - new Date(dose.eventTimestamp).getTime();
-  return ageMs <= 10 * 60 * 1000;
-};
-
-const isActionable = (dose: DoseOccurrence): boolean => dose.state === 'due' || dose.state === 'missed';
-
-const getTimeIcon = (hour: number, c: ReturnType<typeof useTokens>['c']) => {
-  if (hour < 12) return { name: 'sunny-outline' as const, color: c.accent };
-  if (hour < 18) return { name: 'partly-sunny-outline' as const, color: c.accent };
-  return { name: 'moon-outline' as const, color: c.tones.lilac.solid };
-};
+import {
+  SNOOZE_OPTIONS,
+  canUndo,
+  getTimeIcon,
+  isActionable,
+  isPersisted,
+} from '@/components/takt/today/_today-shared';
 
 export default function TodayScreen() {
   const router = useRouter();
@@ -96,6 +83,10 @@ export default function TodayScreen() {
     visible: boolean;
     message: string;
     eventId?: string;
+    /** Supply context so Undo hands the dose's units back to the local counter. */
+    medicationRef?: string;
+    taken?: boolean;
+    quantity?: number;
   } | null>(null);
 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -273,7 +264,12 @@ export default function TodayScreen() {
 
     try {
       if (isPersisted(dose)) {
-        await undoDose.mutateAsync(dose.eventId!);
+        await undoDose.mutateAsync({
+          eventId: dose.eventId!,
+          medicationRef: dose.medicationRef,
+          taken: dose.state === 'taken',
+          quantity: dose.quantity,
+        });
       }
 
       const result = await recordDose.mutateAsync({
@@ -283,6 +279,7 @@ export default function TodayScreen() {
         scheduledAt: dose.scheduledAt,
         action,
         reason,
+        quantity: dose.quantity,
       });
 
       setUndoToast({
@@ -292,6 +289,9 @@ export default function TodayScreen() {
             ? `${dose.label} · ${t('doseConfirmedToast')}`
             : `${dose.label} · ${t('doseSkippedToast')}`,
         eventId: result.id,
+        medicationRef: dose.medicationRef,
+        taken: action === 'taken',
+        quantity: dose.quantity,
       });
     } catch {
       setActionError(t('doseActionError'));
@@ -310,8 +310,16 @@ export default function TodayScreen() {
         requestRef: `MedicationRequest/${plan.request.id}`,
         scheduledAt: new Date(),
         action: 'taken',
+        quantity: plan.dosageQuantity,
       });
-      setUndoToast({ visible: true, message: `${plan.label} · ${t('doseConfirmedToast')}`, eventId: result.id });
+      setUndoToast({
+        visible: true,
+        message: `${plan.label} · ${t('doseConfirmedToast')}`,
+        eventId: result.id,
+        medicationRef: plan.request.medicationReference?.reference,
+        taken: true,
+        quantity: plan.dosageQuantity,
+      });
     } catch {
       setActionError(t('doseActionError'));
     } finally {
@@ -331,11 +339,11 @@ export default function TodayScreen() {
 
   const handleUndoToast = async () => {
     if (!undoToast?.eventId) return;
-    const eventId = undoToast.eventId;
+    const { eventId, medicationRef, taken, quantity } = undoToast;
     setUndoToast(null);
 
     try {
-      await undoDose.mutateAsync(eventId);
+      await undoDose.mutateAsync({ eventId, medicationRef, taken, quantity });
     } catch {
       setActionError(t('undoDoseError'));
     }
@@ -685,7 +693,12 @@ export default function TodayScreen() {
                                   onSnooze={(minutes) => snoozeDose(dose, minutes)}
                                   onUndo={async () => {
                                     try {
-                                      await undoDose.mutateAsync(dose.eventId!);
+                                      await undoDose.mutateAsync({
+                                        eventId: dose.eventId!,
+                                        medicationRef: dose.medicationRef,
+                                        taken: dose.state === 'taken',
+                                        quantity: dose.quantity,
+                                      });
                                     } catch {
                                       setActionError(t('undoDoseError'));
                                     }

@@ -24,7 +24,7 @@ import { useLocale } from '@/lib/takt/l10n';
 import { useReadinessChecklist } from '@/lib/takt/readiness-checklist';
 import { type ReportReviewCheckId, useReportReview } from '@/lib/takt/report-review';
 
-const CHECK_ROWS: Array<{
+const CHECK_ROWS: {
   id: ReportReviewCheckId;
   titleKey:
     | 'reportReviewCheckIdentity'
@@ -42,7 +42,7 @@ const CHECK_ROWS: Array<{
     | 'reportReviewCheckEn'
     | 'reportReviewCheckDe'
     | 'reportReviewCheckDrift';
-}> = [
+}[] = [
   { id: 'a-identity-clear', titleKey: 'reportReviewCheckIdentity' },
   { id: 'a-window-clear', titleKey: 'reportReviewCheckWindow' },
   { id: 'a-adherence-readable', titleKey: 'reportReviewCheckAdherence' },

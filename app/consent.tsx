@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,6 +43,17 @@ export default function ConsentScreen() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Prefill the name once the patient profile arrives, but never over user edits
+  // (a partial re-consent must not wipe the stored name).
+  const nameEdited = useRef(false);
+
+  useEffect(() => {
+    if (nameEdited.current || !patient.data) return;
+    const name = patient.data.name?.[0];
+    if (firstName === '' && name?.given?.join(' ')) setFirstName(name.given.join(' '));
+    if (lastName === '' && name?.family) setLastName(name.family);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient.data]);
 
   const submit = async () => {
     setSubmitError(null);
@@ -70,7 +81,7 @@ export default function ConsentScreen() {
     }
   };
 
-  const busy = consent.isPending || ensurePatient.isPending || patient.isLoading;
+  const busy = consent.isPending || ensurePatient.isPending || updatePatient.isPending || patient.isLoading;
 
   const trustPoints: { icon: IconName; tone: ToneName; title: string; description: string }[] = [
     {
@@ -137,7 +148,10 @@ export default function ConsentScreen() {
                   <Input
                     placeholder={t('firstNamePlaceholder')}
                     value={firstName}
-                    onChangeText={setFirstName}
+                    onChangeText={(value) => {
+                      nameEdited.current = true;
+                      setFirstName(value);
+                    }}
                     autoCapitalize="words"
                     returnKeyType="next"
                   />
@@ -146,7 +160,10 @@ export default function ConsentScreen() {
                   <Input
                     placeholder={t('lastNamePlaceholder')}
                     value={lastName}
-                    onChangeText={setLastName}
+                    onChangeText={(value) => {
+                      nameEdited.current = true;
+                      setLastName(value);
+                    }}
                     autoCapitalize="words"
                     returnKeyType="done"
                   />

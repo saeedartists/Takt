@@ -63,6 +63,13 @@ export default function RegisterScreen() {
         tenantCode: env.ovokTenantCode,
       });
 
+      // Patient registration resolves with tokens; the clinician-invite step
+      // only appears for business-email clinician sign-up (never a patient).
+      if ('nextStep' in response) {
+        setErrorText(t('authInvitationOnly'));
+        return;
+      }
+
       await ovokClient.setActiveLogin({
         accessToken: response.accessToken,
         refreshToken: response.refreshToken,

@@ -141,7 +141,9 @@ export default function SettingsTabScreen() {
   );
 
   const signOut = () => {
-    ovokClient.clearActiveLogin();
+    // logout() revokes the server session and always clears the local login,
+    // even offline (Ovok docs → passwords and sessions → sign out).
+    void ovokClient.logout().catch(() => undefined);
     router.replace('/auth/sign-in' as never);
   };
 

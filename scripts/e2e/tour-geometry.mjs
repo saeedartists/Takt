@@ -2,8 +2,8 @@
 // asserts it fits the viewport at three phone widths in light and dark.
 // Needs Metro on :8081 (npx expo start --web --port 8081) and playwright-core.
 // Run: PLAYWRIGHT_CORE=/path/to/playwright-core/index.mjs node scripts/e2e/tour-geometry.mjs <out-dir>
-const { chromium } = await import(process.env.PLAYWRIGHT_CORE || 'playwright-core');
 import fs from 'node:fs';
+const { chromium } = await import(process.env.PLAYWRIGHT_CORE || 'playwright-core');
 
 const OUT = process.argv[2] || '/tmp/takt-tour-geometry';
 fs.mkdirSync(OUT, { recursive: true });

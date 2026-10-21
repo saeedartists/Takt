@@ -26,7 +26,7 @@ import { useLocale } from '@/lib/takt/l10n';
 import { useReadinessChecklist } from '@/lib/takt/readiness-checklist';
 import { type ConsentAuditCheckId, useConsentAudit } from '@/lib/takt/consent-audit';
 
-const CHECK_ROWS: Array<{ id: ConsentAuditCheckId; titleKey: ConsentChecklistKey }> = [
+const CHECK_ROWS: { id: ConsentAuditCheckId; titleKey: ConsentChecklistKey }[] = [
   { id: 'grant-created', titleKey: 'consentAuditCheckGrant' },
   { id: 'withdraw-created', titleKey: 'consentAuditCheckWithdraw' },
   { id: 'timeline-reviewed', titleKey: 'consentAuditCheckTimeline' },

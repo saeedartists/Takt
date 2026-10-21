@@ -66,7 +66,7 @@ const revokedConsent = buildFamilyShareRevokeConsent({
   revokedAt: '2026-08-27T10:00:00.000Z',
 });
 
-const checks: Array<[string, { ok: boolean; issues: Array<{ field: string; message: string }> }]> = [
+const checks: [string, { ok: boolean; issues: { field: string; message: string }[] }][] = [
   ['patient-shape', validatePatientResource(patient)],
   ['medication-shape', validateMedicationResource(medication)],
   ['request-shape', validateMedicationRequestResource(request)],
@@ -86,7 +86,7 @@ const checks: Array<[string, { ok: boolean; issues: Array<{ field: string; messa
     'family-revoke-marker',
     {
       ok: Boolean(revokedConsent.extension?.some((item) => item.url === TAKT_EXT.familyShareRevokedAt)),
-      issues: [] as Array<{ field: string; message: string }>,
+      issues: [] as { field: string; message: string }[],
     },
   ],
 ];

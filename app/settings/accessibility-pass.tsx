@@ -23,7 +23,7 @@ import { type A11yCaseId, useAccessibilityPass } from '@/lib/takt/accessibility-
 import { useLocale } from '@/lib/takt/l10n';
 import { useReadinessChecklist } from '@/lib/takt/readiness-checklist';
 
-const A11Y_CASES: Array<{
+const A11Y_CASES: {
   id: A11yCaseId;
   titleKey:
     | 'a11yCaseLargeTextTodayTitle'
@@ -43,7 +43,7 @@ const A11Y_CASES: Array<{
     | 'a11yCaseNonColorSubtitle'
     | 'a11yCaseFocusOrderSubtitle'
     | 'a11yCaseRotationSubtitle';
-}> = [
+}[] = [
   {
     id: 'a-large-text-today',
     titleKey: 'a11yCaseLargeTextTodayTitle',

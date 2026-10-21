@@ -23,7 +23,7 @@ import { useReadinessChecklist } from '@/lib/takt/readiness-checklist';
 import { type SessionQaCaseId, useSessionTokenMatrix } from '@/lib/takt/session-token-matrix';
 import { useLocale } from '@/lib/takt/l10n';
 
-const SESSION_CASES: Array<{
+const SESSION_CASES: {
   id: SessionQaCaseId;
   priority: 'p0' | 'p1';
   titleKey:
@@ -56,7 +56,7 @@ const SESSION_CASES: Array<{
     | 'sessionQaCase12Subtitle'
     | 'sessionQaCase13Subtitle'
     | 'sessionQaCase14Subtitle';
-}> = [
+}[] = [
   {
     id: 'st-01-sign-in-success',
     priority: 'p0',

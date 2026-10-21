@@ -6,7 +6,7 @@ import Animated from 'react-native-reanimated';
 
 import { Button, Card, Field, Input, PageShell, Stack, spacing, typography, useMotion, useTokens } from '@/components/ui';
 import { ConfirmExpander } from '@/components/takt/confirm-expander';
-import { Chip } from '@/components/takt/medication-form';
+import { Chip } from '@/components/takt/form/_form-fields';
 import { TimeField } from '@/components/takt/time-field';
 import { useCare } from '@/lib/takt/care';
 import { useLocale } from '@/lib/takt/l10n';

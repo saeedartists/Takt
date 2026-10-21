@@ -4,13 +4,16 @@ import { MedicationForm } from '@/components/takt/medication-form';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useCreateMedicationPlan, useEnsurePatient } from '@/lib/hooks/use-takt-mutations';
 import { useLocale } from '@/lib/takt/l10n';
+import { normalizeWeekdayCodes } from '@/lib/takt/time';
 import {
   EMPTY_MEDICATION_FORM,
+  formatStrength,
   parseSupply,
   scheduleFieldsFromForm,
+  splitStrength,
   type MedicationFormValues,
 } from '@/lib/takt/medication-form';
-import type { IntakeInstruction, MedicationCadence, MedicationShape, WeekdayCode } from '@/lib/takt/types';
+import type { IntakeInstruction, MedicationCadence, MedicationShape, MedicationUnit } from '@/lib/takt/types';
 
 /** Optional prefill, used by "Duplicate" on the detail screen. */
 type PrefillParams = {
@@ -21,6 +24,12 @@ type PrefillParams = {
   cadence?: MedicationCadence;
   days?: string;
   intervalDays?: string;
+  intervalStart?: string;
+  startDate?: string;
+  endDate?: string;
+  dosageQuantity?: string;
+  dosageUnit?: MedicationUnit;
+  maxPerDay?: string;
   instruction?: IntakeInstruction;
   instructionNote?: string;
   shape?: MedicationShape;
@@ -38,15 +47,23 @@ export default function AddMedicationScreen() {
 
   const initialValues = useMemo<MedicationFormValues>(() => {
     if (!params.name) return EMPTY_MEDICATION_FORM;
+    const split = splitStrength(params.strength ?? '');
     return {
       ...EMPTY_MEDICATION_FORM,
       name: params.name,
       form: params.form || EMPTY_MEDICATION_FORM.form,
-      strength: params.strength ?? '',
+      strength: split.strength,
+      unit: split.unit,
       times: params.times ? params.times.split(',').filter(Boolean) : EMPTY_MEDICATION_FORM.times,
       cadence: params.cadence ?? 'daily',
-      days: params.days ? (params.days.split(',').filter(Boolean) as WeekdayCode[]) : EMPTY_MEDICATION_FORM.days,
+      days: params.days ? normalizeWeekdayCodes(params.days.split(',').filter(Boolean)) : EMPTY_MEDICATION_FORM.days,
       intervalDays: params.intervalDays ?? EMPTY_MEDICATION_FORM.intervalDays,
+      intervalStart: params.intervalStart ?? EMPTY_MEDICATION_FORM.intervalStart,
+      startDate: params.startDate ?? EMPTY_MEDICATION_FORM.startDate,
+      endDate: params.endDate ?? EMPTY_MEDICATION_FORM.endDate,
+      dosageQuantity: params.dosageQuantity ?? EMPTY_MEDICATION_FORM.dosageQuantity,
+      dosageUnit: params.dosageUnit ?? EMPTY_MEDICATION_FORM.dosageUnit,
+      maxPerDay: params.maxPerDay ?? EMPTY_MEDICATION_FORM.maxPerDay,
       instruction: params.instruction ?? '',
       instructionNote: params.instructionNote ?? '',
       shape: params.shape ?? EMPTY_MEDICATION_FORM.shape,
@@ -71,7 +88,7 @@ export default function AddMedicationScreen() {
         patientRef,
         name: values.name,
         form: values.form,
-        strength: values.strength,
+        strength: formatStrength(values.strength, values.unit),
         ...scheduleFieldsFromForm(values),
         supplyCount: parseSupply(values.supply),
       });

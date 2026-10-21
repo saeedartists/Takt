@@ -11,7 +11,7 @@ type FixtureResult = {
 
 const createPlan = (
   id: string,
-  params?: { createdAt?: string; pauseHistory?: PausePeriod[] } & Partial<Pick<MedicationPlan, 'cadence' | 'intervalDays' | 'intervalStart' | 'endDate' | 'asNeeded'>>,
+  params?: { createdAt?: string; pauseHistory?: PausePeriod[] } & Partial<Pick<MedicationPlan, 'cadence' | 'intervalDays' | 'intervalStart' | 'startDate' | 'endDate' | 'asNeeded'>>,
 ): MedicationPlan => ({
   request: {
     resourceType: 'MedicationRequest',
@@ -36,6 +36,7 @@ const createPlan = (
   pauseHistory: params?.pauseHistory ?? [],
   intervalDays: params?.intervalDays,
   intervalStart: params?.intervalStart,
+  startDate: params?.startDate,
   endDate: params?.endDate,
   asNeeded: params?.asNeeded,
 });
@@ -174,7 +175,8 @@ const fixtureTwentyMedication = (): FixtureResult => {
 const fixtureMidDayAddFutureOnly = (): FixtureResult => {
   const day = startOfDay(new Date('2026-01-10T00:00:00'));
   const plan = {
-    ...createPlan('midday', { createdAt: '2026-01-10T13:00:00.000Z' }),
+    // Local 13:00, not UTC: the morning suppression must hold in every timezone.
+    ...createPlan('midday', { createdAt: new Date(2026, 0, 10, 13, 0, 0).toISOString() }),
     times: ['08:00', '20:00'],
   };
 
@@ -273,6 +275,23 @@ const fixtureCourseEnd = (): FixtureResult => {
   };
 };
 
+const fixtureStartDateGate = (): FixtureResult => {
+  const plan = createPlan('start', { startDate: '2026-01-11' });
+  const now = new Date('2026-01-13T20:00:00');
+  const before = buildDoseOccurrencesForDay([plan], [], new Date('2026-01-10T00:00:00'), now).length;
+  const onStart = buildDoseOccurrencesForDay([plan], [], new Date('2026-01-11T00:00:00'), now).length;
+  // A 4-day window (Jan 10..13): Jan 10 is before the regimen, so it contributes nothing.
+  const history = buildHistory([plan], [], 4, { today: new Date('2026-01-13T00:00:00'), now });
+  const totals = countTotals(history);
+
+  return {
+    id: 'edge-start-date-gate',
+    title: 'Start date: days before the regimen produce no doses and no missed entries',
+    passed: before === 0 && onStart === 1 && totals.missed === 3,
+    details: `before=${before}, onStart=${onStart}, missed=${totals.missed} (expected 3 from Jan 11..13)`,
+  };
+};
+
 const fixtureAsNeededExcluded = (): FixtureResult => {
   const plan = createPlan('prn', { cadence: 'as-needed', asNeeded: true });
   const day = startOfDay(new Date('2026-01-10T00:00:00'));
@@ -300,6 +319,7 @@ export const runAdherenceFixtureSuite = (): { passed: boolean; results: FixtureR
     fixtureParallelDoseIsolation(),
     fixtureIntervalCadence(),
     fixtureCourseEnd(),
+    fixtureStartDateGate(),
     fixtureAsNeededExcluded(),
   ];
 

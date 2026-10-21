@@ -1,6 +1,7 @@
 import { Tabs, useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
 import { useEffect, useMemo, useRef } from 'react';
+import { AppState } from 'react-native';
 import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
@@ -9,6 +10,7 @@ import { useLocale } from '@/lib/takt/l10n';
 import { useReminderPreferences } from '@/lib/takt/preferences';
 import { scheduleSnoozeReminder, useReminderResponseRouting, useReminderSync, useWeeklySummarySync } from '@/lib/takt/reminders';
 import { buildDoseOccurrencesForDay, courseEnded } from '@/lib/takt/schedule';
+import { getSupplyCount } from '@/lib/takt/supply-tracker';
 import { TAKT_EXT } from '@/lib/takt/constants';
 import { isoDateKey, startOfDay } from '@/lib/takt/time';
 import { resolveSessionGate } from '@/lib/auth-session';
@@ -36,6 +38,8 @@ export default function TabsLayout() {
         requestRef: target.requestRef,
         scheduledAt: new Date(target.scheduledAt),
         action: 'taken',
+        // Supply deducts the plan's per-intake amount, not a fixed 1.
+        quantity: plans.plans.find((plan) => `MedicationRequest/${plan.request.id}` === target.requestRef)?.dosageQuantity,
       });
     },
     // Spoken reminder while the app is open; the notification handler mutes the chime then.
@@ -93,20 +97,25 @@ export default function TabsLayout() {
   useEffect(() => {
     if (!patientRef) return;
     const now = new Date();
-    for (const plan of plans.plans) {
-      if (!plan.medication || touched.current.has(plan.request.id)) continue;
-      const last = plan.pauseHistory[plan.pauseHistory.length - 1];
-      const pauseOver = plan.request.status === 'on-hold' && Boolean(last?.end) && new Date(last?.end ?? 0).getTime() <= now.getTime();
-      const ended = plan.request.status !== 'stopped' && courseEnded(plan, now);
-      if (!pauseOver && !ended) continue;
-      touched.current.add(plan.request.id);
-      updatePlan.mutate({
-        ...planToInput(plan, patientRef),
-        status: ended ? 'stopped' : 'active',
-        request: plan.request,
-        medication: plan.medication,
-      });
-    }
+    const run = async () => {
+      for (const plan of plans.plans) {
+        if (!plan.medication || touched.current.has(plan.request.id)) continue;
+        const last = plan.pauseHistory[plan.pauseHistory.length - 1];
+        const pauseOver = plan.request.status === 'on-hold' && Boolean(last?.end) && new Date(last?.end ?? 0).getTime() <= now.getTime();
+        const ended = plan.request.status !== 'stopped' && courseEnded(plan, now);
+        if (!pauseOver && !ended) continue;
+        touched.current.add(plan.request.id);
+        // The local count is the live truth; FHIR's dispenseRequest goes stale the moment a dose is deducted.
+        const localCount = await getSupplyCount(plan.medication.id).catch(() => null);
+        updatePlan.mutate({
+          ...planToInput(plan, patientRef, localCount ?? undefined),
+          status: ended ? 'stopped' : 'active',
+          request: plan.request,
+          medication: plan.medication,
+        });
+      }
+    };
+    void run();
   }, [patientRef, plans.plans, updatePlan]);
 
   useEffect(() => {
@@ -116,8 +125,15 @@ export default function TabsLayout() {
       const gate = await resolveSessionGate();
       if (!active) return;
 
-      if (gate.kind === 'needs-config' || gate.kind === 'backend-unreachable') {
+      if (gate.kind === 'needs-config') {
         router.replace('/setup' as never);
+        return;
+      }
+
+      // Live build, service unreachable mid-session: friendly retry, keep the
+      // user signed in locally until the service answers again.
+      if (gate.kind === 'backend-unreachable') {
+        router.replace('/backend-down' as never);
         return;
       }
 
@@ -128,8 +144,17 @@ export default function TabsLayout() {
 
     void guard();
 
+    // Multi-device: another device may revoke this session (or revoke-sessions
+    // may have killed it server-side). Re-check in the tabs root whenever the
+    // app returns to the foreground so a killed session lands on sign-in
+    // instead of showing stale data behind 401 error states.
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void guard();
+    });
+
     return () => {
       active = false;
+      subscription.remove();
     };
   }, [router]);
 

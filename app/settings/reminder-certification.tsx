@@ -24,7 +24,7 @@ import { type ReminderCaseId, useReminderCertification } from '@/lib/takt/remind
 import { useLocale } from '@/lib/takt/l10n';
 import { useReminderDiagnostics } from '@/lib/takt/reminders';
 
-const CASES: Array<{
+const CASES: {
   id: ReminderCaseId;
   titleKey:
     | 'reminderCaseA1Title'
@@ -48,7 +48,7 @@ const CASES: Array<{
     | 'reminderCaseD2Subtitle'
     | 'reminderCaseD3Subtitle'
     | 'reminderCaseE1Subtitle';
-}> = [
+}[] = [
   { id: 'a1-ios-overnight', titleKey: 'reminderCaseA1Title', subtitleKey: 'reminderCaseA1Subtitle' },
   { id: 'a2-android-overnight', titleKey: 'reminderCaseA2Title', subtitleKey: 'reminderCaseA2Subtitle' },
   { id: 'b1-ios-reboot', titleKey: 'reminderCaseB1Title', subtitleKey: 'reminderCaseB1Subtitle' },

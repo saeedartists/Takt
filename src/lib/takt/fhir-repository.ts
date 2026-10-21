@@ -44,6 +44,18 @@ const parseOperationOutcomeText = (body: unknown): string | undefined => {
 
 const isRetryable = (status: number): boolean => status === 429 || status >= 500;
 
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/*
+ * Ovok docs → errors and retries: wait out the server's Retry-After for
+ * throttling (429), use a short bounded backoff for transient 5xx, and never
+ * retry an auth/authorization or validation failure.
+ */
+const retryDelayMs = (error: OvokFetchError): number => {
+  if (error.retryAfterMs) return Math.min(Math.max(error.retryAfterMs, 250), 30_000);
+  return 1_000;
+};
+
 const withRetry = async <T>(run: () => Promise<T>): Promise<T> => {
   let attempt = 0;
   let lastError: unknown;
@@ -56,6 +68,7 @@ const withRetry = async <T>(run: () => Promise<T>): Promise<T> => {
       if (!(error instanceof OvokFetchError) || !isRetryable(error.status) || attempt === 1) {
         break;
       }
+      await sleep(retryDelayMs(error));
     }
     attempt += 1;
   }

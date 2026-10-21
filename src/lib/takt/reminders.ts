@@ -741,6 +741,7 @@ export const useReminderSync = (plans: MedicationPlan[], enabled: boolean, confi
             label: plan.label,
             strength: plan.strength,
             interval: [plan.intervalDays, plan.intervalStart],
+            startDate: plan.startDate,
             endDate: plan.endDate,
             asNeeded: plan.asNeeded,
             instruction: plan.instruction,

@@ -80,8 +80,9 @@ export default function ResetPasswordScreen() {
               onSubmitEditing={() => void submit()}
             />
           </Field>
-          {sent ? <AuthBanner tone="success" message={t('authResetEmailSentBody')} /> : null}
-          {errorText ? <AuthBanner tone="destructive" message={errorText} /> : null}
+        {sent ? <AuthBanner tone="success" message={t('authResetEmailSentBody')} /> : null}
+        {sent ? <AuthBanner tone="info" message={t('authResetOpenLinkHint')} /> : null}
+        {errorText ? <AuthBanner tone="destructive" message={errorText} /> : null}
         </AuthBlock>
 
         <AuthBlock index={4}>

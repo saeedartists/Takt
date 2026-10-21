@@ -23,7 +23,7 @@ import { useReadinessChecklist } from '@/lib/takt/readiness-checklist';
 import { type IsolationCaseId, useIsolationMatrix } from '@/lib/takt/isolation-matrix';
 import { useLocale } from '@/lib/takt/l10n';
 
-const CASE_CONFIG: Array<{
+const CASE_CONFIG: {
   id: IsolationCaseId;
   titleKey:
     | 'isolationCaseAReadsATitle'
@@ -39,7 +39,7 @@ const CASE_CONFIG: Array<{
     | 'isolationCaseBReadsBSubtitle'
     | 'isolationCaseBReadsADeniedSubtitle'
     | 'isolationCaseBWritesADeniedSubtitle';
-}> = [
+}[] = [
   { id: 'a-reads-a', titleKey: 'isolationCaseAReadsATitle', subtitleKey: 'isolationCaseAReadsASubtitle' },
   {
     id: 'a-reads-b-denied',

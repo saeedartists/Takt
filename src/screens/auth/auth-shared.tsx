@@ -77,17 +77,17 @@ export const PasswordInput = ({ style, ...props }: TextInputProps & { invalid?: 
   );
 };
 
-export const AuthBanner = ({ tone, message }: { tone: 'destructive' | 'success'; message: string }) => {
+export const AuthBanner = ({ tone, message }: { tone: 'destructive' | 'success' | 'info'; message: string }) => {
   const { c } = useTokens();
   const { duration } = useMotion();
-  const t = tone === 'success' ? c.tones.sage : c.tones.rose;
+  const t = tone === 'success' ? c.tones.sage : tone === 'info' ? c.tones.sky : c.tones.rose;
   return (
     <Animated.View
       entering={FadeIn.duration(duration.base)}
       accessibilityRole="alert"
       style={[styles.banner, { backgroundColor: t.bg }]}
     >
-      <Ionicons name={tone === 'success' ? 'checkmark-circle' : 'alert-circle'} size={20} color={t.fg} />
+      <Ionicons name={tone === 'success' ? 'checkmark-circle' : tone === 'info' ? 'information-circle' : 'alert-circle'} size={20} color={t.fg} />
       <Text style={[typography.subhead, { color: INK, flex: 1 }]}>{message}</Text>
     </Animated.View>
   );

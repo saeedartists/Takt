@@ -9,6 +9,8 @@ import { env } from './env';
 export const ovokClient = new OvokClient({
   storage: new ExpoClientStorage(),
   baseUrl: env.ovokApiUrl,
-  fhirUrlPath: '/fhir',
-  socialLoginClientId: env.googleSocialLoginClientId,
+  // Trailing slash required; must match the /fhir/R4/ surface FhirRepository
+  // hits directly (Ovok docs → configure the client).
+  fhirUrlPath: '/fhir/R4/',
+  socialLoginClientId: env.ovokClientId,
 });

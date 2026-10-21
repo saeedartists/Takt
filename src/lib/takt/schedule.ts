@@ -17,6 +17,20 @@ export const localScheduledKey = (value: Date): string => {
 
 const eventKey = (requestRef: string, localKey: string): string => `${requestRef}|${localKey}`;
 
+/** Namespaced so a slot can never collide with a legacy local key. */
+const slotEventKey = (requestRef: string, slot: string): string => `${requestRef}#slot|${slot}`;
+
+/**
+ * The plan slot an occurrence belongs to, as the schedule engine sees it:
+ * the plan's wall time on the day's local calendar, independent of where the
+ * recording device was. Matches the slot frozen onto events at record time.
+ */
+export const planSlotKey = (requestId: string, scheduledAt: Date, time: string): string =>
+  `${requestId}|${isoDateKey(scheduledAt)}|${time}`;
+
+const planSlotOf = (event: MedicationAdministrationResource): string | undefined =>
+  event.extension?.find((x) => x.url === TAKT_EXT.planSlot)?.valueString;
+
 const eventState = (event: MedicationAdministrationResource): DoseState => {
   if (event.status === 'completed') return 'taken';
   const reason = event.statusReason?.[0]?.coding?.[0]?.code;
@@ -31,10 +45,16 @@ const skipReasonOf = (event?: MedicationAdministrationResource): SkipReason | un
 const eventTimestamp = (event: MedicationAdministrationResource): number =>
   event.effectiveDateTime ? new Date(event.effectiveDateTime).getTime() : 0;
 
-const indexEvents = (
-  events: MedicationAdministrationResource[],
-): Map<string, MedicationAdministrationResource> => {
-  const map = new Map<string, MedicationAdministrationResource>();
+type EventIndex = {
+  /** Events that carry a frozen plan slot: matched by slot, not by the viewer's local clock. */
+  bySlot: Map<string, MedicationAdministrationResource>;
+  /** Legacy events (no slot stored): matched by the viewer's local wall time, as before. */
+  byLocal: Map<string, MedicationAdministrationResource>;
+};
+
+const indexEvents = (events: MedicationAdministrationResource[]): EventIndex => {
+  const bySlot = new Map<string, MedicationAdministrationResource>();
+  const byLocal = new Map<string, MedicationAdministrationResource>();
   for (const event of events) {
     const requestRef = event.request?.reference;
     const scheduledRaw = event.extension?.find((x) => x.url === TAKT_EXT.scheduledTime)?.valueDateTime;
@@ -43,15 +63,26 @@ const indexEvents = (
     const scheduledAt = new Date(scheduledRaw);
     if (Number.isNaN(scheduledAt.getTime())) continue;
 
-    const key = eventKey(requestRef, localScheduledKey(scheduledAt));
+    const slot = planSlotOf(event);
+    const map = slot ? bySlot : byLocal;
+    const key = slot ? slotEventKey(requestRef, slot) : eventKey(requestRef, localScheduledKey(scheduledAt));
+
     const current = map.get(key);
 
     if (!current || eventTimestamp(event) >= eventTimestamp(current)) {
       map.set(key, event);
     }
   }
-  return map;
+  return { bySlot, byLocal };
 };
+
+const lookupEvent = (
+  indexed: EventIndex,
+  requestRef: string,
+  slot: string,
+  localKey: string,
+): MedicationAdministrationResource | undefined =>
+  indexed.bySlot.get(slotEventKey(requestRef, slot)) ?? indexed.byLocal.get(eventKey(requestRef, localKey));
 
 const parseIsoDateTime = (value?: string): Date | null => {
   if (!value) return null;
@@ -66,7 +97,9 @@ export const parseDateOnly = (value?: string): Date | null => {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   if (!match) return null;
   const parsed = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  // Round-trip check: Feb 30 would otherwise silently roll into March.
+  if (Number.isNaN(parsed.getTime()) || isoDateKey(parsed) !== value) return null;
+  return parsed;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -74,6 +107,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Whether the plan has a scheduled dose on this calendar day. As-needed plans never do. */
 export const planDueOnDay = (plan: MedicationPlan, day: Date): boolean => {
   if (plan.asNeeded || plan.cadence === 'as-needed') return false;
+  const regimenStart = parseDateOnly(plan.startDate);
+  if (regimenStart && startOfDay(day) < regimenStart) return false;
   if (plan.cadence === 'interval') {
     const every = Math.max(1, plan.intervalDays ?? 1);
     const start = parseDateOnly(plan.intervalStart) ?? parseIsoDateTime(plan.createdAt);
@@ -107,6 +142,12 @@ const isWithinPausePeriod = (scheduledAt: Date, period: PausePeriod): boolean =>
 const doseSuppressed = (plan: MedicationPlan, scheduledAt: Date): boolean => {
   const createdAt = parseIsoDateTime(plan.createdAt);
   if (createdAt && scheduledAt < createdAt) {
+    return true;
+  }
+
+  // Nothing is scheduled before the regimen's first day.
+  const regimenStart = parseDateOnly(plan.startDate);
+  if (regimenStart && scheduledAt < regimenStart) {
     return true;
   }
 
@@ -173,7 +214,12 @@ export const buildDoseOccurrencesForDay = (
       if (doseSuppressed(plan, scheduledAt)) continue;
 
       const requestRef = `MedicationRequest/${plan.request.id}`;
-      const lookup = indexed.get(eventKey(requestRef, localScheduledKey(scheduledAt)));
+      const lookup = lookupEvent(
+        indexed,
+        requestRef,
+        planSlotKey(plan.request.id, scheduledAt, time),
+        localScheduledKey(scheduledAt),
+      );
 
       const state = resolveDoseState(scheduledAt, now, lookup, graceHours);
 
@@ -188,6 +234,7 @@ export const buildDoseOccurrencesForDay = (
         eventId: lookup?.id,
         eventTimestamp: lookup?.effectiveDateTime,
         reasonCode: skipReasonOf(lookup),
+        quantity: plan.dosageQuantity,
         instruction: plan.instruction,
         instructionNote: plan.instructionNote,
       });
@@ -214,7 +261,7 @@ export const buildAsNeededLogForDay = (
   const dayStart = startOfDay(day);
   const dayEnd = addDays(dayStart, 1);
   return plans
-    .filter((plan) => (plan.asNeeded || plan.cadence === 'as-needed') && plan.request.status === 'active')
+    .filter((plan) => plan.asNeeded || plan.cadence === 'as-needed')
     .map((plan) => {
       const requestRef = `MedicationRequest/${plan.request.id}`;
       const doses = events
@@ -232,11 +279,15 @@ export const buildAsNeededLogForDay = (
           state: 'taken',
           eventId: event.id,
           eventTimestamp: event.effectiveDateTime,
+          quantity: plan.dosageQuantity,
           instruction: plan.instruction,
           instructionNote: plan.instructionNote,
         }));
-      return { plan, doses, atMax: typeof plan.maxPerDay === 'number' && doses.length >= plan.maxPerDay };
-    });
+      // A paused or archived plan can't log new doses, but the ones it already has that day stay visible.
+      const active = plan.request.status === 'active';
+      return { plan, doses, atMax: !active || (typeof plan.maxPerDay === 'number' && doses.length >= plan.maxPerDay) };
+    })
+    .filter((row) => row.plan.request.status === 'active' || row.doses.length > 0);
 };
 
 export const adherenceSummary = (doses: DoseOccurrence[]) => {

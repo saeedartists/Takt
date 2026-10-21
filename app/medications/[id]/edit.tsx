@@ -8,13 +8,16 @@ import { useUpdateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
 import { useLocale } from '@/lib/takt/l10n';
 import {
   EMPTY_MEDICATION_FORM,
+  formatStrength,
   normalizeDateInput,
   parseSupply,
   scheduleFieldsFromForm,
+  splitStrength,
   type MedicationFormValues,
   type MedicationStatus,
 } from '@/lib/takt/medication-form';
 import { getDaysUntilRefill, getLastRefilledAt, getSupplyCount } from '@/lib/takt/supply-tracker';
+import { isoDateKey } from '@/lib/takt/time';
 
 const toStatus = (status: string): MedicationStatus =>
   status === 'on-hold' || status === 'stopped' ? status : 'active';
@@ -46,10 +49,14 @@ export default function EditMedicationScreen() {
         : [null, null, null];
       if (!active) return;
       setDaysUntilRefill(days);
+      const split = splitStrength(plan.strength || '');
       setInitial({
         name: plan.label,
         form: plan.form || 'Tablet',
-        strength: plan.strength || '',
+        strength: split.strength,
+        unit: split.unit,
+        dosageQuantity: plan.dosageQuantity !== undefined ? String(plan.dosageQuantity) : '',
+        dosageUnit: plan.dosageUnit ?? EMPTY_MEDICATION_FORM.dosageUnit,
         times: plan.times,
         cadence: plan.cadence,
         days: plan.dayOfWeek,
@@ -60,7 +67,8 @@ export default function EditMedicationScreen() {
               ? Math.round(plan.supplyCount).toString()
               : '',
         status: toStatus(plan.request.status),
-        lastRefilled: refilledAt ? refilledAt.slice(0, 10) : '',
+        lastRefilled: refilledAt ? isoDateKey(new Date(refilledAt)) : '',
+        startDate: plan.startDate ?? '',
         intervalDays: plan.intervalDays ? String(plan.intervalDays) : EMPTY_MEDICATION_FORM.intervalDays,
         intervalStart: plan.intervalStart ?? '',
         endDate: plan.endDate ?? '',
@@ -87,7 +95,7 @@ export default function EditMedicationScreen() {
         patientRef,
         name: values.name,
         form: values.form,
-        strength: values.strength,
+        strength: formatStrength(values.strength, values.unit),
         ...scheduleFieldsFromForm(values),
         supplyCount: parseSupply(values.supply),
         lastRefilledDate: normalizeDateInput(values.lastRefilled) ?? '',

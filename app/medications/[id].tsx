@@ -43,7 +43,7 @@ import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { TAKT_EXT } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
 import { MedicationGlyph, glyphTint } from '@/components/takt/medication-glyph';
-import { describeCadence, describeInstruction } from '@/lib/takt/medication-form';
+import { describeCadence, describeInstruction, MEDICATION_UNIT_LABELS } from '@/lib/takt/medication-form';
 import { buildHistory, parseDateOnly } from '@/lib/takt/schedule';
 import { LOW_SUPPLY_THRESHOLD, getSupplySnapshot, type SupplySnapshot } from '@/lib/takt/supply-tracker';
 import type { MedicationAdministrationResource, MedicationPlan } from '@/lib/takt/types';
@@ -189,6 +189,12 @@ export default function MedicationDetailsScreen() {
   const status = plan.request.status;
   const until = pausedUntil(plan);
   const cadenceText = describeCadence(plan, t);
+  const dosageText =
+    plan.dosageQuantity !== undefined
+      ? `${plan.dosageQuantity}${
+          plan.dosageUnit && plan.dosageUnit !== 'other' ? ` ${t(MEDICATION_UNIT_LABELS[plan.dosageUnit])}` : ''
+        }`
+      : undefined;
   const instructionText = describeInstruction(plan, t);
   const courseEnd = parseDateOnly(plan.endDate);
   const low = Boolean(supply && supply.count <= LOW_SUPPLY_THRESHOLD);
@@ -225,7 +231,7 @@ export default function MedicationDetailsScreen() {
               {plan.label}
             </Text>
             <Text style={[typography.callout, styles.heroSub, { color: heroSub }]}>
-              {[plan.form || t('formNotSet'), plan.strength].filter(Boolean).join(' · ')}
+              {[plan.form || t('formNotSet'), plan.strength, dosageText].filter(Boolean).join(' · ')}
             </Text>
           </View>
         </Animated.View>

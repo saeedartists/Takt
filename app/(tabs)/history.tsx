@@ -2,15 +2,13 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeInLeft, FadeInRight, LinearTransition } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import {
   AnimatedNumber,
   AnimatedPressable,
   AnimatedSegmentedControl,
-  Badge,
   Button,
   CONTENT_MAX_WIDTH,
   Card,
@@ -40,52 +38,28 @@ import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
 import { useRecordDose, useUndoDose } from '@/lib/hooks/use-takt-mutations';
-import { TimeField } from '@/components/takt/time-field';
 import { buildHistoryCsv } from '@/lib/takt/history-csv';
 import { useLocale } from '@/lib/takt/l10n';
 import { useReminderPreferences } from '@/lib/takt/preferences';
 import { buildHistory, type HistoryDay } from '@/lib/takt/schedule';
-import { addDays, atClockTime, isoDateKey, startOfDay } from '@/lib/takt/time';
-import type { DoseOccurrence, MedicationPlan, SkipReason } from '@/lib/takt/types';
+import { atClockTime, isoDateKey, startOfDay } from '@/lib/takt/time';
+import type { DoseOccurrence, MedicationPlan } from '@/lib/takt/types';
 import { semantic } from '@/theme/tokens';
 
-const reasonKey = (code: SkipReason) =>
-  code === 'forgot'
-    ? ('skipReasonForgot' as const)
-    : code === 'side-effects'
-      ? ('skipReasonSideEffects' as const)
-      : code === 'ran-out'
-        ? ('skipReasonRanOut' as const)
-        : code === 'not-needed'
-          ? ('skipReasonNotNeeded' as const)
-          : ('skipReasonOther' as const);
+import { DaySheet } from '@/components/takt/history/_day-sheet';
+import { DoseLogRow } from '@/components/takt/history/_dose-log-row';
+import { MonthCalendar } from '@/components/takt/history/_month-calendar';
+import {
+  historyLayoutGlide,
+  STATE_META,
+  type CorrectionAction,
+  type DoseWithDay,
+} from '@/components/takt/history/_history-shared';
 
-const clockOf = (iso: string): string => {
-  const date = new Date(iso);
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-};
-
-type CorrectionAction = 'taken' | 'skipped' | 'missed';
-type DoseWithDay = DoseOccurrence & { dayLabel: string };
 type Note = { tone: 'success' | 'error'; text: string };
-
-/*
- * One meaning per tone: sage = taken, butter = skipped, rose = missed.
- * The segmented thumb uses the light-mode solids so its white label stays
- * AA in dark mode too.
- */
-const STATE_META: Record<CorrectionAction, { badge: BadgeTone; icon: IconName; thumb: string }> = {
-  taken: { badge: 'success', icon: 'checkmark', thumb: semantic.light.tones.sage.solid },
-  skipped: { badge: 'warning', icon: 'pause', thumb: semantic.light.tones.butter.solid },
-  missed: { badge: 'destructive', icon: 'close', thumb: semantic.light.tones.rose.solid },
-};
 
 /** Missed doses shown before "Show all": the newest few are the ones worth fixing. */
 const MISSED_PREVIEW = 4;
-
-const layoutGlide = LinearTransition.springify()
-  .damping(motion.spring.settle.damping)
-  .stiffness(motion.spring.settle.stiffness);
 
 export default function HistoryScreen() {
   const { c } = useTokens();
@@ -216,6 +190,7 @@ export default function HistoryScreen() {
               scheduledAt: dose.scheduledAt,
               medicationRef: dose.medicationRef,
               eventId: dose.eventId,
+              quantity: dose.quantity,
             })),
         )
         .reverse()
@@ -330,7 +305,12 @@ export default function HistoryScreen() {
 
     try {
       if (dose.eventId) {
-        await undoDose.mutateAsync(dose.eventId);
+        await undoDose.mutateAsync({
+          eventId: dose.eventId,
+          medicationRef: dose.medicationRef,
+          taken: dose.state === 'taken',
+          quantity: dose.quantity,
+        });
       }
 
       await recordDose.mutateAsync({
@@ -340,6 +320,7 @@ export default function HistoryScreen() {
         scheduledAt: dose.scheduledAt,
         action,
         effectiveAt,
+        quantity: dose.quantity,
       });
     } catch {
       setActionError(t('historyCorrectionError'));
@@ -355,7 +336,12 @@ export default function HistoryScreen() {
     setPendingDoseId(dose.id);
 
     try {
-      await undoDose.mutateAsync(dose.eventId);
+      await undoDose.mutateAsync({
+        eventId: dose.eventId,
+        medicationRef: dose.medicationRef,
+        taken: dose.state === 'taken',
+        quantity: dose.quantity,
+      });
     } catch {
       setActionError(t('historyCorrectionError'));
     } finally {
@@ -370,7 +356,11 @@ export default function HistoryScreen() {
 
     try {
       if (item.eventId) {
-        await undoDose.mutateAsync(item.eventId);
+        await undoDose.mutateAsync({
+          eventId: item.eventId,
+          medicationRef: item.medicationRef,
+          quantity: item.quantity,
+        });
       }
 
       await recordDose.mutateAsync({
@@ -379,6 +369,7 @@ export default function HistoryScreen() {
         requestRef: `MedicationRequest/${item.requestId}`,
         scheduledAt: item.scheduledAt,
         action: 'taken',
+        quantity: item.quantity,
       });
     } catch {
       setActionError(t('historyCorrectionError'));
@@ -601,7 +592,7 @@ export default function HistoryScreen() {
                     <Animated.View
                       key={group.dayLabel}
                       entering={enter(groupIndex)}
-                      layout={layoutGlide}
+                      layout={historyLayoutGlide}
                       style={{ gap: spacing(2.5) }}
                     >
                       <Text
@@ -644,7 +635,7 @@ export default function HistoryScreen() {
                       <Animated.View
                         key={item.id}
                         entering={enter(i)}
-                        layout={layoutGlide}
+                        layout={historyLayoutGlide}
                         style={[styles.missedRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator }]}
                       >
                         <View style={[styles.stateGlyph, { backgroundColor: c.tones.rose.bg }]}>
@@ -700,372 +691,6 @@ export default function HistoryScreen() {
   );
 }
 
-type DayMark = 'all' | 'partly' | 'missed' | 'planned' | 'none' | 'future';
-
-const dayMark = (day: HistoryDay | undefined): DayMark => {
-  if (!day) return 'future';
-  if (day.doses.length === 0) return 'none';
-  if (day.missed > 0) return 'missed';
-  if (day.taken === day.doses.length) return 'all';
-  if (day.taken + day.skipped > 0) return 'partly';
-  return 'planned';
-};
-
-// Any Monday: the weekday header runs Monday to Sunday in the user's language.
-const MONDAY = new Date(2024, 0, 1);
-
-/*
- * Month grid: sage = every dose taken, butter = some, rose ring = a dose
- * was missed, ink ring = today, faint = still ahead. Each day says the
- * same in words for screen readers; the legend spells it out on screen.
- */
-const MonthCalendar = ({
-  month,
-  days,
-  dir,
-  onShift,
-  onOpenDay,
-}: {
-  month: Date;
-  days: HistoryDay[];
-  dir: -1 | 0 | 1;
-  onShift: (dir: -1 | 1) => void;
-  onOpenDay: (day: HistoryDay) => void;
-}) => {
-  const { c } = useTokens();
-  const { t, formatDate } = useLocale();
-  const { reduce, duration } = useMotion();
-  const todayKey = isoDateKey(new Date());
-  const now = new Date();
-  const isCurrent = month.getFullYear() === now.getFullYear() && month.getMonth() === now.getMonth();
-  const lead = (month.getDay() + 6) % 7;
-  const length = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
-  const cells: (number | null)[] = [...Array<null>(lead).fill(null), ...Array.from({ length }, (_, i) => i + 1)];
-  while (cells.length % 7) cells.push(null);
-
-  const slide = reduce || dir === 0 ? undefined : (dir > 0 ? FadeInRight : FadeInLeft).duration(duration.slow);
-
-  const label = (date: Date, day: HistoryDay | undefined, mark: DayMark): string => {
-    const name = formatDate(date, { weekday: 'long', day: 'numeric', month: 'long' });
-    const at = isoDateKey(date) === todayKey ? `${t('today')}, ${name}` : name;
-    const total = String(day?.doses.length ?? 0);
-    const taken = String(day?.taken ?? 0);
-    if (mark === 'all') return t('calendarDayAllTaken').replace('{date}', at).replace('{total}', total);
-    if (mark === 'missed')
-      return t('calendarDayMissed')
-        .replace('{date}', at)
-        .replace('{taken}', taken)
-        .replace('{total}', total)
-        .replace('{missed}', String(day?.missed ?? 0));
-    if (mark === 'partly') return t('calendarDayPartly').replace('{date}', at).replace('{taken}', taken).replace('{total}', total);
-    if (mark === 'planned') return t('calendarDayPlanned').replace('{date}', at).replace('{total}', total);
-    return t('calendarDayNone').replace('{date}', at);
-  };
-
-  const arrow = (to: -1 | 1) => {
-    const enabled = to < 0 || !isCurrent;
-    return (
-      <AnimatedPressable
-        onPress={() => onShift(to)}
-        disabled={!enabled}
-        haptic="light"
-        scaleTo={0.9}
-        accessibilityRole="button"
-        accessibilityLabel={t(to < 0 ? 'calendarPrevMonth' : 'calendarNextMonth')}
-        accessibilityState={{ disabled: !enabled }}
-        style={[styles.monthArrow, { backgroundColor: c.surfaceRaised, opacity: enabled ? 1 : 0.35 }]}
-      >
-        <Ionicons name={to < 0 ? 'chevron-back' : 'chevron-forward'} size={20} color={c.textPrimary} />
-      </AnimatedPressable>
-    );
-  };
-
-  const legend = [
-    { key: 'all', label: t('calendarAllTaken'), style: { backgroundColor: c.tones.sage.bg } },
-    { key: 'partly', label: t('calendarPartly'), style: { backgroundColor: c.tones.butter.bg } },
-    { key: 'missed', label: t('statusMissed'), style: { borderWidth: 2, borderColor: c.tones.rose.solid } },
-  ];
-
-  return (
-    <Card style={styles.calendar}>
-      <View style={styles.monthHead}>
-        <Text accessibilityRole="header" style={[typography.title3, { color: c.textPrimary, flex: 1 }]}>
-          {formatDate(month, { month: 'long', year: 'numeric' })}
-        </Text>
-        {arrow(-1)}
-        {arrow(1)}
-      </View>
-
-      <View style={styles.weekRow} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-        {Array.from({ length: 7 }, (_, i) => (
-          <Text key={i} style={[typography.caption, styles.weekday, { color: c.textTertiary }]}>
-            {formatDate(addDays(MONDAY, i), { weekday: 'narrow' })}
-          </Text>
-        ))}
-      </View>
-
-      <Animated.View key={isoDateKey(month)} entering={slide} style={styles.grid}>
-        {cells.map((dayOfMonth, index) => {
-          if (dayOfMonth === null) return <View key={`blank-${index}`} style={styles.dayCell} />;
-          const date = new Date(month.getFullYear(), month.getMonth(), dayOfMonth);
-          const day = days[dayOfMonth - 1];
-          const mark = dayMark(day);
-          const isToday = isoDateKey(date) === todayKey;
-          const fill = mark === 'all' ? c.tones.sage.bg : mark === 'partly' ? c.tones.butter.bg : 'transparent';
-          const ring = mark === 'missed' ? c.tones.rose.solid : isToday ? c.textPrimary : 'transparent';
-          const onTone = mark === 'all' || mark === 'partly';
-          const text =
-            mark === 'future' ? c.textTertiary : onTone ? INK : mark === 'none' ? c.textSecondary : c.textPrimary;
-          const circle = (
-            <View style={[styles.dayCircle, { backgroundColor: fill, borderColor: ring }]}>
-              <Text
-                style={[
-                  typography.subhead,
-                  styles.dayNumber,
-                  { color: text, fontFamily: isToday || onTone || mark === 'missed' ? font.bold : font.medium },
-                  mark === 'future' && styles.future,
-                ]}
-              >
-                {dayOfMonth}
-              </Text>
-            </View>
-          );
-          if (!day || day.doses.length === 0) {
-            return (
-              <View key={dayOfMonth} style={styles.dayCell} accessible accessibilityLabel={label(date, day, mark)}>
-                {circle}
-              </View>
-            );
-          }
-          return (
-            <AnimatedPressable
-              key={dayOfMonth}
-              onPress={() => onOpenDay(day)}
-              scaleTo={0.88}
-              accessibilityRole="button"
-              accessibilityLabel={label(date, day, mark)}
-              accessibilityHint={t('calendarDayHint')}
-              style={styles.dayCell}
-            >
-              {circle}
-            </AnimatedPressable>
-          );
-        })}
-      </Animated.View>
-
-      <View style={styles.legend} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-        {legend.map((item) => (
-          <View key={item.key} style={styles.legendItem}>
-            <View style={[styles.legendDot, item.style]} />
-            <Text style={[typography.caption, { color: c.textSecondary }]}>{item.label}</Text>
-          </View>
-        ))}
-      </View>
-    </Card>
-  );
-};
-
-/** One day's doses, read-only; corrections stay in "Fix a logged dose". */
-const DaySheet = ({
-  day,
-  planById,
-  onClose,
-}: {
-  day: HistoryDay | null;
-  planById: Map<string, MedicationPlan>;
-  onClose: () => void;
-}) => {
-  const { c } = useTokens();
-  const { t, formatDate, formatTime } = useLocale();
-  const insets = useSafeAreaInsets();
-  if (!day) return null;
-
-  const status = (state: DoseOccurrence['state']): { label: string; tone: BadgeTone; icon: IconName } =>
-    state === 'taken' || state === 'skipped' || state === 'missed'
-      ? {
-          label: state === 'taken' ? t('statusTaken') : state === 'skipped' ? t('statusSkipped') : t('statusMissed'),
-          tone: STATE_META[state].badge,
-          icon: STATE_META[state].icon,
-        }
-      : state === 'due'
-        ? { label: t('statusDue'), tone: 'accent', icon: 'alarm-outline' }
-        : { label: t('statusScheduled'), tone: 'info', icon: 'time-outline' };
-
-  return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <View style={styles.sheetWrap}>
-        <Pressable
-          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(21,23,28,0.45)' }]}
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel={t('calendarClose')}
-        />
-        <View style={[styles.sheet, { backgroundColor: c.surface, paddingBottom: spacing(4) + insets.bottom }]}>
-          <View style={[styles.handle, { backgroundColor: c.separator }]} />
-          <Text accessibilityRole="header" style={[typography.title2, { color: c.textPrimary }]}>
-            {formatDate(day.date, { weekday: 'long', day: 'numeric', month: 'long' })}
-          </Text>
-          <Text style={[typography.subhead, { color: c.textSecondary, fontVariant: ['tabular-nums'] }]}>
-            {t('takenOfTotal').replace('{taken}', String(day.taken)).replace('{total}', String(day.doses.length))}
-          </Text>
-          <View style={styles.sheetList}>
-            {day.doses.map((dose, index) => {
-              const plan = planById.get(dose.requestId);
-              const meta = status(dose.state);
-              return (
-                <View
-                  key={dose.id}
-                  accessible
-                  accessibilityLabel={`${dose.label}, ${formatTime(dose.scheduledAt)}, ${meta.label}`}
-                  style={[styles.sheetRow, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator }]}
-                >
-                  <MedicationGlyph appearance={plan?.appearance} form={plan?.form} size={36} />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text numberOfLines={1} style={[typography.headline, { color: c.textPrimary }]}>
-                      {dose.label}
-                    </Text>
-                    <Text style={[typography.subhead, { color: c.textSecondary, fontVariant: ['tabular-nums'] }]}>
-                      {formatTime(dose.scheduledAt)}
-                    </Text>
-                  </View>
-                  <View>
-                    <Badge label={meta.label} tone={meta.tone} icon={meta.icon} size="sm" />
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-          <Button kind="secondary" label={t('calendarClose')} onPress={onClose} />
-        </View>
-      </View>
-    </Modal>
-  );
-};
-
-/*
- * One logged dose. Collapsed: glyph, name · time, status badge. Tapping
- * opens the editor in place (the card grows with a layout glide); a status
- * change or new time is saved at once, as before.
- */
-const DoseLogRow = ({
-  dose,
-  plan,
-  expanded,
-  pending,
-  disabled,
-  onToggle,
-  onChangeState,
-  onChangeTime,
-  onClear,
-}: {
-  dose: DoseWithDay;
-  plan?: MedicationPlan;
-  expanded: boolean;
-  pending: boolean;
-  disabled: boolean;
-  onToggle: () => void;
-  onChangeState: (next: CorrectionAction) => void;
-  onChangeTime: (next: string) => void;
-  onClear: () => void;
-}) => {
-  const { c } = useTokens();
-  const { t, formatTime } = useLocale();
-  const state = dose.state as CorrectionAction;
-  const meta = STATE_META[state];
-  const time = formatTime(dose.scheduledAt);
-  const statusLabel = state === 'taken' ? t('statusTaken') : state === 'skipped' ? t('statusSkipped') : t('statusMissed');
-  const detail = expanded
-    ? t('historyEditHint')
-    : state === 'taken' && dose.eventTimestamp
-      ? `${t('takenAtLabel')} ${formatTime(new Date(dose.eventTimestamp))}`
-      : dose.reasonCode
-        ? t(reasonKey(dose.reasonCode))
-        : null;
-
-  return (
-    <Animated.View
-      layout={layoutGlide}
-      style={[styles.logRow, { backgroundColor: c.surface, borderColor: expanded ? c.textPrimary : 'transparent' }]}
-    >
-      <AnimatedPressable
-        onPress={onToggle}
-        scaleTo={0.98}
-        accessibilityRole="button"
-        accessibilityLabel={`${dose.label}, ${time}, ${statusLabel}`}
-        accessibilityHint={expanded ? t('historyCloseEditor') : t('historyEditHint')}
-        accessibilityState={{ expanded }}
-        style={styles.rowHead}
-      >
-        <MedicationGlyph appearance={plan?.appearance} form={plan?.form} size={48} />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text numberOfLines={2} style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>
-            {dose.label}
-          </Text>
-          <Text style={[typography.subhead, { color: c.textSecondary }]}>{[time, detail].filter(Boolean).join(' · ')}</Text>
-        </View>
-        {pending ? (
-          <ActivityIndicator size="small" color={c.textSecondary} accessibilityLabel={t('historyUpdating')} />
-        ) : expanded ? (
-          <View style={[styles.chevron, { backgroundColor: c.surfaceRaised }]}>
-            <Ionicons name="chevron-up" size={20} color={c.textPrimary} />
-          </View>
-        ) : (
-          <View>
-            <Badge label={statusLabel} tone={meta.badge} icon={meta.icon} size="sm" />
-          </View>
-        )}
-      </AnimatedPressable>
-
-      {expanded ? (
-        <Animated.View entering={FadeIn.duration(motion.duration.base)} style={styles.editor}>
-          <View
-            pointerEvents={disabled ? 'none' : 'auto'}
-            accessibilityState={{ disabled, busy: pending }}
-            style={{ opacity: disabled ? 0.5 : 1 }}
-          >
-            <AnimatedSegmentedControl
-              value={state}
-              thumbColor={meta.thumb}
-              onChange={(next) => onChangeState(next as CorrectionAction)}
-              options={[
-                { value: 'taken', label: t('statusTaken') },
-                { value: 'skipped', label: t('statusSkipped') },
-                { value: 'missed', label: t('statusMissed') },
-              ]}
-            />
-          </View>
-
-          {state === 'taken' && dose.eventTimestamp ? (
-            <View style={styles.takenAt}>
-              <Text style={[typography.callout, { color: c.textPrimary, fontFamily: font.semibold }]}>{t('takenAtLabel')}</Text>
-              <View style={{ flex: 1 }}>
-                <TimeField
-                  mode="time"
-                  value={clockOf(dose.eventTimestamp)}
-                  onChange={onChangeTime}
-                  accessibilityLabel={`${t('takenAtLabel')}, ${dose.label}`}
-                />
-              </View>
-            </View>
-          ) : null}
-
-          {dose.eventId ? (
-            <Button
-              kind="destructive"
-              size="sm"
-              fullWidth={false}
-              icon={<Ionicons name="trash-outline" size={16} color={c.tones.rose.fg} />}
-              label={t('historyClearDoseLogCta')}
-              onPress={onClear}
-              disabled={disabled}
-            />
-          ) : null}
-        </Animated.View>
-      ) : null}
-    </Animated.View>
-  );
-};
-
 const styles = StyleSheet.create({
   reportPill: {
     minHeight: 48,
@@ -1100,11 +725,6 @@ const styles = StyleSheet.create({
   weekLink: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), padding: spacing(4), minHeight: 64 },
   weekLinkIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   dayLabel: { paddingHorizontal: spacing(1) },
-  logRow: { borderRadius: radius.xl, borderWidth: 2, padding: spacing(3.5), gap: spacing(3.5) },
-  rowHead: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
-  chevron: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  editor: { gap: spacing(3.5) },
-  takenAt: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
   stateGlyph: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   missedList: { paddingHorizontal: spacing(4) },
   missedRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing(3), paddingVertical: spacing(3.5) },
@@ -1117,31 +737,4 @@ const styles = StyleSheet.create({
     gap: spacing(1.5),
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  calendar: { padding: spacing(4), gap: spacing(2) },
-  monthHead: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingLeft: spacing(1) },
-  monthArrow: { width: 44, height: 44, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
-  weekRow: { flexDirection: 'row' },
-  weekday: { width: `${100 / 7}%`, textAlign: 'center' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  dayCell: { width: `${100 / 7}%`, height: 44, alignItems: 'center', justifyContent: 'center' },
-  dayCircle: { width: 38, height: 38, borderRadius: 19, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  dayNumber: { fontVariant: ['tabular-nums'] },
-  future: { opacity: 0.55 },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: spacing(4), rowGap: spacing(1.5), paddingHorizontal: spacing(1), paddingTop: spacing(1) },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing(1.5) },
-  legendDot: { width: 12, height: 12, borderRadius: 6 },
-  sheetWrap: { flex: 1, justifyContent: 'flex-end' },
-  sheet: {
-    width: '100%',
-    maxWidth: CONTENT_MAX_WIDTH,
-    alignSelf: 'center',
-    borderTopLeftRadius: radius.xxl,
-    borderTopRightRadius: radius.xxl,
-    paddingHorizontal: spacing(5),
-    paddingTop: spacing(2),
-    gap: spacing(1),
-  },
-  handle: { width: 36, height: 4, borderRadius: radius.full, alignSelf: 'center', marginBottom: spacing(3) },
-  sheetList: { marginTop: spacing(2), marginBottom: spacing(4) },
-  sheetRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), minHeight: 60, paddingVertical: spacing(2) },
 });

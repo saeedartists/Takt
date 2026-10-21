@@ -1,16 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Platform, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import Animated, {
   FadeIn,
   FadeOut,
   LinearTransition,
   ZoomIn,
-  interpolateColor,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -27,7 +23,6 @@ import {
   PAPER,
   PageHeader,
   PageShell,
-  PillIcon,
   Stack,
   Tile,
   type IconName,
@@ -42,15 +37,19 @@ import {
 import { MedicationGlyph } from '@/components/takt/medication-glyph';
 import { TimeField } from '@/components/takt/time-field';
 import { WeekdayPicker } from '@/components/takt/weekday-picker';
+import { ChoiceTile, Chip, FormField, SectionTitle, UnitChips } from '@/components/takt/form/_form-fields';
 import { useLocale } from '@/lib/takt/l10n';
 import {
   COLOR_OPTIONS,
+  DOSAGE_UNIT_OPTIONS,
   FORM_PRESETS,
   INSTRUCTION_LABEL_KEY,
   INSTRUCTION_OPTIONS,
+  MEDICATION_UNIT_LABELS,
   SHAPE_LABEL_KEY,
   INTERVAL_PRESETS,
   SHAPE_OPTIONS,
+  STRENGTH_UNIT_OPTIONS,
   SUPPLY_PRESETS,
   TIME_PRESETS,
   formatDayLabel,
@@ -60,7 +59,7 @@ import {
   type MedicationFormValues,
 } from '@/lib/takt/medication-form';
 import { sortTimes, WEEKDAY_ORDER } from '@/lib/takt/time';
-import type { MedicationCadence, WeekdayCode } from '@/lib/takt/types';
+import type { MedicationCadence, MedicationUnit, WeekdayCode } from '@/lib/takt/types';
 
 const FORM_LABEL_KEY = {
   Tablet: 'formTablet',
@@ -86,59 +85,6 @@ const timeIn = ZoomIn.duration(motion.duration.base);
 
 const chipLayout = expand;
 
-/** Fill that eases between idle and selected instead of snapping. */
-const useSelectFill = (selected: boolean, idle: string, active: string) => {
-  const { duration } = useMotion();
-  const progress = useSharedValue(selected ? 1 : 0);
-  useEffect(() => {
-    progress.value = withTiming(selected ? 1 : 0, { duration: duration.base });
-  }, [duration.base, progress, selected]);
-  const style = useAnimatedStyle(() => ({ backgroundColor: interpolateColor(progress.value, [0, 1], [idle, active]) }));
-  // AnimatedPressable is an Animated component, so an animated style is fine in its style array.
-  return style as unknown as ViewStyle;
-};
-
-/**
- * Selectable pill used for cadence, instruction, supply and refill amounts.
- * Selected = ink. `onTone` when it sits on a pastel tile (tiles stay light in dark mode).
- */
-export const Chip = ({
-  label,
-  selected = false,
-  onPress,
-  accessibilityLabel,
-  trailing,
-  onTone = false,
-}: {
-  label: string;
-  selected?: boolean;
-  onPress: () => void;
-  accessibilityLabel?: string;
-  trailing?: ReactNode;
-  onTone?: boolean;
-}) => {
-  const { c } = useTokens();
-  const idle = onTone ? 'rgba(255,255,255,0.75)' : c.surfaceRaised;
-  const active = onTone ? INK : c.ink;
-  const fill = useSelectFill(selected, idle, active);
-  const fg = selected ? (onTone ? PAPER : c.onInk) : onTone ? INK : c.textPrimary;
-  return (
-    <AnimatedPressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={[styles.chip, fill]}
-    >
-      {selected ? <Ionicons name="checkmark" size={16} color={fg} /> : null}
-      <Text style={[typography.callout, { color: fg, fontFamily: selected ? font.bold : font.semibold, fontVariant: ['tabular-nums'] }]}>
-        {label}
-      </Text>
-      {trailing}
-    </AnimatedPressable>
-  );
-};
-
 const FORM_ICON: Record<(typeof FORM_PRESETS)[number] | 'Other', IconName | 'pill'> = {
   Tablet: 'ellipse-outline',
   Capsule: 'pill',
@@ -147,72 +93,6 @@ const FORM_ICON: Record<(typeof FORM_PRESETS)[number] | 'Other', IconName | 'pil
   Syrup: 'beaker-outline',
   Other: 'ellipsis-horizontal',
 };
-
-/** A form choice in the 3-column grid: icon over label, apricot and ink-edged when chosen. */
-const ChoiceTile = ({ label, icon, selected, onPress }: { label: string; icon: IconName | 'pill'; selected: boolean; onPress: () => void }) => {
-  const { c } = useTokens();
-  const fill = useSelectFill(selected, c.background, c.accentSoft);
-  const fg = selected ? INK : c.textPrimary;
-  return (
-    <AnimatedPressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      scaleTo={0.95}
-      style={[styles.choice, { borderColor: selected ? INK : 'transparent' }, fill]}
-    >
-      {selected ? (
-        <View style={styles.choiceCheck}>
-          <Ionicons name="checkmark-circle" size={20} color={INK} />
-        </View>
-      ) : null}
-      {icon === 'pill' ? <PillIcon size={26} color={fg} /> : <Ionicons name={icon} size={24} color={fg} />}
-      <Text numberOfLines={1} style={[typography.subhead, { color: fg, fontFamily: selected ? font.bold : font.semibold }]}>
-        {label}
-      </Text>
-    </AnimatedPressable>
-  );
-};
-
-/** Field for the form's cards and tiles: on a pastel tile the text stays ink. */
-const FormField = ({
-  label,
-  hint,
-  error,
-  onTone = false,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  error?: string | null;
-  onTone?: boolean;
-  children: ReactNode;
-}) => {
-  const { c } = useTokens();
-  if (!onTone) return <Field label={label} hint={hint} error={error}>{children}</Field>;
-  return (
-    <View style={{ gap: spacing(2) }}>
-      <Text style={[typography.subhead, { color: INK, fontFamily: font.bold }]}>{label}</Text>
-      {children}
-      {error ? (
-        <View accessibilityRole="alert" style={styles.errorRow}>
-          <Ionicons name="alert-circle" size={16} color={c.tones.rose.fg} />
-          <Text style={[typography.subhead, { color: c.tones.rose.fg, fontFamily: font.semibold, flex: 1 }]}>{error}</Text>
-        </View>
-      ) : hint ? (
-        <Text style={[typography.footnote, { color: INK, opacity: 0.78 }]}>{hint}</Text>
-      ) : null}
-    </View>
-  );
-};
-
-/** Card title inside a section: display face, optional icon. */
-const SectionTitle = ({ title, color }: { title: string; color: string }) => (
-  <Text accessibilityRole="header" style={[typography.title3, { color }]}>
-    {title}
-  </Text>
-);
 
 type Props = {
   mode: 'create' | 'edit';
@@ -275,7 +155,17 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
   };
 
   const submit = async () => {
-    setTouched({ name: true, times: true, days: true, lastRefilled: true, interval: true, endDate: true, maxPerDay: true });
+    setTouched({
+      name: true,
+      times: true,
+      days: true,
+      lastRefilled: true,
+      interval: true,
+      endDate: true,
+      maxPerDay: true,
+      startDate: true,
+      dosageQuantity: true,
+    });
     if (!isValid || submitting) return;
     await onSubmit({ ...values, name: values.name.trim(), form: values.form.trim(), times: finalTimes });
   };
@@ -385,6 +275,13 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
                   value={values.strength}
                   onChangeText={(next) => set('strength', next)}
                   placeholder={t('medicationStrengthPlaceholder')}
+                  keyboardType="decimal-pad"
+                  inputMode="decimal"
+                />
+                <UnitChips
+                  options={STRENGTH_UNIT_OPTIONS}
+                  selected={values.unit}
+                  onSelect={(next) => set('unit', next)}
                 />
               </Field>
 
@@ -590,6 +487,39 @@ export const MedicationForm = ({ mode, initialValues, onSubmit, submitting, subm
                 </FormField>
               )}
 
+              <FormField onTone label={t('medicationDosageLabel')} hint={t('medicationDosageHint')} error={shown('dosageQuantity')}>
+                <Input
+                  value={values.dosageQuantity}
+                  onChangeText={(next) => {
+                    set('dosageQuantity', next);
+                    touch('dosageQuantity');
+                  }}
+                  keyboardType="decimal-pad"
+                  inputMode="decimal"
+                  placeholder={t('medicationDosagePlaceholder')}
+                  invalid={Boolean(shown('dosageQuantity'))}
+                />
+                <UnitChips
+                  onTone
+                  options={DOSAGE_UNIT_OPTIONS}
+                  selected={values.dosageUnit}
+                  onSelect={(next) => set('dosageUnit', next)}
+                />
+              </FormField>
+
+              <FormField onTone label={t('medicationStartDate')} hint={t('medicationStartDateHint')} error={shown('startDate')}>
+                <TimeField
+                  mode="date"
+                  value={values.startDate}
+                  onChange={(next) => {
+                    set('startDate', next);
+                    touch('startDate');
+                  }}
+                  accessibilityLabel={t('medicationStartDate')}
+                  invalid={Boolean(shown('startDate'))}
+                />
+              </FormField>
+
               <FormField onTone label={t('endDateLabel')} hint={t('endDateHint')} error={shown('endDate')}>
                 <TimeField
                   mode="date"
@@ -691,6 +621,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   section: { padding: spacing(4), gap: spacing(4) },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), alignItems: 'center' },
+  unitGroup: { gap: spacing(1.5) },
   chip: {
     minHeight: MIN_TOUCH_TARGET,
     flexDirection: 'row',

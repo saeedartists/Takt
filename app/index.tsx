@@ -20,8 +20,14 @@ export default function IndexRedirect() {
       const gate = await resolveSessionGate();
       if (!active) return;
 
-      if (gate.kind === 'needs-config' || gate.kind === 'backend-unreachable') {
+      if (gate.kind === 'needs-config') {
         router.replace('/setup' as never);
+        return;
+      }
+
+      // Live build, service unreachable: a friendly retry screen, not diagnostics.
+      if (gate.kind === 'backend-unreachable') {
+        router.replace('/backend-down' as never);
         return;
       }
 

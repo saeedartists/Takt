@@ -1,9 +1,9 @@
 // Web end-to-end suite: 48 steps over every feature. Needs Metro on :8081 (npx expo start --web)
 // and playwright-core (PLAYWRIGHT_CORE=/path/to/playwright-core/index.mjs, or installed locally).
 // Run: node scripts/e2e/suite.mjs <screenshot-dir>
-const { chromium } = await import(process.env.PLAYWRIGHT_CORE || 'playwright-core');
 import { makeHelpers } from './e2e-lib.mjs';
 import fs from 'node:fs';
+const { chromium } = await import(process.env.PLAYWRIGHT_CORE || 'playwright-core');
 const OUT = process.argv[2];
 const BASE = 'http://localhost:8081';
 const browser = await chromium.launch({ channel: 'chrome', headless: true });

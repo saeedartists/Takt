@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FhirRepository } from '@/lib/takt/fhir-repository';
 import { TAKT_EXT } from '@/lib/takt/constants';
+import { parseDosageQuantity, splitDosage } from '@/lib/takt/medication-form';
 import { fromTimeOfDay, normalizeWeekdayCodes, sortTimes, WEEKDAY_ORDER, WEEKDAYS_ONLY } from '@/lib/takt/time';
 import type {
   FhirBundle,
@@ -58,7 +59,8 @@ const readPauseHistory = (request: MedicationRequestResource): PausePeriod[] => 
 const readCreatedAt = (request: MedicationRequestResource): string | undefined => {
   const ext = readRequestExtensionDateTime(request, TAKT_EXT.requestCreatedAt);
   if (ext) return ext;
-  if (request.authoredOn) return `${request.authoredOn}T00:00:00.000Z`;
+  // authoredOn is a bare date; midnight is local, so "created" doesn't shift a day west of UTC.
+  if (request.authoredOn) return new Date(`${request.authoredOn}T00:00:00`).toISOString();
   return undefined;
 };
 
@@ -83,6 +85,16 @@ const readInstruction = (request: MedicationRequestResource): IntakeInstruction 
     ?.flatMap((entry) => entry.coding ?? [])
     .find((coding) => coding.system === TAKT_EXT.intakeInstruction)?.code;
   return code && INSTRUCTIONS.has(code) ? (code as IntakeInstruction) : undefined;
+};
+
+/** Stored as the Takt extension "2 tablets"; split back into quantity + unit. */
+const readDosage = (request: MedicationRequestResource): Pick<MedicationPlan, 'dosageQuantity' | 'dosageUnit'> => {
+  const raw = readRequestExtensionString(request, TAKT_EXT.dosageQuantity);
+  if (!raw) return {};
+  const split = splitDosage(raw);
+  const quantity = parseDosageQuantity(split.dosageQuantity);
+  if (quantity === undefined) return {};
+  return { dosageQuantity: quantity, dosageUnit: split.dosageUnit || undefined };
 };
 
 const readTimes = (request: MedicationRequestResource): string[] => {
@@ -150,9 +162,11 @@ export const useMedicationPlans = (patientRef?: string) => {
         dayOfWeek,
         intervalDays: cadence === 'interval' ? repeat?.period : undefined,
         intervalStart: cadence === 'interval' ? repeat?.boundsPeriod?.start?.slice(0, 10) : undefined,
+        startDate: readRequestExtensionString(request, TAKT_EXT.startDate)?.slice(0, 10),
         endDate: repeat?.boundsPeriod?.end?.slice(0, 10),
         asNeeded: cadence === 'as-needed',
         maxPerDay: dosage?.maxDosePerPeriod?.numerator?.value,
+        ...readDosage(request),
         instruction: readInstruction(request),
         instructionNote: dosage?.patientInstruction?.trim() || undefined,
         appearance: readAppearance(medication),

@@ -3,9 +3,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ovokFetch } from '@/lib/ovok-fetch';
-import { PRIMARY_PATIENT_STORAGE_KEY, TAKT_CONSENT_VERSION, TAKT_EXT } from '@/lib/takt/constants';
-import { normalizeWeekdayCodes, sortTimes, toTimeOfDay, WEEKDAY_ORDER, WEEKDAYS_ONLY } from '@/lib/takt/time';
-import { clearSupplyCount, deductSupply, setDailyConsumptionRate, setLastRefilledAt, setSupplyCount } from '@/lib/takt/supply-tracker';
+import { PATIENT_SCOPE_SYSTEM, PRIMARY_PATIENT_STORAGE_KEY, TAKT_CONSENT_VERSION, TAKT_EXT } from '@/lib/takt/constants';
+import { isoDateKey, normalizeWeekdayCodes, sortTimes, toTimeOfDay, WEEKDAY_ORDER, WEEKDAYS_ONLY } from '@/lib/takt/time';
+import { clearSupplyCount, deductSupply, restoreSupply, setDailyConsumptionRate, setLastRefilledAt, setSupplyCount } from '@/lib/takt/supply-tracker';
+import { localScheduledKey } from '@/lib/takt/schedule';
 import type {
   ConsentResource,
   FhirBundle,
@@ -17,6 +18,7 @@ import type {
   MedicationPlan,
   MedicationRequestResource,
   MedicationResource,
+  MedicationUnit,
   PausePeriod,
   SkipReason,
   WeekdayCode,
@@ -32,6 +34,11 @@ export type PlanInput = {
   times: string[];
   supplyCount?: number;
   lastRefilledDate?: string;
+  /** First active day of the regimen, YYYY-MM-DD. */
+  startDate?: string;
+  /** Per-intake amount (e.g. 2 tablets); kept with `dosageUnit`. */
+  dosageQuantity?: number;
+  dosageUnit?: MedicationUnit;
   /** Every N days from `intervalStart` (YYYY-MM-DD); cadence 'interval'. */
   intervalDays?: number;
   intervalStart?: string;
@@ -54,6 +61,9 @@ export const planToInput = (plan: MedicationPlan, patientRef: string, supplyCoun
   dayOfWeek: plan.dayOfWeek,
   times: plan.times,
   supplyCount: supplyCount ?? plan.supplyCount,
+  startDate: plan.startDate,
+  dosageQuantity: plan.dosageQuantity,
+  dosageUnit: plan.dosageUnit,
   intervalDays: plan.intervalDays,
   intervalStart: plan.intervalStart,
   endDate: plan.endDate,
@@ -63,6 +73,14 @@ export const planToInput = (plan: MedicationPlan, patientRef: string, supplyCoun
   instructionNote: plan.instructionNote,
   appearance: plan.appearance,
 });
+
+/** Start date and per-intake dosage live on the request as Takt extensions. */
+const planExtras = (input: Pick<PlanInput, 'startDate' | 'dosageQuantity' | 'dosageUnit'>): FhirExtension[] => [
+  ...(input.startDate ? [{ url: TAKT_EXT.startDate, valueString: input.startDate }] : []),
+  ...(typeof input.dosageQuantity === 'number' && Number.isFinite(input.dosageQuantity)
+    ? [{ url: TAKT_EXT.dosageQuantity, valueString: `${input.dosageQuantity}${input.dosageUnit ? ` ${input.dosageUnit}` : ''}` }]
+    : []),
+];
 
 type UpdatePlanInput = PlanInput & {
   request: MedicationRequestResource;
@@ -127,6 +145,19 @@ const medicationExtensions = (input: Pick<PlanInput, 'strength' | 'appearance'>)
   { url: TAKT_EXT.strength, valueString: input.strength.trim() },
   ...(input.appearance ? [{ url: TAKT_EXT.appearance, valueString: JSON.stringify(input.appearance) }] : []),
 ];
+
+const patientScopedIdentifiers = (
+  identifiers: MedicationResource['identifier'],
+  patientRef: string,
+): NonNullable<MedicationResource['identifier']> => {
+  const patientId = patientRef.split('/')[1];
+  if (!patientId) return identifiers ?? [];
+  const existing = identifiers ?? [];
+  if (existing.some((identifier) => identifier.system === PATIENT_SCOPE_SYSTEM && identifier.value === patientId)) {
+    return existing;
+  }
+  return [...existing, { system: PATIENT_SCOPE_SYSTEM, value: patientId }];
+};
 
 const estimateDailyConsumptionRate = (
   cadence: MedicationCadence,
@@ -195,7 +226,8 @@ const applyStatusMetadata = (
   if (!getExtension(extensions, TAKT_EXT.requestCreatedAt)) {
     extensions = upsertExtension(extensions, {
       url: TAKT_EXT.requestCreatedAt,
-      valueDateTime: request.authoredOn ? `${request.authoredOn}T00:00:00.000Z` : nowIso,
+      // authoredOn is a bare date; midnight is local, so the created day matches what the user sees.
+      valueDateTime: request.authoredOn ? new Date(`${request.authoredOn}T00:00:00`).toISOString() : nowIso,
     });
   }
 
@@ -221,10 +253,14 @@ const applyStatusMetadata = (
   });
 
   if (nextStatus === 'stopped') {
-    extensions = upsertExtension(extensions, {
-      url: TAKT_EXT.archivedAt,
-      valueDateTime: nowIso,
-    });
+    // Stamp the archive moment once: editing a stopped plan must not re-stamp it,
+    // which would resurrect already-missed doses into the archive window.
+    if (!getExtension(extensions, TAKT_EXT.archivedAt)) {
+      extensions = upsertExtension(extensions, {
+        url: TAKT_EXT.archivedAt,
+        valueDateTime: nowIso,
+      });
+    }
   } else {
     extensions = removeExtension(extensions, TAKT_EXT.archivedAt);
   }
@@ -243,6 +279,7 @@ export const useCreateMedicationPlan = () => {
           status: 'active',
           code: { text: input.name.trim() },
           form: { text: input.form.trim() || 'Tablet' },
+          identifier: patientScopedIdentifiers(undefined, input.patientRef),
           extension: medicationExtensions(input),
         }),
       });
@@ -254,7 +291,7 @@ export const useCreateMedicationPlan = () => {
           resourceType: 'MedicationRequest',
           status: 'active',
           intent: 'order',
-          authoredOn: nowIso.slice(0, 10),
+          authoredOn: isoDateKey(new Date()),
           subject: { reference: input.patientRef },
           medicationReference: { reference: `Medication/${medication.id}` },
           extension: [
@@ -266,6 +303,7 @@ export const useCreateMedicationPlan = () => {
               url: TAKT_EXT.pauseHistory,
               valueString: '[]',
             },
+            ...planExtras(input),
           ],
           dosageInstruction: [buildDosage(input)],
           ...(typeof input.supplyCount === 'number' && Number.isFinite(input.supplyCount)
@@ -313,11 +351,19 @@ export const useUpdateMedicationPlan = () => {
           ...input.medication,
           code: { text: input.name.trim() },
           form: { text: input.form.trim() || 'Tablet' },
+          identifier: patientScopedIdentifiers(input.medication.identifier, input.patientRef),
           extension: medicationExtensions(input),
         }),
       });
 
-      const extensions = applyStatusMetadata(input.request, input.status, input.pauseUntil);
+      let extensions = applyStatusMetadata(input.request, input.status, input.pauseUntil);
+      for (const extra of planExtras(input)) {
+        extensions = upsertExtension(extensions, extra);
+      }
+      if (!input.startDate) extensions = removeExtension(extensions, TAKT_EXT.startDate);
+      if (!(typeof input.dosageQuantity === 'number' && Number.isFinite(input.dosageQuantity))) {
+        extensions = removeExtension(extensions, TAKT_EXT.dosageQuantity);
+      }
 
       const medicationRequest = await ovokFetch<MedicationRequestResource>(
         `/fhir/R4/MedicationRequest/${input.request.id}`,
@@ -400,7 +446,23 @@ export const useRecordDose = () => {
       reason?: SkipReason;
       /** When the dose was actually taken, for late confirmations from History. Defaults to now. */
       effectiveAt?: Date;
+      /** Per-intake units (the plan's dosageQuantity) so supply deducts the real amount. */
+      quantity?: number;
     }) => {
+      const requestId = input.requestRef.split('/')[1] ?? input.requestRef;
+      // One stable identifier per (plan, scheduled time, action): the create is
+      // guarded with If-None-Exist (conditional create) so a retried request —
+      // e.g. a 5xx after the server persisted — cannot record the dose twice.
+      // Same shape as the optimistic row in onMutate keeps reconciliation exact.
+      const doseEventId = `${requestId}-${input.scheduledAt.toISOString()}-${input.action}`;
+      // The plan slot is frozen with the recorder's local clock at record time:
+      // devices in other timezones (or after a DST shift) resolve their own
+      // occurrences by this slot instead of their own local wall time.
+      const planSlot = `${requestId}|${localScheduledKey(input.scheduledAt)}`;
+      const scheduledExtension: FhirExtension[] = [
+        { url: TAKT_EXT.scheduledTime, valueDateTime: input.scheduledAt.toISOString() },
+        { url: TAKT_EXT.planSlot, valueString: planSlot },
+      ];
       const body: Omit<MedicationAdministrationResource, 'id'> = {
         resourceType: 'MedicationAdministration',
         status: input.action === 'taken' ? 'completed' : 'not-done',
@@ -408,18 +470,15 @@ export const useRecordDose = () => {
         request: { reference: input.requestRef },
         medicationReference: input.medicationRef ? { reference: input.medicationRef } : undefined,
         effectiveDateTime: (input.effectiveAt ?? new Date()).toISOString(),
-        extension: [
-          {
-            url: TAKT_EXT.scheduledTime,
-            valueDateTime: input.scheduledAt.toISOString(),
-          },
-        ],
+        identifier: [{ system: TAKT_EXT.doseEvent, value: doseEventId }],
+        extension: scheduledExtension,
         ...(input.action !== 'taken' ? notGivenReason(input.action, input.reason) : {}),
       };
 
       const created = await ovokFetch<MedicationAdministrationResource>('/fhir/R4/MedicationAdministration', {
         method: 'POST',
         body: JSON.stringify(body),
+        headers: { 'if-none-exist': `identifier=${TAKT_EXT.doseEvent}|${doseEventId}` },
       });
 
       if (input.action === 'taken' && input.medicationRef) {
@@ -429,7 +488,7 @@ export const useRecordDose = () => {
           const label = await ovokFetch<{ code?: { text?: string } }>(`/fhir/R4/Medication/${medicationId}`)
             .then((med) => med.code?.text)
             .catch(() => undefined);
-          await deductSupply(medicationId, label);
+          await deductSupply(medicationId, label, input.quantity ?? 1);
         }
       }
 
@@ -448,7 +507,10 @@ export const useRecordDose = () => {
         request: { reference: input.requestRef },
         medicationReference: input.medicationRef ? { reference: input.medicationRef } : undefined,
         effectiveDateTime: (input.effectiveAt ?? new Date()).toISOString(),
-        extension: [{ url: TAKT_EXT.scheduledTime, valueDateTime: input.scheduledAt.toISOString() }],
+        extension: [
+          { url: TAKT_EXT.scheduledTime, valueDateTime: input.scheduledAt.toISOString() },
+          { url: TAKT_EXT.planSlot, valueString: `${(input.requestRef.split('/')[1] ?? input.requestRef)}|${localScheduledKey(input.scheduledAt)}` },
+        ],
         ...(input.action !== 'taken' ? notGivenReason(input.action, input.reason) : {}),
       };
       qc.setQueryData<FhirBundle<MedicationAdministrationResource>>(key, (old) => ({
@@ -466,23 +528,39 @@ export const useRecordDose = () => {
   });
 };
 
+export type UndoDoseInput = {
+  eventId: string;
+  /** Supply context: undoing a taken dose hands its units back to the local counter. */
+  medicationRef?: string;
+  /** True when the event being undone was a taken dose (deducted supply at record time). */
+  taken?: boolean;
+  /** Per-intake units the taken dose removed; mirrors the record-time quantity. */
+  quantity?: number;
+};
+
 export const useUndoDose = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (eventId: string) => {
+    mutationFn: async ({ eventId, medicationRef, taken, quantity }: UndoDoseInput) => {
       await ovokFetch(`/fhir/R4/MedicationAdministration/${eventId}`, {
         method: 'DELETE',
       });
+
+      // Only taken doses touched the supply counter; skips and misses never did.
+      if (taken && medicationRef) {
+        const medicationId = medicationRef.split('/')[1];
+        if (medicationId) await restoreSupply(medicationId, quantity ?? 1);
+      }
     },
-    onMutate: async (eventId) => {
+    onMutate: async (input) => {
       await qc.cancelQueries({ queryKey: DOSE_EVENTS_KEY });
       const previous = qc.getQueriesData<FhirBundle<MedicationAdministrationResource>>({ queryKey: DOSE_EVENTS_KEY });
       qc.setQueriesData<FhirBundle<MedicationAdministrationResource>>({ queryKey: DOSE_EVENTS_KEY }, (old) =>
-        old ? { ...old, entry: (old.entry ?? []).filter((item) => item.resource.id !== eventId) } : old,
+        old ? { ...old, entry: (old.entry ?? []).filter((item) => item.resource.id !== input.eventId) } : old,
       );
       return { previous };
     },
-    onError: (_error, _eventId, context) => {
+    onError: (_error, _input, context) => {
       context?.previous.forEach(([key, data]) => qc.setQueryData(key, data));
     },
     onSettled: () => {
@@ -541,9 +619,16 @@ export const useUpdatePatient = () => {
 };
 
 const writeConsent = async (patientRef: string, status: 'active' | 'inactive') => {
+  const patientId = patientRef.split('/')[1] ?? patientRef;
+  // One stable identifier per (patient, status): the create is guarded with
+  // If-None-Exist so a retried accept/withdraw (e.g. a timeout after the server
+  // persisted) cannot pile up duplicate Consent records. Including the status in
+  // the identity keeps a fresh accept possible after a withdraw.
+  const consentId = `${patientId}-${status}`;
   const body: ConsentResource = {
     resourceType: 'Consent',
     status,
+    identifier: [{ system: TAKT_EXT.consent, value: consentId }],
     patient: { reference: patientRef },
     dateTime: new Date().toISOString(),
     scope: {
@@ -574,6 +659,7 @@ const writeConsent = async (patientRef: string, status: 'active' | 'inactive') =
   return ovokFetch('/fhir/R4/Consent', {
     method: 'POST',
     body: JSON.stringify(body),
+    headers: { 'if-none-exist': `identifier=${TAKT_EXT.consent}|${consentId}` },
   });
 };
 

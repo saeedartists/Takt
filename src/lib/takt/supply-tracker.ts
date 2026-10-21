@@ -180,7 +180,8 @@ export const setSupplyCount = async (medicationId: string, count: number): Promi
   const store = await readStore();
   const nextCount = toInt(count);
   const previous = store[medicationId];
-  const refilled = hasCount(previous) && nextCount > toInt(previous.count);
+  // Setting a count where none is stored (fresh row, or re-entered after a clear) counts as a refill.
+  const refilled = nextCount > toInt(previous?.count ?? 0);
 
   store[medicationId] = {
     ...(previous ?? {}),
@@ -198,25 +199,36 @@ export const setSupplyCount = async (medicationId: string, count: number): Promi
   await writeStore(store);
 };
 
+/**
+ * Forget the count but keep the refill rhythm: `dailyRate` and `lastRefilledAt`
+ * survive a clear so the next count still knows its pace and history.
+ */
 export const clearSupplyCount = async (medicationId: string): Promise<void> => {
   const store = await readStore();
-  if (!(medicationId in store)) return;
-  delete store[medicationId];
+  const previous = store[medicationId];
+  if (!previous) return;
+  await cancelNudge(previous);
+  store[medicationId] = {
+    ...(previous.dailyRate ? { dailyRate: previous.dailyRate } : {}),
+    ...(previous.lastRefilledAt ? { lastRefilledAt: previous.lastRefilledAt } : {}),
+  };
   await writeStore(store);
 };
 
 /**
- * One dose taken: count down, and nudge once when the supply first reaches
+ * One dose taken: count down by `quantity` units (the per-intake dosage, e.g.
+ * 2 tablets, defaulting to 1) and nudge once when the supply first reaches
  * about a week left (by days at the current rate, or the unit threshold),
  * and once more if it runs out. `label` names the medicine in the reminder.
  */
-export const deductSupply = async (medicationId: string, label?: string): Promise<number | null> => {
+export const deductSupply = async (medicationId: string, label?: string, quantity = 1): Promise<number | null> => {
   const store = await readStore();
   const row = store[medicationId];
   if (!hasCount(row)) return null;
 
+  const units = Math.max(1, Math.round(quantity));
   const previousCount = toInt(row.count);
-  const nextCount = Math.max(0, previousCount - 1);
+  const nextCount = Math.max(0, previousCount - units);
   const nextDays = nextCount <= 0 ? 0 : Math.ceil(nextCount / rateOf(row));
   const isLow = nextCount <= LOW_SUPPLY_THRESHOLD || nextDays <= LOW_SUPPLY_DAYS;
 
@@ -235,6 +247,34 @@ export const deductSupply = async (medicationId: string, label?: string): Promis
     lowSupplyNudgedAt: nudgeLow ? new Date().toISOString() : row.lowSupplyNudgedAt,
     outNudgedAt: nudgeOut ? new Date().toISOString() : row.outNudgedAt,
     nudgeId,
+  };
+  await writeStore(store);
+  return nextCount;
+};
+
+/**
+ * The mirror of `deductSupply`, for undoing a taken dose: count back up by
+ * `quantity` units. Back above the low-supply thresholds any pending refill
+ * reminder is cancelled and the once-only flags reset, so a later genuine
+ * dip can nudge again. No-op when no count was ever set.
+ */
+export const restoreSupply = async (medicationId: string, quantity = 1): Promise<number | null> => {
+  const store = await readStore();
+  const row = store[medicationId];
+  if (!hasCount(row)) return null;
+
+  const units = Math.max(0, Math.round(quantity));
+  const nextCount = toInt(row.count) + units;
+  const nextDays = nextCount <= 0 ? 0 : Math.ceil(nextCount / rateOf(row));
+  const aboveLow = nextCount > LOW_SUPPLY_THRESHOLD && nextDays > LOW_SUPPLY_DAYS;
+  if (aboveLow) await cancelNudge(row);
+
+  store[medicationId] = {
+    ...row,
+    count: nextCount,
+    lowSupplyNudgedAt: aboveLow ? undefined : row.lowSupplyNudgedAt,
+    outNudgedAt: nextCount > 0 ? undefined : row.outNudgedAt,
+    nudgeId: aboveLow ? undefined : row.nudgeId,
   };
   await writeStore(store);
   return nextCount;

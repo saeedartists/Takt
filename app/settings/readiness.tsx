@@ -26,7 +26,7 @@ type ReadinessTone = 'success' | 'warning' | 'neutral';
 
 type PhaseState = 'done' | 'in-progress' | 'blocked' | 'pending';
 
-const TASKS: Array<{
+const TASKS: {
   id: ReadinessTaskId;
   titleKey:
     | 'readinessTaskAuthSmokeTitle'
@@ -48,7 +48,7 @@ const TASKS: Array<{
     | 'readinessTaskConsentSubtitle'
     | 'readinessTaskA11ySubtitle'
     | 'readinessTaskSessionQaSubtitle';
-}> = [
+}[] = [
   {
     id: 'auth-live-smoke',
     titleKey: 'readinessTaskAuthSmokeTitle',

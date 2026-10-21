@@ -1,0 +1,9 @@
+dist/
+node_modules/
+package-lock.json
+android/
+ios/
+.expo/
+build-artifacts/
+store-assets/
+*.md

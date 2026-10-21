@@ -17,11 +17,23 @@ export class OvokFetchError extends Error {
     public readonly path: string,
     public readonly body: unknown,
     message: string,
+    /** Milliseconds the server asked callers to wait (Retry-After header). */
+    public readonly retryAfterMs?: number,
   ) {
     super(message);
     this.name = 'OvokFetchError';
   }
 }
+
+/** Retry-After in seconds, or an HTTP date string. */
+const parseRetryAfterMs = (value: string | null): number | undefined => {
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.round(seconds * 1000);
+  const dateMs = Date.parse(value);
+  if (Number.isFinite(dateMs)) return Math.max(0, dateMs - Date.now());
+  return undefined;
+};
 
 export async function ovokFetch<T = unknown>(
   path: string,
@@ -44,7 +56,6 @@ export async function ovokFetch<T = unknown>(
   };
   if (token) finalHeaders.authorization = `Bearer ${token}`;
   if (ifMatch) finalHeaders['if-match'] = ifMatch;
-  if (env.ovokTenantCode) finalHeaders['x-tenant-code'] = env.ovokTenantCode;
 
   const res = await fetch(url, { ...rest, headers: finalHeaders });
   const text = await res.text();
@@ -56,6 +67,7 @@ export async function ovokFetch<T = unknown>(
       path,
       body,
       `Ovok ${res.status.toString()} ${res.statusText} at ${path}`,
+      parseRetryAfterMs(res.headers.get('retry-after')),
     );
   }
 

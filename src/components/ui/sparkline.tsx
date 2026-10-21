@@ -72,7 +72,7 @@ export const AdherenceBars = ({
   height = 112,
   accessibilityLabel,
 }: {
-  days: ReadonlyArray<AdherenceBarDay>;
+  days: readonly AdherenceBarDay[];
   height?: number;
   accessibilityLabel?: string;
 }) => {
@@ -162,7 +162,7 @@ export const Sparkline = ({
   filled = true,
 }: {
   /** Chronological series. Fewer than 2 points renders nothing. */
-  values: ReadonlyArray<number>;
+  values: readonly number[];
   category?: HealthCategory;
   height?: number;
   filled?: boolean;

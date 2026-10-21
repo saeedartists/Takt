@@ -80,7 +80,7 @@ const sortKey = (r: FhirResource, field: string): string => {
   }
   if (field === 'name') {
     const names = r.name as
-      | Array<{ family?: string; given?: string[] }>
+      | { family?: string; given?: string[] }[]
       | undefined;
     const n = names?.[0];
     return `${n?.family ?? ''} ${n?.given?.join(' ') ?? ''}`.trim();
@@ -112,7 +112,7 @@ const matchesSearch = (
       continue;
     }
     if (key === 'code') {
-      const coding = (r.code as { coding?: Array<{ code?: string }> } | undefined)?.coding ?? [];
+      const coding = (r.code as { coding?: { code?: string }[] } | undefined)?.coding ?? [];
       if (!coding.some((c) => c.code === value)) return false;
       continue;
     }
@@ -126,7 +126,7 @@ const matchesSearch = (
     }
     if (key === 'name' || key === 'family') {
       const names = r.name as
-        | Array<{ family?: string; given?: string[] }>
+        | { family?: string; given?: string[] }[]
         | undefined;
       const haystack = (names ?? [])
         .map((n) => `${n.family ?? ''} ${n.given?.join(' ') ?? ''}`)
@@ -136,12 +136,12 @@ const matchesSearch = (
       continue;
     }
     if (key === 'identifier') {
-      const ids = r.identifier as Array<{ value?: string }> | undefined;
+      const ids = r.identifier as { value?: string }[] | undefined;
       if (!(ids ?? []).some((i) => i.value === value)) return false;
       continue;
     }
     if (key === 'email') {
-      const telecom = r.telecom as Array<{ system?: string; value?: string }> | undefined;
+      const telecom = r.telecom as { system?: string; value?: string }[] | undefined;
       const wanted = value.toLowerCase();
       if (!(telecom ?? []).some((t) => t.system === 'email' && (t.value ?? '').toLowerCase() === wanted)) return false;
       continue;
@@ -268,9 +268,31 @@ const routes: MockRoute[] = [
   {
     method: 'POST',
     path: /^\/fhir(?:\/R[45])?\/([A-Z][A-Za-z]+)$/,
+    // Mirror the live FHIR server's conditional-create semantics: with
+    // If-None-Exist, return the existing match (200) instead of duplicating.
     respond: (req, match) => {
       const resourceType = match[1]!;
       const input = (req.body ?? {}) as Partial<FhirResource>;
+      const ifNoneExist = req.headers.get('if-none-exist');
+      if (ifNoneExist) {
+        const [system, value] = (new URLSearchParams(ifNoneExist.replace(/^\?/, '')).get('identifier') ?? '').split('|');
+        for (const candidate of bucket(resourceType).values()) {
+          const identifiers = candidate.identifier as Array<{ system?: string; value?: string }> | undefined;
+          if (
+            Array.isArray(identifiers) &&
+            identifiers.some((item) => (!system || item.system === system) && (Boolean(value) && item.value === value))
+          ) {
+            return {
+              status: 200,
+              body: cloneResource(candidate),
+              headers: {
+                location: `${resourceType}/${candidate.id}`,
+                etag: `W/"${candidate.meta?.versionId ?? '1'}"`,
+              },
+            };
+          }
+        }
+      }
       const id = input.id ?? nextId(resourceType);
       const created: FhirResource = {
         ...(input as FhirResource),

@@ -1,6 +1,6 @@
 export type FhirBundle<T> = {
   total: number;
-  entry?: Array<{ resource: T }>;
+  entry?: { resource: T }[];
 };
 
 export type FhirReference = {
@@ -20,8 +20,8 @@ export type WeekdayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 export type PatientResource = {
   resourceType: 'Patient';
   id: string;
-  name?: Array<{ given?: string[]; family?: string }>;
-  telecom?: Array<{ system?: string; value?: string; use?: string }>;
+  name?: { given?: string[]; family?: string }[];
+  telecom?: { system?: string; value?: string; use?: string }[];
   birthDate?: string;
   gender?: string;
 };
@@ -32,6 +32,7 @@ export type MedicationResource = {
   status?: string;
   code?: { text?: string };
   form?: { text?: string };
+  identifier?: { system?: string; value?: string }[];
   extension?: FhirExtension[];
 };
 
@@ -44,7 +45,7 @@ export type MedicationRequestResource = {
   medicationReference?: FhirReference;
   authoredOn?: string;
   extension?: FhirExtension[];
-  dosageInstruction?: Array<{
+  dosageInstruction?: {
     timing?: {
       repeat?: {
         frequency?: number;
@@ -60,9 +61,9 @@ export type MedicationRequestResource = {
     asNeededBoolean?: boolean;
     /** Free-text intake note, e.g. "with a full glass of water". */
     patientInstruction?: string;
-    additionalInstruction?: Array<{ coding?: Array<{ system?: string; code?: string; display?: string }>; text?: string }>;
+    additionalInstruction?: { coding?: { system?: string; code?: string; display?: string }[]; text?: string }[];
     maxDosePerPeriod?: { numerator?: { value?: number }; denominator?: { value?: number; unit?: string } };
-  }>;
+  }[];
   dispenseRequest?: {
     quantity?: {
       value?: number;
@@ -79,31 +80,34 @@ export type MedicationAdministrationResource = {
   medicationReference?: FhirReference;
   request?: FhirReference;
   effectiveDateTime?: string;
-  statusReason?: Array<{
-    coding?: Array<{ code?: string; display?: string; system?: string }>;
+  identifier?: { system?: string; value?: string }[];
+  statusReason?: {
+    coding?: { code?: string; display?: string; system?: string }[];
     text?: string;
-  }>;
+  }[];
   extension?: FhirExtension[];
 };
 
 export type ConsentResource = {
   resourceType: 'Consent';
   id?: string;
+  /** Patient-scoped identity per (patient, status): one retry can't duplicate a consent. */
+  identifier?: { system?: string; value?: string }[];
   status: 'active' | 'inactive' | 'draft' | string;
   patient: FhirReference;
   dateTime: string;
-  scope: { coding: Array<{ system: string; code: string }> };
-  category: Array<{ coding: Array<{ system: string; code: string; display?: string }> }>;
+  scope: { coding: { system: string; code: string }[] };
+  category: { coding: { system: string; code: string; display?: string }[] }[];
   policyRule?: {
     text?: string;
   };
   extension?: FhirExtension[];
   provision?: {
     type?: 'permit' | 'deny' | string;
-    actor?: Array<{
-      role?: { coding?: Array<{ system?: string; code?: string; display?: string }> };
+    actor?: {
+      role?: { coding?: { system?: string; code?: string; display?: string }[] };
       reference?: FhirReference;
-    }>;
+    }[];
   };
 };
 
@@ -112,19 +116,19 @@ export type RelatedPersonResource = {
   id?: string;
   active?: boolean;
   patient: FhirReference;
-  relationship?: Array<{
-    coding?: Array<{ system?: string; code?: string; display?: string }>;
-  }>;
-  name?: Array<{
+  relationship?: {
+    coding?: { system?: string; code?: string; display?: string }[];
+  }[];
+  name?: {
     use?: 'official' | 'usual' | 'temp' | 'nickname' | 'anonymous' | 'old' | 'maiden' | string;
     family?: string;
     given?: string[];
-  }>;
-  telecom?: Array<{
+  }[];
+  telecom?: {
     system?: 'phone' | 'fax' | 'email' | 'pager' | 'url' | 'sms' | 'other' | string;
     value?: string;
     use?: 'home' | 'work' | 'temp' | 'old' | 'mobile' | string;
-  }>;
+  }[];
   extension?: FhirExtension[];
 };
 
@@ -157,6 +161,9 @@ export type MedicationCadence = 'daily' | 'weekdays' | 'custom' | 'interval' | '
 /** How a dose is taken; a record the patient chose, never drug information. */
 export type IntakeInstruction = 'with-food' | 'empty-stomach' | 'before-bed';
 
+/** Standard dosage units a patient can pick instead of free text. */
+export type MedicationUnit = 'mg' | 'mcg' | 'µg' | 'g' | 'ml' | 'tablets' | 'capsules' | 'drops' | 'tsp' | 'tbsp' | 'puffs' | 'sprays' | 'units' | 'other';
+
 export type MedicationShape = 'round' | 'oval' | 'capsule' | 'drops' | 'inhaler' | 'injection' | 'other';
 
 /** What the tablet looks like, so the row icon matches the real thing. */
@@ -184,10 +191,16 @@ export type MedicationPlan = {
   intervalDays?: number;
   /** YYYY-MM-DD */
   intervalStart?: string;
+  /** YYYY-MM-DD; the first day the regimen is active. */
+  startDate?: string;
   /** YYYY-MM-DD; the last day of a course. Doses stop after it and the plan archives itself. */
   endDate?: string;
   asNeeded?: boolean;
   maxPerDay?: number;
+  /** Per-intake dosage quantity (e.g. 2 tablets). */
+  dosageQuantity?: number;
+  /** Unit chosen for `dosageQuantity` (tablets, tsp, …). */
+  dosageUnit?: MedicationUnit;
   instruction?: IntakeInstruction;
   instructionNote?: string;
   appearance?: MedicationAppearance;
@@ -205,6 +218,8 @@ export type DoseOccurrence = {
   eventTimestamp?: string;
   /** User-reported reason on a skipped dose, when one was given. */
   reasonCode?: SkipReason;
+  /** Per-intake units (the plan's dosageQuantity, e.g. 2 tablets) taken at once. */
+  quantity?: number;
   instruction?: IntakeInstruction;
   instructionNote?: string;
 };
