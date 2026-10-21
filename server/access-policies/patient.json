@@ -1,0 +1,41 @@
+{
+  "resourceType": "AccessPolicy",
+  "name": "Takt patient self-access v1",
+  "resource": [
+    {
+      "type": "Patient",
+      "criteria": "Patient?_id=%profile",
+      "readonly": false
+    },
+    {
+      "type": "MedicationRequest",
+      "criteria": "MedicationRequest?subject=Patient/%profile",
+      "readonly": false
+    },
+    {
+      "type": "MedicationAdministration",
+      "criteria": "MedicationAdministration?subject=Patient/%profile",
+      "readonly": false
+    },
+    {
+      "type": "Medication",
+      "criteria": "Medication?identifier=https://actimi.com/fhir/takt/patient-scope|%profile",
+      "readonly": false
+    },
+    {
+      "type": "Consent",
+      "criteria": "Consent?patient=Patient/%profile",
+      "readonly": false
+    },
+    {
+      "type": "RelatedPerson",
+      "criteria": "RelatedPerson?patient=Patient/%profile",
+      "readonly": false
+    },
+    {
+      "type": "Device",
+      "criteria": "Device?patient=Patient/%profile",
+      "readonly": false
+    }
+  ]
+}

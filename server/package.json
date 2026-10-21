@@ -1,0 +1,45 @@
+{
+  "name": "@takt/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tsc -p tsconfig.build.json",
+    "verify": "npm run typecheck && npm run test",
+    "verify:tenant": "tsx scripts/verify-tenant.ts",
+    "bot:family-share-today": "tsx scripts/run-family-share-today.ts",
+    "bot:unconfirmed": "tsx scripts/run-family-share-unconfirmed.ts",
+    "bot:scan": "tsx scripts/run-family-share-scan.ts",
+    "bot:backfill-meds": "tsx scripts/backfill-medication-scope.ts",
+    "bot:erase": "tsx scripts/erase-patient.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "luxon": "^3.5.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.4.2",
+    "@types/node": "^22.10.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.12"
+  }
+}

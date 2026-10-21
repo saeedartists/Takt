@@ -1,0 +1,21 @@
+{
+  "resourceType": "AccessPolicy",
+  "name": "Takt family-share relative read-only v1",
+  "resource": [
+    {
+      "type": "Patient",
+      "criteria": "Patient?_id=%patient",
+      "readonly": true
+    },
+    {
+      "type": "MedicationRequest",
+      "criteria": "MedicationRequest?subject=Patient/%patient",
+      "readonly": true
+    },
+    {
+      "type": "Medication",
+      "criteria": "Medication?identifier=https://actimi.com/fhir/takt/patient-scope|%patient",
+      "readonly": true
+    }
+  ]
+}
