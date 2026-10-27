@@ -29,6 +29,10 @@ Do **not** use `Takt-source`. That folder was a temporary Expo Go workspace. All
 | **TestFlight (Xcode upload)** | iPhone testers | Yes ($99/yr) | Mock (testflight profile) |
 | **TestFlight (EAS auto-build)** | iPhone testers | Yes + one-time EAS credentials | Mock (testflight profile) |
 
+For live sandbox QA, use the dedicated `testflight-live` and
+`play-internal-live` profiles. They disable mock mode and target the verified
+`practice-stdi` sandbox tenant; they are not production-store profiles.
+
 ---
 
 ## 1. Expo Go demo (QR code share)
@@ -252,6 +256,15 @@ npm run submit:testflight
 
 # Or combined:
 eas build --platform ios --profile testflight --auto-submit --non-interactive
+```
+
+Live sandbox QA builds:
+
+```bash
+npm run build:testflight:live
+npm run build:android:live
+npm run submit:testflight:live
+npm run submit:android:live
 ```
 
 The `testflight` profile in `eas.json`:

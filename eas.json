@@ -50,12 +50,48 @@
       "env": {
         "EXPO_PUBLIC_OVOK_MOCK": "1"
       }
+    },
+    "testflight-live": {
+      "distribution": "store",
+      "channel": "preview",
+      "autoIncrement": false,
+      "env": {
+        "EXPO_PUBLIC_OVOK_MOCK": "0",
+        "EXPO_PUBLIC_OVOK_API_URL": "https://api.sandbox.ovok.com",
+        "EXPO_PUBLIC_OVOK_TENANT_CODE": "practice-stdi",
+        "EXPO_PUBLIC_OVOK_CLIENT_ID": "82876711-5145-4562-9659-64922e5f3173"
+      }
+    },
+    "play-internal-live": {
+      "distribution": "store",
+      "channel": "preview",
+      "autoIncrement": false,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_OVOK_MOCK": "0",
+        "EXPO_PUBLIC_OVOK_API_URL": "https://api.sandbox.ovok.com",
+        "EXPO_PUBLIC_OVOK_TENANT_CODE": "practice-stdi",
+        "EXPO_PUBLIC_OVOK_CLIENT_ID": "82876711-5145-4562-9659-64922e5f3173"
+      }
     }
   },
   "submit": {
     "testflight": {
       "ios": {
         "appleTeamId": "TR4973K4Q2"
+      }
+    },
+    "testflight-live": {
+      "ios": {
+        "appleTeamId": "TR4973K4Q2"
+      }
+    },
+    "play-internal-live": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
       }
     },
     "production": {

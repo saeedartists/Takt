@@ -9,7 +9,9 @@
  *   npm run verify:live
  *
  * Env:
- *   EXPO_PUBLIC_OVOK_API_URL        (default https://api.ovok.com)
+ *   EXPO_PUBLIC_OVOK_API_URL        (default https://api.ovok.com; the
+ *                                   practice-stdi sandbox tenant lives at
+ *                                   https://api.sandbox.ovok.com)
  *   EXPO_PUBLIC_OVOK_TENANT_CODE    the code from the Ovok Console
  *   TAKT_VERIFY_EMAIL / TAKT_VERIFY_PASSWORD  optional: a real account to
  *                                   unlock the authenticated checks
@@ -22,8 +24,12 @@
  *                                       If-None-Exist yields the same id twice)
  *   4. Family email search             (RelatedPerson?email=)
  *   5. Cleanup + operator checklist
+ *
+ * Note: in Node the SDK client has no storage, so after the SDK contract
+ * check we fall back to a raw PKCE login to obtain the bearer token.
  */
 
+import { createHash, randomBytes } from 'node:crypto';
 import { OvokClient } from '@ovok/core';
 import type { Bundle, Consent, MedicationAdministration } from '@medplum/fhirtypes';
 
@@ -114,6 +120,47 @@ const main = async () => {
       } catch (error) {
         fail('login contract', error instanceof Error ? error.message : String(error));
       }
+
+      // Node fallback: the SDK client drops the session without storage, so
+      // repeat the exact PKCE flow the app runs and keep the access token.
+      if (!token) {
+        try {
+          const verifier = randomBytes(32).toString('base64url');
+          const challenge = createHash('sha256').update(verifier).digest('base64url');
+          const start = await fetch(`${API_URL}/auth/tenant/${LOGIN_TYPE}/login/start`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(
+              LOGIN_TYPE === 'Patient'
+                ? { email: EMAIL, password: PASSWORD, codeChallenge: challenge, codeChallengeMethod: 'S256', tenantCode: TENANT }
+                : { email: EMAIL, password: PASSWORD, codeChallenge: challenge, codeChallengeMethod: 'S256' },
+            ),
+          });
+          const startBody = (await start.json()) as { sessionCode?: string; profiles?: { tenantCode?: string }[]; message?: string };
+          if (!start.ok || !startBody.sessionCode) {
+            fail('login fallback (raw PKCE)', `status ${start.status} ${startBody.message ?? ''}`);
+          } else {
+            const tenantForExchange =
+              LOGIN_TYPE === 'Patient'
+                ? TENANT
+                : (startBody.profiles?.find((p) => p.tenantCode === TENANT)?.tenantCode ?? startBody.profiles?.[0]?.tenantCode ?? TENANT);
+            const exchange = await fetch(`${API_URL}/auth/tenant/${LOGIN_TYPE}/login/token`, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ sessionCode: startBody.sessionCode, codeVerifier: verifier, tenantCode: tenantForExchange }),
+            });
+            const exchangeBody = (await exchange.json()) as { accessToken?: string; message?: string };
+            if (!exchange.ok || !exchangeBody.accessToken) {
+              fail('login fallback (raw PKCE)', `status ${exchange.status} ${exchangeBody.message ?? ''}`);
+            } else {
+              token = exchangeBody.accessToken;
+              ok('login fallback (raw PKCE session)', `token ${token.slice(0, 8)}…`);
+            }
+          }
+        } catch (error) {
+          fail('login fallback (raw PKCE)', error instanceof Error ? error.message : String(error));
+        }
+      }
     }
   } else {
     skip('login contract', 'set TAKT_VERIFY_EMAIL / TAKT_VERIFY_PASSWORD to exercise');
@@ -121,6 +168,32 @@ const main = async () => {
 
   // 3 + 4 need a session.
   if (token) {
+    // Ovok enforces referential integrity, so every write probe hangs off a
+    // real, uniquely-named Patient (mirrors the app, which always has one).
+    let patientId: string | undefined;
+    try {
+      const res = await fhirFetch<{ id?: string }>(
+        'Patient',
+        'POST',
+        JSON.stringify({
+          resourceType: 'Patient',
+          active: true,
+          name: [{ family: 'TaktVerify', given: ['Probe'] }],
+          identifier: [{ system: TAKT_EXT_DOSE_EVENT, value: RUN_KEY }],
+        }),
+        {},
+        token,
+      );
+      if (res.status >= 200 && res.status < 300 && (res.body as { id?: string }).id) {
+        patientId = (res.body as { id?: string }).id;
+        ok('probe Patient create', patientId);
+      } else {
+        fail('probe Patient create', `status ${res.status} — ${JSON.stringify(res.body).slice(0, 120)}`);
+      }
+    } catch (error) {
+      fail('probe Patient create', error instanceof Error ? error.message : String(error));
+    }
+
     const conditionalCreate = async <T extends { id?: string }>(label: string, path: string, resource: Record<string, unknown>, search: string) => {
       try {
         const first = await fhirFetch<T>(path, 'POST', JSON.stringify(resource), { 'if-none-exist': search }, token);
@@ -130,7 +203,7 @@ const main = async () => {
         if (first.status === 201 && token && second.status === 200 && firstId && secondId === firstId) {
           ok(`${label}: conditional create replays to the same id`, firstId);
         } else if (first.status >= 400 || second.status >= 400) {
-          fail(`${label}: conditional create`, `status ${first.status}/${second.status} — check write permissions for this role`);
+          fail(`${label}: conditional create`, `status ${first.status}/${second.status} — ${JSON.stringify(first.body).slice(0, 160)}`);
         } else {
           fail(`${label}: conditional create replay`, `first=${firstId} second=${secondId} (statuses ${first.status}/${second.status})`);
         }
@@ -141,34 +214,45 @@ const main = async () => {
       }
     };
 
-    const maId = await conditionalCreate<MedicationAdministration>(
-      'MedicationAdministration',
-      'MedicationAdministration',
-      {
-        resourceType: 'MedicationAdministration',
-        status: 'in-progress',
-        subject: { reference: 'Patient/takt-verify' },
-        identifier: [{ system: TAKT_EXT_DOSE_EVENT, value: RUN_KEY }],
-      },
-      `identifier=${TAKT_EXT_DOSE_EVENT}|${RUN_KEY}`,
-    );
+    const maId = patientId
+      ? await conditionalCreate<MedicationAdministration>(
+          'MedicationAdministration',
+          'MedicationAdministration',
+          {
+            resourceType: 'MedicationAdministration',
+            status: 'in-progress',
+            subject: { reference: `Patient/${patientId}` },
+            effectiveDateTime: new Date().toISOString(),
+            medicationCodeableConcept: { text: 'Takt verify probe' },
+            identifier: [{ system: TAKT_EXT_DOSE_EVENT, value: RUN_KEY }],
+          },
+          `identifier=${TAKT_EXT_DOSE_EVENT}|${RUN_KEY}`,
+        )
+      : undefined;
 
-    const consentId = await conditionalCreate<Consent>(
-      'Consent',
-      'Consent',
-      {
-        resourceType: 'Consent',
-        status: 'active',
-        identifier: [{ system: TAKT_EXT_CONSENT, value: `${RUN_KEY}-patient-active` }],
-      },
-      `identifier=${TAKT_EXT_CONSENT}|${RUN_KEY}-patient-active`,
-    );
+    const consentId = patientId
+      ? await conditionalCreate<Consent>(
+          'Consent',
+          'Consent',
+          {
+            resourceType: 'Consent',
+            status: 'active',
+            patient: { reference: `Patient/${patientId}` },
+            dateTime: new Date().toISOString(),
+            scope: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/consentscope', code: 'patient-privacy' }] },
+            category: [{ coding: [{ system: 'http://loinc.org', code: '59284-0', display: 'Patient Consent' }] }],
+            policyRule: { text: 'takt-verify' },
+            identifier: [{ system: TAKT_EXT_CONSENT, value: `${RUN_KEY}-patient-active` }],
+          },
+          `identifier=${TAKT_EXT_CONSENT}|${RUN_KEY}-patient-active`,
+        )
+      : undefined;
 
     // 4. Relative email search (family features).
     try {
       const probe = await fhirFetch<Bundle>('RelatedPerson?email=takt-verify-probe@example.com', 'GET', undefined, {}, token);
-      if (probe.status === 200 && probe.body && 'total' in (probe.body as object)) {
-        ok('RelatedPerson email search (AccessPolicy allows ?email=)', `bundle total ${(probe.body as Bundle).total}`);
+      if (probe.status === 200 && probe.body && 'resourceType' in (probe.body as object)) {
+        ok('RelatedPerson email search (AccessPolicy allows ?email=)', `bundle ${(probe.body as Bundle).total ?? '(no total field)'}`);
       } else if (probe.status === 403) {
         fail('RelatedPerson email search', '403 — ask the Ovok admin to allow relatives to search RelatedPerson by email');
       } else {
@@ -182,6 +266,7 @@ const main = async () => {
     const deletions: [string, string | undefined][] = [
       ['MedicationAdministration', maId],
       ['Consent', consentId],
+      ['Patient', patientId],
     ];
     for (const [type, id] of deletions) {
       if (!id) continue;

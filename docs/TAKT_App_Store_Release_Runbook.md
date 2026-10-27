@@ -55,6 +55,20 @@ eas build --platform ios --profile production
 eas submit --platform ios --profile production --latest
 ```
 
+For live end-to-end QA against the verified `practice-stdi` sandbox tenant, use the
+dedicated profiles instead of the mock-data profiles:
+
+```bash
+npm run build:testflight:live
+npm run build:android:live
+npm run submit:testflight:live
+npm run submit:android:live
+```
+
+These live profiles set `EXPO_PUBLIC_OVOK_MOCK=0` and target
+`https://api.sandbox.ovok.com`. They are for internal testing only; configure a
+separate production tenant before a public store release.
+
 > **Internal distribution is not TestFlight.** The `preview` profile sets
 > `"distribution": "internal"`, which produces an ad-hoc IPA limited to devices whose
 > UDIDs are registered with the provisioning profile. Apple rejects ad-hoc builds
