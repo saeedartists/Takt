@@ -24,7 +24,10 @@
       "channel": "preview",
       "autoIncrement": false,
       "env": {
-        "EXPO_PUBLIC_OVOK_MOCK": "1"
+        "EXPO_PUBLIC_OVOK_MOCK": "0",
+        "EXPO_PUBLIC_OVOK_API_URL": "https://api.sandbox.ovok.com",
+        "EXPO_PUBLIC_OVOK_TENANT_CODE": "practice-stdi",
+        "EXPO_PUBLIC_OVOK_CLIENT_ID": "82876711-5145-4562-9659-64922e5f3173"
       }
     },
     "production": {
