@@ -28,7 +28,8 @@
     "bot:unconfirmed": "tsx scripts/run-family-share-unconfirmed.ts",
     "bot:scan": "tsx scripts/run-family-share-scan.ts",
     "bot:backfill-meds": "tsx scripts/backfill-medication-scope.ts",
-    "bot:erase": "tsx scripts/erase-patient.ts"
+    "bot:erase": "tsx scripts/erase-patient.ts",
+    "smoke:bots": "tsx scripts/smoke-bots-live.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
