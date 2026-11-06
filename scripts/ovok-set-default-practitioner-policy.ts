@@ -245,6 +245,8 @@ const authByClientCredentials = !!(
 const authByToken = !!process.env.OVOK_ACCESS_TOKEN;
 
 function envOrDie(key: string): string {
+  // Node admin script, never bundled by Expo: dynamic env access is fine here.
+  // eslint-disable-next-line expo/no-dynamic-env-var
   const value = process.env[key];
   if (!value) throw new Error(`Missing required env: ${key}`);
   return value;
