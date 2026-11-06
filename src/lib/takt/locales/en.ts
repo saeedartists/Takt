@@ -578,6 +578,9 @@ export const en = {
     authCompleteLinkInvalidTitle: 'Link expired',
     authCompleteLinkInvalidBody: 'This reset link is incomplete or expired. Request a new email from the sign-in screen.',
     authPasswordTooShort: 'Use at least 12 characters.',
+    authPasswordTooCommon: 'This password is too common and easy to guess. Choose a less predictable one — for example a few unrelated words.',
+    authEmailTaken: 'An account with this email already exists. Sign in instead, or reset your password.',
+    authTooManyAttempts: 'Too many attempts. Wait a few minutes and try again.',
 
     authEmailLabel: 'Email',
     authEmailPlaceholder: 'you@example.com',

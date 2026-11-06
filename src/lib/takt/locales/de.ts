@@ -577,6 +577,9 @@ export const de = {
     authCompleteLinkInvalidTitle: 'Link abgelaufen',
     authCompleteLinkInvalidBody: 'Dieser Link ist unvollständig oder abgelaufen. Fordern Sie auf der Anmeldeseite eine neue E-Mail an.',
     authPasswordTooShort: 'Verwenden Sie mindestens 12 Zeichen.',
+    authPasswordTooCommon: 'Dieses Passwort ist zu verbreitet und leicht zu erraten. Wählen Sie ein weniger vorhersehbares – zum Beispiel einige unzusammenhängende Wörter.',
+    authEmailTaken: 'Für diese E-Mail-Adresse gibt es bereits ein Konto. Melden Sie sich an oder setzen Sie Ihr Passwort zurück.',
+    authTooManyAttempts: 'Zu viele Versuche. Bitte warten Sie einige Minuten und versuchen Sie es erneut.',
 
     authEmailLabel: 'E-Mail',
     authEmailPlaceholder: 'sie@example.com',
