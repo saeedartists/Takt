@@ -18,7 +18,22 @@ const messageFromError = (error: unknown): string => {
 export const mapAuthError = (
   kind: AuthFlowKind,
   error: unknown,
-  t: (key: 'authErrorSignIn' | 'authErrorRegister' | 'authErrorReset' | 'authBackendNotReadyBody' | 'authInvalidCredentials' | 'authRegistrationDisabled' | 'authMissingClientId' | 'authTenantMissing' | 'authGenericRetry' | 'authPasswordTooCommon' | 'authPasswordTooShort' | 'authEmailTaken' | 'authTooManyAttempts') => string,
+  t: (
+    key:
+      | 'authErrorSignIn'
+      | 'authErrorRegister'
+      | 'authErrorReset'
+      | 'authBackendNotReadyBody'
+      | 'authInvalidCredentials'
+      | 'authRegistrationDisabled'
+      | 'authMissingClientId'
+      | 'authTenantMissing'
+      | 'authGenericRetry'
+      | 'authPasswordTooCommon'
+      | 'authPasswordTooShort'
+      | 'authEmailTaken'
+      | 'authTooManyAttempts',
+  ) => string,
 ): string => {
   const message = messageFromError(error);
 
@@ -44,7 +59,11 @@ export const mapAuthError = (
     return t('authBackendNotReadyBody');
   }
 
-  if (/(username|email)\s+or\s+password\s+is\s+incorrect|invalid\s+email\s+or\s+password/i.test(message)) {
+  if (
+    /(username|email)\s+or\s+password\s+is\s+incorrect|invalid\s+email\s+or\s+password/i.test(
+      message,
+    )
+  ) {
     return t('authInvalidCredentials');
   }
 

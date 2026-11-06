@@ -18,22 +18,34 @@ describe('mapAuthError', () => {
 
   it('uses the field code when the SDK provides it', () => {
     const error = new OvokApiError(
-      { status: 422, code: undefined, message: 'The request has invalid fields.', fieldErrors: [{ code: 'PASSWORD_TOO_COMMON', message: '', path: ['password'] }], missing: [] },
+      {
+        status: 422,
+        code: undefined,
+        message: 'The request has invalid fields.',
+        fieldErrors: [{ code: 'PASSWORD_TOO_COMMON', message: '', path: ['password'] }],
+        missing: [],
+      },
       undefined,
     );
     expect(mapAuthError('register', error, t)).toBe('authPasswordTooCommon');
   });
 
   it('tells the user the email already has an account', () => {
-    expect(mapAuthError('register', apiError(400, 'Registration failed.'), t)).toBe('authEmailTaken');
+    expect(mapAuthError('register', apiError(400, 'Registration failed.'), t)).toBe(
+      'authEmailTaken',
+    );
   });
 
   it('maps a 401 at sign-in to wrong credentials', () => {
-    expect(mapAuthError('sign-in', apiError(401, 'Unauthorized'), t)).toBe('authInvalidCredentials');
+    expect(mapAuthError('sign-in', apiError(401, 'Unauthorized'), t)).toBe(
+      'authInvalidCredentials',
+    );
   });
 
   it('maps rate limiting', () => {
-    expect(mapAuthError('register', apiError(429, 'Too Many Requests'), t)).toBe('authTooManyAttempts');
+    expect(mapAuthError('register', apiError(429, 'Too Many Requests'), t)).toBe(
+      'authTooManyAttempts',
+    );
   });
 
   it('falls back to the generic message for anything unknown', () => {
