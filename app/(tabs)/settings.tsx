@@ -40,6 +40,7 @@ import { useReminderPreferences } from '@/lib/takt/preferences';
 import { splitAppointments, useCare } from '@/lib/takt/care';
 import { formatVisitWhen } from '@/components/takt/next-visit-card';
 import { readReminderPermissionStatus } from '@/lib/takt/reminders';
+import { clearUserLocalState } from '@/lib/takt/session-reset';
 import { env } from '@/lib/env';
 
 type PermissionStatus = Awaited<ReturnType<typeof readReminderPermissionStatus>>;
@@ -55,7 +56,15 @@ function RowIcon({ name }: { name: IconName }) {
   );
 }
 
-function Section({ index, title, children }: { index: number; title?: string; children: ReactNode }) {
+function Section({
+  index,
+  title,
+  children,
+}: {
+  index: number;
+  title?: string;
+  children: ReactNode;
+}) {
   const { enter } = useMotion();
   return (
     <Animated.View entering={enter(index)}>
@@ -87,7 +96,12 @@ function SettingsTile({
   const { fg } = useTileColors(tone);
   return (
     <Animated.View entering={enter(index)} style={styles.tileCell}>
-      <Tile tone={tone} onPress={onPress} accessibilityLabel={`${title}, ${value}`} style={styles.tile}>
+      <Tile
+        tone={tone}
+        onPress={onPress}
+        accessibilityLabel={`${title}, ${value}`}
+        style={styles.tile}
+      >
         <TileIcon name={icon} size={40} />
         <View style={styles.tileText}>
           <Text style={[typography.headline, styles.tileTitle]}>{title}</Text>
@@ -141,15 +155,23 @@ export default function SettingsTabScreen() {
   );
 
   const signOut = () => {
-    // logout() revokes the server session and always clears the local login,
-    // even offline (Ovok docs → passwords and sessions → sign out).
-    void ovokClient.logout().catch(() => undefined);
+    // Wipe this user's reminders, cache and local data (consent, diary, supply,
+    // primary patient) before the next person can sign in on the device.
+    void clearUserLocalState()
+      .catch(() => undefined)
+      // logout() revokes the server session and always clears the local login,
+      // even offline (Ovok docs → passwords and sessions → sign out).
+      .then(() => ovokClient.logout())
+      .catch(() => undefined);
     router.replace('/auth/sign-in' as never);
   };
 
   const name = patient.data?.name?.[0];
   const fullName = [name?.given?.[0], name?.family].filter(Boolean).join(' ');
-  const initials = [name?.given?.[0]?.[0], name?.family?.[0]].filter(Boolean).join('').toUpperCase();
+  const initials = [name?.given?.[0]?.[0], name?.family?.[0]]
+    .filter(Boolean)
+    .join('')
+    .toUpperCase();
 
   const remindersSummary = [
     prefs.data?.sound === false ? t('reminderSoundOff') : t('reminderSoundOn'),
@@ -166,14 +188,22 @@ export default function SettingsTabScreen() {
         : t('familySharingRelatives').replace('{count}', String(activeGrants));
 
   const themeLabel =
-    themeMode === 'light' ? t('themeModeLight') : themeMode === 'dark' ? t('themeModeDark') : t('themeModeSystem');
+    themeMode === 'light'
+      ? t('themeModeLight')
+      : themeMode === 'dark'
+        ? t('themeModeDark')
+        : t('themeModeSystem');
   const appearanceSummary = `${themeLabel} · ${locale === 'de' ? 'Deutsch' : 'English'}`;
 
   const consentSummary = consent.isActive
     ? consent.currentAt
       ? t('consentGivenOn').replace(
           '{date}',
-          formatDate(new Date(consent.currentAt), { year: 'numeric', month: 'short', day: 'numeric' }),
+          formatDate(new Date(consent.currentAt), {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          }),
         )
       : t('consentStatusActive')
     : t('consentStatusInactive');
@@ -212,7 +242,8 @@ export default function SettingsTabScreen() {
 
   const version = Constants.expoConfig?.version ?? '0.0.0';
   const runtimeVersion = Constants.expoConfig?.runtimeVersion;
-  const build = typeof runtimeVersion === 'string' ? runtimeVersion : Constants.expoConfig?.ios?.buildNumber;
+  const build =
+    typeof runtimeVersion === 'string' ? runtimeVersion : Constants.expoConfig?.ios?.buildNumber;
 
   return (
     <PageShell>
@@ -221,7 +252,12 @@ export default function SettingsTabScreen() {
       <Stack>
         {/* Profile: lilac is the "you / profile" tone. */}
         <Animated.View entering={enter(0)}>
-          <Tile tone="lilac" onPress={openEditProfile} accessibilityLabel={t('editProfileTitle')} style={styles.profile}>
+          <Tile
+            tone="lilac"
+            onPress={openEditProfile}
+            accessibilityLabel={t('editProfileTitle')}
+            style={styles.profile}
+          >
             <View style={styles.avatar}>
               <Text style={[typography.title3, { color: INK }]}>{initials || '·'}</Text>
             </View>
@@ -241,7 +277,9 @@ export default function SettingsTabScreen() {
           <Animated.View entering={enter(1)}>
             <Card>
               <View style={{ padding: spacing(4), gap: spacing(3) }}>
-                <Text style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>
+                <Text
+                  style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}
+                >
                   {t('editProfileTitle')}
                 </Text>
                 <View style={{ flexDirection: 'row', gap: spacing(2) }}>
@@ -263,7 +301,11 @@ export default function SettingsTabScreen() {
                   </View>
                 </View>
                 <View style={{ flexDirection: 'row', gap: spacing(2), justifyContent: 'flex-end' }}>
-                  <Button kind="ghost" label={t('editProfileCancel')} onPress={() => setEditingProfile(false)} />
+                  <Button
+                    kind="ghost"
+                    label={t('editProfileCancel')}
+                    onPress={() => setEditingProfile(false)}
+                  />
                   <Button
                     label={t('editProfileSave')}
                     onPress={() => void saveProfile()}
@@ -286,7 +328,12 @@ export default function SettingsTabScreen() {
               extra={
                 permission === 'denied' ? (
                   <View style={styles.tileBadge}>
-                    <Badge size="sm" icon="alert-circle" label={t('notificationStatusDenied')} tone="warning" />
+                    <Badge
+                      size="sm"
+                      icon="alert-circle"
+                      label={t('notificationStatusDenied')}
+                      tone="warning"
+                    />
                   </View>
                 ) : undefined
               }
@@ -319,26 +366,32 @@ export default function SettingsTabScreen() {
               onPress={() => router.push('/report')}
             />
           </View>
-        {/* Care team: people and visits, one wide tile closing the grid. */}
-        <Animated.View entering={enter(5)}>
-          <Tile
-            tone="lilac"
-            onPress={() => router.push('/care' as never)}
-            accessibilityLabel={`${t('careRouteTitle')}, ${careSummary}`}
-            style={styles.wide}
-          >
-            <TileIcon name="medkit-outline" size={40} />
-            <View style={styles.wideText}>
-              <Text numberOfLines={1} style={[typography.headline, styles.tileTitle]}>
-                {t('careRouteTitle')}
-              </Text>
-              <Text numberOfLines={1} style={[typography.subhead, { color: c.tones.lilac.fg, fontVariant: ['tabular-nums'] }]}>
-                {careSummary}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={c.tones.lilac.fg} />
-          </Tile>
-        </Animated.View>
+          {/* Care team: people and visits, one wide tile closing the grid. */}
+          <Animated.View entering={enter(5)}>
+            <Tile
+              tone="lilac"
+              onPress={() => router.push('/care' as never)}
+              accessibilityLabel={`${t('careRouteTitle')}, ${careSummary}`}
+              style={styles.wide}
+            >
+              <TileIcon name="medkit-outline" size={40} />
+              <View style={styles.wideText}>
+                <Text numberOfLines={1} style={[typography.headline, styles.tileTitle]}>
+                  {t('careRouteTitle')}
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    typography.subhead,
+                    { color: c.tones.lilac.fg, fontVariant: ['tabular-nums'] },
+                  ]}
+                >
+                  {careSummary}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={c.tones.lilac.fg} />
+            </Tile>
+          </Animated.View>
         </View>
 
         <Section index={6} title={t('helpSection')}>
@@ -389,9 +442,10 @@ export default function SettingsTabScreen() {
           </Section>
         )}
 
-
         <View style={styles.footer}>
-          <Text style={[typography.footnote, { color: c.textTertiary, textAlign: 'center' }]}>{t('safetyNote')}</Text>
+          <Text style={[typography.footnote, { color: c.textTertiary, textAlign: 'center' }]}>
+            {t('safetyNote')}
+          </Text>
           <Text style={[typography.caption, { color: c.textTertiary, textAlign: 'center' }]}>
             {t('versionLabel').replace('{version}', version)}
             {build ? ` · ${t('buildLabel').replace('{build}', build)}` : ''}
@@ -403,7 +457,13 @@ export default function SettingsTabScreen() {
 }
 
 const styles = StyleSheet.create({
-  profile: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), borderRadius: radius.xxl, paddingVertical: spacing(3.5) },
+  profile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(3),
+    borderRadius: radius.xxl,
+    paddingVertical: spacing(3.5),
+  },
   avatar: {
     width: 52,
     height: 52,
@@ -420,7 +480,12 @@ const styles = StyleSheet.create({
   tileText: { gap: 2 },
   tileTitle: { color: INK, fontFamily: font.bold, fontSize: 18 },
   tileBadge: { marginTop: spacing(2) },
-  wide: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), paddingVertical: spacing(3.5) },
+  wide: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(3),
+    paddingVertical: spacing(3.5),
+  },
   wideText: { flex: 1, minWidth: 0, gap: 2 },
   rowIcon: {
     width: 40,

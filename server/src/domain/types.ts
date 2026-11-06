@@ -13,6 +13,8 @@ export type FhirReference = {
 
 export type FhirExtension = {
   url: string;
+  /** Sub-extensions of a complex extension (S-08 pause-period / medication-appearance). */
+  extension?: FhirExtension[];
   valueString?: string;
   valueDateTime?: string;
   valueInteger?: number;
@@ -211,7 +213,16 @@ export type DeviceResource = FhirResource & {
 
 export type CommunicationResource = FhirResource & {
   resourceType: 'Communication';
-  status?: 'preparation' | 'in-progress' | 'not-done' | 'on-hold' | 'stopped' | 'completed' | 'entered-in-error' | 'unknown' | string;
+  status?:
+    | 'preparation'
+    | 'in-progress'
+    | 'not-done'
+    | 'on-hold'
+    | 'stopped'
+    | 'completed'
+    | 'entered-in-error'
+    | 'unknown'
+    | string;
   sent?: string;
   subject?: FhirReference;
   recipient?: FhirReference[];

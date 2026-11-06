@@ -34,10 +34,21 @@ export const TAKT_EXT = {
   intakeInstruction: 'https://actimi.com/fhir/takt/intake-instruction',
   /** On the Medication: JSON { shape, color } for the row icon. */
   appearance: 'https://actimi.com/fhir/takt/appearance',
+  /** On the Patient: IANA zone (valueString); server bots schedule in it. Same URL as server/src/domain/constants.ts. */
+  patientTimezone: 'https://actimi.com/fhir/takt/patient-timezone',
+  /** On the MedicationRequest: complex { count, at } — the count set/refilled and when; remaining = count − doses since. */
+  supplyAnchor: 'https://actimi.com/fhir/takt/supply-anchor',
+  /** S-08, on the MedicationRequest: one complex { start, end? } per pause (supersedes the pause-history JSON string). */
+  pausePeriod: 'https://actimi.com/fhir/takt/pause-period',
+  /** S-08, on the Medication: complex { shape (code), color } (supersedes the appearance JSON string). */
+  medicationAppearance: 'https://actimi.com/fhir/takt/medication-appearance',
 } as const;
 
 /** On a Medication: the owning patient id, so patient-scoped FHIR policies can match it. */
 export const PATIENT_SCOPE_SYSTEM = 'https://actimi.com/fhir/takt/patient-scope';
+
+/** Ovok rejects shorter passwords (422); check client-side so users see it inline. */
+export const MIN_PASSWORD_LENGTH = 12;
 
 export const TAKT_CONSENT_VERSION = 'takt-consent-v1';
 export const CONSENT_STORAGE_KEY = `takt:consent:${TAKT_CONSENT_VERSION}`;

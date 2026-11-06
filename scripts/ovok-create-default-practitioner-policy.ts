@@ -119,11 +119,17 @@ function clientCredentialsTokenProvider(options: ClientCredentialsOptions) {
   };
 }
 
+/** Minimum shape create/update rely on (resourceType + id for the URL). */
+type FhirResource = { resourceType: string; id?: string };
+
 interface FhirClient {
-  search<T>(resourceType: string, params?: Record<string, string | number | boolean | undefined>): Promise<T>;
+  search<T>(
+    resourceType: string,
+    params?: Record<string, string | number | boolean | undefined>,
+  ): Promise<T>;
   read<T>(path: string): Promise<T>;
-  create<T>(resource: T): Promise<T>;
-  update<T>(resource: T): Promise<T>;
+  create<T extends FhirResource>(resource: T): Promise<T>;
+  update<T extends FhirResource>(resource: T): Promise<T>;
   delete(path: string): Promise<void>;
 }
 
@@ -133,7 +139,12 @@ class HttpFhirClient implements FhirClient {
   private readonly token: () => string | Promise<string>;
   private readonly timeoutMs: number;
 
-  constructor(baseUrl: string, tenantCode: string, token: () => string | Promise<string>, timeoutMs = 15_000) {
+  constructor(
+    baseUrl: string,
+    tenantCode: string,
+    token: () => string | Promise<string>,
+    timeoutMs = 15_000,
+  ) {
     this.baseUrl = baseUrl.replace(/\/+$/, '');
     this.tenantCode = tenantCode;
     this.token = token;
@@ -166,7 +177,10 @@ class HttpFhirClient implements FhirClient {
     }
   }
 
-  async search<T>(resourceType: string, params: Record<string, string | number | boolean | undefined> = {}) {
+  async search<T>(
+    resourceType: string,
+    params: Record<string, string | number | boolean | undefined> = {},
+  ) {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
       if (value === undefined) continue;
@@ -180,14 +194,14 @@ class HttpFhirClient implements FhirClient {
     return this.request<T>(path);
   }
 
-  async create<T>(resource: T) {
+  async create<T extends FhirResource>(resource: T) {
     return this.request<T>(`/fhir/R4/${resource.resourceType}`, {
       method: 'POST',
       body: JSON.stringify(resource),
     });
   }
 
-  async update<T>(resource: T) {
+  async update<T extends FhirResource>(resource: T) {
     if (!resource.id) throw new Error('Update requires an id.');
     return this.request<T>(`/fhir/R4/${resource.resourceType}/${resource.id}`, {
       method: 'PUT',
@@ -259,26 +273,32 @@ const main = async () => {
   const useStaticToken = !!accessToken;
 
   if (!useClientCredentials && !useStaticToken) {
-    console.error('No auth path configured. Set OVOK_ACCESS_TOKEN or OVOK_CLIENT_ID + OVOK_CLIENT_SECRET + OVOK_TOKEN_URL.');
+    console.error(
+      'No auth path configured. Set OVOK_ACCESS_TOKEN or OVOK_CLIENT_ID + OVOK_CLIENT_SECRET + OVOK_TOKEN_URL.',
+    );
     process.exitCode = 1;
     return;
   }
 
-  const token: () => string | Promise<string> = useStaticToken
-    ? () => accessToken
-    : clientCredentialsTokenProvider({
-        tokenUrl,
-        clientId,
-        clientSecret,
-        tenantCode,
-        scope,
-      });
+  const token: () => string | Promise<string> =
+    // The guard above guarantees one auth path; `?? ''` only satisfies the type.
+    useStaticToken || !tokenUrl || !clientId
+      ? () => accessToken ?? ''
+      : clientCredentialsTokenProvider({
+          tokenUrl,
+          clientId,
+          clientSecret,
+          tenantCode,
+          scope,
+        });
 
   const fhir = new HttpFhirClient(apiUrl, tenantCode, token);
 
   console.log(`Target: ${apiUrl} (tenant ${tenantCode})`);
   if (useClientCredentials) {
-    console.log(`Auth: client credentials client=${clientId} secret=${maskedSecret(clientSecret)} tokenUrl=${tokenUrl}`);
+    console.log(
+      `Auth: client credentials client=${clientId} secret=${maskedSecret(clientSecret)} tokenUrl=${tokenUrl}`,
+    );
   } else {
     console.log('Auth: static token (first 8 chars shown)');
   }
@@ -286,8 +306,19 @@ const main = async () => {
   const policyName = (process.env.OVOK_DEFAULT_POLICY_NAME ?? '').trim() || DEFAULT_POLICY_NAME;
   const typesRaw = (process.env.OVOK_DEFAULT_POLICY_RESOURCE_TYPES ?? '').trim();
   const types = typesRaw
-    ? typesRaw.split(',').map((s) => s.trim()).filter(Boolean)
-    : ['Patient', 'MedicationRequest', 'MedicationAdministration', 'Medication', 'Consent', 'RelatedPerson', 'Device'];
+    ? typesRaw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [
+        'Patient',
+        'MedicationRequest',
+        'MedicationAdministration',
+        'Medication',
+        'Consent',
+        'RelatedPerson',
+        'Device',
+      ];
   const readOnly = process.env.OVOK_DEFAULT_POLICY_READONLY === 'true';
 
   console.log(`Desired default practitioner policy name: ${policyName}`);

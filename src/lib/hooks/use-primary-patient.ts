@@ -2,6 +2,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
+import { ovokClient } from '@/lib/ovok-client';
 import { FhirRepository } from '@/lib/takt/fhir-repository';
 import { PRIMARY_PATIENT_STORAGE_KEY } from '@/lib/takt/constants';
 import type { FhirBundle, PatientResource } from '@/lib/takt/types';
@@ -18,6 +19,16 @@ export const usePrimaryPatient = () =>
   useQuery<PatientResource | null>({
     queryKey: ['takt', 'patient', 'primary'],
     queryFn: async () => {
+      // A patient login *is* the primary patient; never guess from a search.
+      const loginRef = ovokClient.getActiveLogin()?.profile?.reference;
+      if (loginRef?.startsWith('Patient/')) {
+        const own = await readPatientById(loginRef.slice('Patient/'.length));
+        if (own?.id) {
+          await AsyncStorage.setItem(PRIMARY_PATIENT_STORAGE_KEY, own.id);
+          return own;
+        }
+      }
+
       const storedId = await AsyncStorage.getItem(PRIMARY_PATIENT_STORAGE_KEY);
       if (storedId) {
         const stored = await readPatientById(storedId);

@@ -39,8 +39,7 @@ type MockRoute = {
  * copies together, or the guard fails CI. */
 const store = new Map<string, Map<string, FhirResource>>();
 
-const cloneResource = <T>(value: T): T =>
-  JSON.parse(JSON.stringify(value)) as T;
+const cloneResource = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 const bucket = (resourceType: string): Map<string, FhirResource> => {
   let b = store.get(resourceType);
@@ -71,17 +70,11 @@ const operationOutcome = (
 
 /** Read a dotted/nested value for the tiny `_sort` implementation. */
 const sortKey = (r: FhirResource, field: string): string => {
-  if (field === 'date' || field === '_lastUpdated') {
-    return String(
-      (r.effectiveDateTime as string | undefined) ??
-        r.meta?.lastUpdated ??
-        '',
-    );
+  if (field === 'date' || field === '_lastUpdated' || field === 'effective-time') {
+    return String((r.effectiveDateTime as string | undefined) ?? r.meta?.lastUpdated ?? '');
   }
   if (field === 'name') {
-    const names = r.name as
-      | { family?: string; given?: string[] }[]
-      | undefined;
+    const names = r.name as { family?: string; given?: string[] }[] | undefined;
     const n = names?.[0];
     return `${n?.family ?? ''} ${n?.given?.join(' ') ?? ''}`.trim();
   }
@@ -95,10 +88,7 @@ const sortKey = (r: FhirResource, field: string): string => {
  * erroring — the real server would filter, but silently returning a
  * superset is far less confusing during a demo than an empty list.
  */
-const matchesSearch = (
-  r: FhirResource,
-  params: URLSearchParams,
-): boolean => {
+const matchesSearch = (r: FhirResource, params: URLSearchParams): boolean => {
   for (const [rawKey, value] of params.entries()) {
     if (rawKey.startsWith('_')) continue; // _count / _sort / _include …
     const key = rawKey.split(':')[0]!; // strip modifiers like name:contains
@@ -125,9 +115,7 @@ const matchesSearch = (
       continue;
     }
     if (key === 'name' || key === 'family') {
-      const names = r.name as
-        | { family?: string; given?: string[] }[]
-        | undefined;
+      const names = r.name as { family?: string; given?: string[] }[] | undefined;
       const haystack = (names ?? [])
         .map((n) => `${n.family ?? ''} ${n.given?.join(' ') ?? ''}`)
         .join(' ')
@@ -143,7 +131,12 @@ const matchesSearch = (
     if (key === 'email') {
       const telecom = r.telecom as { system?: string; value?: string }[] | undefined;
       const wanted = value.toLowerCase();
-      if (!(telecom ?? []).some((t) => t.system === 'email' && (t.value ?? '').toLowerCase() === wanted)) return false;
+      if (
+        !(telecom ?? []).some(
+          (t) => t.system === 'email' && (t.value ?? '').toLowerCase() === wanted,
+        )
+      )
+        return false;
       continue;
     }
     // Unknown param — ignore.
@@ -151,10 +144,7 @@ const matchesSearch = (
   return true;
 };
 
-const searchBundle = (
-  resourceType: string,
-  params: URLSearchParams,
-): Record<string, unknown> => {
+const searchBundle = (resourceType: string, params: URLSearchParams): Record<string, unknown> => {
   const all = [...bucket(resourceType).values()];
   let hits = all.filter((r) => matchesSearch(r, params));
 
@@ -228,9 +218,7 @@ const routes: MockRoute[] = [
     path: /^\/v1\/project\/settings$/,
     respond: () => ({
       status: 200,
-      body: Object.fromEntries(
-        Object.entries(projectSettings).map(([k, v]) => [k, v.value]),
-      ),
+      body: Object.fromEntries(Object.entries(projectSettings).map(([k, v]) => [k, v.value])),
     }),
   },
   {
@@ -275,12 +263,18 @@ const routes: MockRoute[] = [
       const input = (req.body ?? {}) as Partial<FhirResource>;
       const ifNoneExist = req.headers.get('if-none-exist');
       if (ifNoneExist) {
-        const [system, value] = (new URLSearchParams(ifNoneExist.replace(/^\?/, '')).get('identifier') ?? '').split('|');
+        const [system, value] = (
+          new URLSearchParams(ifNoneExist.replace(/^\?/, '')).get('identifier') ?? ''
+        ).split('|');
         for (const candidate of bucket(resourceType).values()) {
-          const identifiers = candidate.identifier as Array<{ system?: string; value?: string }> | undefined;
+          const identifiers = candidate.identifier as
+            Array<{ system?: string; value?: string }> | undefined;
           if (
             Array.isArray(identifiers) &&
-            identifiers.some((item) => (!system || item.system === system) && (Boolean(value) && item.value === value))
+            identifiers.some(
+              (item) =>
+                (!system || item.system === system) && Boolean(value) && item.value === value,
+            )
           ) {
             return {
               status: 200,
@@ -319,11 +313,7 @@ const routes: MockRoute[] = [
       if (!found) {
         return {
           status: 404,
-          body: operationOutcome(
-            'error',
-            'not-found',
-            `${resourceType}/${id} not found`,
-          ),
+          body: operationOutcome('error', 'not-found', `${resourceType}/${id} not found`),
         };
       }
       return {
@@ -340,9 +330,7 @@ const routes: MockRoute[] = [
       const [, resourceType, id] = match as unknown as [string, string, string];
       const b = bucket(resourceType);
       const prior = b.get(id);
-      const nextVersion = String(
-        Number.parseInt(prior?.meta?.versionId ?? '0', 10) + 1,
-      );
+      const nextVersion = String(Number.parseInt(prior?.meta?.versionId ?? '0', 10) + 1);
       const updated: FhirResource = {
         ...((req.body ?? {}) as FhirResource),
         resourceType,
@@ -426,7 +414,10 @@ const restoreStore = async (): Promise<void> => {
 const saveStore = (): void => {
   if (!persistStore) return;
   const resources = Object.fromEntries([...store].map(([type, b]) => [type, [...b.values()]]));
-  void AsyncStorage.setItem(PERSIST_KEY, JSON.stringify({ nextId: nextIdCounter, resources })).catch(() => undefined);
+  void AsyncStorage.setItem(
+    PERSIST_KEY,
+    JSON.stringify({ nextId: nextIdCounter, resources }),
+  ).catch(() => undefined);
 };
 
 /*
@@ -462,8 +453,7 @@ export const installOvokMocks = (): void => {
       if (route.method !== method) continue;
       const match = pathname.match(route.path);
       if (!match) continue;
-      const body =
-        init?.body && typeof init.body === 'string' ? safeJson(init.body) : null;
+      const body = init?.body && typeof init.body === 'string' ? safeJson(init.body) : null;
       const headers = new Headers(init?.headers);
       const {
         status,
@@ -471,16 +461,13 @@ export const installOvokMocks = (): void => {
         headers: responseHeaders,
       } = route.respond({ url, body, headers }, match);
       if (method !== 'GET') saveStore();
-      return new Response(
-        responseBody === null ? null : JSON.stringify(responseBody),
-        {
-          status,
-          headers: {
-            'content-type': 'application/json',
-            ...(responseHeaders ?? {}),
-          },
+      return new Response(responseBody === null ? null : JSON.stringify(responseBody), {
+        status,
+        headers: {
+          'content-type': 'application/json',
+          ...(responseHeaders ?? {}),
         },
-      );
+      });
     }
 
     return realFetch(input, init);

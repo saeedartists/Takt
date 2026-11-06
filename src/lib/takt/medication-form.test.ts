@@ -8,10 +8,12 @@ import {
   parseDosageQuantity,
   parseSupply,
   parseTimeList,
+  readDoseQuantity,
   resolveDayOfWeek,
   scheduleFieldsFromForm,
   splitDosage,
   splitStrength,
+  toDoseQuantity,
   validateMedicationForm,
 } from './medication-form';
 import type { MedicationFormValues } from './medication-form';
@@ -187,3 +189,39 @@ const EMPTY_FORM: MedicationFormValues = {
   shape: 'round',
   color: '#F1ECE2',
 };
+
+describe('toDoseQuantity / readDoseQuantity (S-05)', () => {
+  it('codes mass/volume units in UCUM, countable forms by unit only', () => {
+    expect(toDoseQuantity(400, 'mg')).toEqual({
+      value: 400,
+      unit: 'mg',
+      system: 'http://unitsofmeasure.org',
+      code: 'mg',
+    });
+    expect(toDoseQuantity(5, 'ml')).toMatchObject({ code: 'mL' });
+    expect(toDoseQuantity(2, 'tablets')).toEqual({ value: 2, unit: 'tablets' });
+  });
+
+  it('reads the legacy extension when doseAndRate is absent', () => {
+    expect(readDoseQuantity(undefined, '2 tablets')).toEqual({
+      dosageQuantity: 2,
+      dosageUnit: 'tablets',
+    });
+    expect(readDoseQuantity(undefined, undefined)).toEqual({});
+  });
+
+  it('prefers doseAndRate over the legacy extension', () => {
+    expect(readDoseQuantity({ value: 1.5, unit: 'ml' }, '2 tablets')).toEqual({
+      dosageQuantity: 1.5,
+      dosageUnit: 'ml',
+    });
+  });
+
+  it('round-trips what the mutation writes', () => {
+    const written = toDoseQuantity(0.5, 'tablets');
+    expect(readDoseQuantity(written, undefined)).toEqual({
+      dosageQuantity: 0.5,
+      dosageUnit: 'tablets',
+    });
+  });
+});

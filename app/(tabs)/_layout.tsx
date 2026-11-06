@@ -1,14 +1,25 @@
 import { Tabs, useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useIsMutating } from '@tanstack/react-query';
 import { AppState } from 'react-native';
 import { useDoseEvents } from '@/lib/hooks/use-dose-events';
 import { useMedicationPlans } from '@/lib/hooks/use-medication-plans';
 import { usePrimaryPatient } from '@/lib/hooks/use-primary-patient';
-import { planToInput, useRecordDose, useUpdateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
+import {
+  planToInput,
+  syncSupplyFromServer,
+  useRecordDose,
+  useUpdateMedicationPlan,
+} from '@/lib/hooks/use-takt-mutations';
 import { useLocale } from '@/lib/takt/l10n';
 import { useReminderPreferences } from '@/lib/takt/preferences';
-import { scheduleSnoozeReminder, useReminderResponseRouting, useReminderSync, useWeeklySummarySync } from '@/lib/takt/reminders';
+import {
+  scheduleSnoozeReminder,
+  useReminderResponseRouting,
+  useReminderSync,
+  useWeeklySummarySync,
+} from '@/lib/takt/reminders';
 import { buildDoseOccurrencesForDay, courseEnded } from '@/lib/takt/schedule';
 import { getSupplyCount } from '@/lib/takt/supply-tracker';
 import { TAKT_EXT } from '@/lib/takt/constants';
@@ -27,7 +38,6 @@ export default function TabsLayout() {
   const recordDose = useRecordDose();
   const updatePlan = useUpdateMedicationPlan();
 
-
   // Lock-screen actions: confirm or snooze straight from the reminder.
   useReminderResponseRouting(router, {
     onTaken: (target) => {
@@ -39,7 +49,9 @@ export default function TabsLayout() {
         scheduledAt: new Date(target.scheduledAt),
         action: 'taken',
         // Supply deducts the plan's per-intake amount, not a fixed 1.
-        quantity: plans.plans.find((plan) => `MedicationRequest/${plan.request.id}` === target.requestRef)?.dosageQuantity,
+        quantity: plans.plans.find(
+          (plan) => `MedicationRequest/${plan.request.id}` === target.requestRef,
+        )?.dosageQuantity,
       });
     },
     // Spoken reminder while the app is open; the notification handler mutes the chime then.
@@ -55,8 +67,16 @@ export default function TabsLayout() {
     onSnooze: (target) => {
       if (!target.doseKey) return;
       void scheduleSnoozeReminder(
-        { label: target.label ?? '', delayMinutes: prefs.data?.snoozeMinutes, doseKey: target.doseKey },
-        { title: t('doseSnoozedTitle'), body: t('doseSnoozedBody'), bodyPrivate: t('doseSnoozedBodyPrivate') },
+        {
+          label: target.label ?? '',
+          delayMinutes: prefs.data?.snoozeMinutes,
+          doseKey: target.doseKey,
+        },
+        {
+          title: t('doseSnoozedTitle'),
+          body: t('doseSnoozedBody'),
+          bodyPrivate: t('doseSnoozedBodyPrivate'),
+        },
       );
     },
   });
@@ -69,11 +89,15 @@ export default function TabsLayout() {
     const floor = startOfDay(new Date()).getTime();
     for (const { resource } of events.data?.entry ?? []) {
       const requestId = resource.request?.reference?.split('/')[1];
-      const scheduled = resource.extension?.find((x) => x.url === TAKT_EXT.scheduledTime)?.valueDateTime;
+      const scheduled = resource.extension?.find(
+        (x) => x.url === TAKT_EXT.scheduledTime,
+      )?.valueDateTime;
       if (!requestId || !scheduled) continue;
       const at = new Date(scheduled);
       if (Number.isNaN(at.getTime()) || at.getTime() < floor) continue;
-      keys.push(`${requestId}|${isoDateKey(at)}|${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`);
+      keys.push(
+        `${requestId}|${isoDateKey(at)}|${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`,
+      );
     }
     return keys;
   }, [events.data?.entry]);
@@ -92,16 +116,33 @@ export default function TabsLayout() {
   }, [events.data?.entry, plans.plans, prefs.data?.graceHours]);
 
   // A pause with an end date resumes by itself: flip the plan back to active once the date has passed.
+  // S-04: the server count (anchor − doses since) refreshes the local cache. Skipped while a
+  // write is in flight so an optimistic dose isn't counted twice; reruns when data settles.
+  const mutating = useIsMutating();
+  const [supplySynced, setSupplySynced] = useState(false);
+  useEffect(() => {
+    if (!patientRef || mutating > 0 || plans.isLoading || !events.data || events.isFetching) return;
+    // ponytail: uses the loaded dose page (_count=500); a plan with >500 doses since its last refill would over-count.
+    const administrations = (events.data.entry ?? []).map((entry) => entry.resource);
+    void syncSupplyFromServer(plans.plans, administrations)
+      .catch(() => undefined)
+      .finally(() => setSupplySynced(true));
+  }, [patientRef, mutating, plans.isLoading, plans.plans, events.data, events.isFetching]);
+
   // Two things the plan does by itself: a timed pause resumes, and a finished course archives.
   const touched = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (!patientRef) return;
+    // Waits for the supply sync: the update re-anchors with the local count, which must be current.
+    if (!patientRef || !supplySynced) return;
     const now = new Date();
     const run = async () => {
       for (const plan of plans.plans) {
         if (!plan.medication || touched.current.has(plan.request.id)) continue;
         const last = plan.pauseHistory[plan.pauseHistory.length - 1];
-        const pauseOver = plan.request.status === 'on-hold' && Boolean(last?.end) && new Date(last?.end ?? 0).getTime() <= now.getTime();
+        const pauseOver =
+          plan.request.status === 'on-hold' &&
+          Boolean(last?.end) &&
+          new Date(last?.end ?? 0).getTime() <= now.getTime();
         const ended = plan.request.status !== 'stopped' && courseEnded(plan, now);
         if (!pauseOver && !ended) continue;
         touched.current.add(plan.request.id);
@@ -116,7 +157,7 @@ export default function TabsLayout() {
       }
     };
     void run();
-  }, [patientRef, plans.plans, updatePlan]);
+  }, [patientRef, plans.plans, updatePlan, supplySynced]);
 
   useEffect(() => {
     let active = true;
@@ -159,7 +200,10 @@ export default function TabsLayout() {
   }, [router]);
 
   return (
-    <Tabs tabBar={(props) => <FloatingTabBar {...props} />} screenOptions={{ headerShown: false, freezeOnBlur: true }}>
+    <Tabs
+      tabBar={(props) => <FloatingTabBar {...props} />}
+      screenOptions={{ headerShown: false, freezeOnBlur: true }}
+    >
       <Tabs.Screen
         name="today"
         options={{

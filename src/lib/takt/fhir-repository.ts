@@ -26,7 +26,11 @@ export class FhirRepositoryError extends Error {
     public readonly operationOutcomeText?: string,
     public readonly causeBody?: unknown,
   ) {
-    super(operationOutcomeText ? `${status.toString()} ${operationOutcomeText}` : `FHIR request failed: ${status.toString()} ${path}`);
+    super(
+      operationOutcomeText
+        ? `${status.toString()} ${operationOutcomeText}`
+        : `FHIR request failed: ${status.toString()} ${path}`,
+    );
     this.name = 'FhirRepositoryError';
   }
 }
@@ -42,46 +46,18 @@ const parseOperationOutcomeText = (body: unknown): string | undefined => {
   return pieces.join(' · ');
 };
 
-const isRetryable = (status: number): boolean => status === 429 || status >= 500;
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-/*
- * Ovok docs → errors and retries: wait out the server's Retry-After for
- * throttling (429), use a short bounded backoff for transient 5xx, and never
- * retry an auth/authorization or validation failure.
- */
-const retryDelayMs = (error: OvokFetchError): number => {
-  if (error.retryAfterMs) return Math.min(Math.max(error.retryAfterMs, 250), 30_000);
-  return 1_000;
-};
-
-const withRetry = async <T>(run: () => Promise<T>): Promise<T> => {
-  let attempt = 0;
-  let lastError: unknown;
-
-  while (attempt < 2) {
-    try {
-      return await run();
-    } catch (error) {
-      lastError = error;
-      if (!(error instanceof OvokFetchError) || !isRetryable(error.status) || attempt === 1) {
-        break;
-      }
-      await sleep(retryDelayMs(error));
-    }
-    attempt += 1;
-  }
-
-  throw lastError;
-};
-
+// Retries (Retry-After, backoff, idempotent-only) live in ovokFetch; a second layer here multiplied them.
 const request = async <T>(path: string, options?: RequestInit): Promise<T> => {
   try {
-    return await withRetry(() => ovokFetch<T>(path, options));
+    return await ovokFetch<T>(path, options);
   } catch (error) {
     if (error instanceof OvokFetchError) {
-      throw new FhirRepositoryError(error.status, path, parseOperationOutcomeText(error.body), error.body);
+      throw new FhirRepositoryError(
+        error.status,
+        path,
+        parseOperationOutcomeText(error.body),
+        error.body,
+      );
     }
     throw error;
   }
@@ -94,25 +70,40 @@ export const FhirRepository = {
   readPatient: (id: string) => request<PatientResource>(`/fhir/R4/Patient/${id}`),
 
   createPatient: (resource: Omit<PatientResource, 'id'>) =>
-    request<PatientResource>('/fhir/R4/Patient', { method: 'POST', body: JSON.stringify(resource) }),
+    request<PatientResource>('/fhir/R4/Patient', {
+      method: 'POST',
+      body: JSON.stringify(resource),
+    }),
 
   updatePatient: (id: string, resource: PatientResource) =>
-    request<PatientResource>(`/fhir/R4/Patient/${id}`, { method: 'PUT', body: JSON.stringify(resource) }),
+    request<PatientResource>(`/fhir/R4/Patient/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(resource),
+    }),
 
   searchMedications: (query = '_count=200&_sort=-_lastUpdated') =>
     request<FhirBundle<MedicationResource>>(`/fhir/R4/Medication?${query}`),
 
   createMedication: (resource: Omit<MedicationResource, 'id'>) =>
-    request<MedicationResource>('/fhir/R4/Medication', { method: 'POST', body: JSON.stringify(resource) }),
+    request<MedicationResource>('/fhir/R4/Medication', {
+      method: 'POST',
+      body: JSON.stringify(resource),
+    }),
 
   updateMedication: (id: string, resource: MedicationResource) =>
-    request<MedicationResource>(`/fhir/R4/Medication/${id}`, { method: 'PUT', body: JSON.stringify(resource) }),
+    request<MedicationResource>(`/fhir/R4/Medication/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(resource),
+    }),
 
   searchMedicationRequests: (query: string) =>
     request<FhirBundle<MedicationRequestResource>>(`/fhir/R4/MedicationRequest?${query}`),
 
   createMedicationRequest: (resource: Omit<MedicationRequestResource, 'id'>) =>
-    request<MedicationRequestResource>('/fhir/R4/MedicationRequest', { method: 'POST', body: JSON.stringify(resource) }),
+    request<MedicationRequestResource>('/fhir/R4/MedicationRequest', {
+      method: 'POST',
+      body: JSON.stringify(resource),
+    }),
 
   updateMedicationRequest: (id: string, resource: MedicationRequestResource) =>
     request<MedicationRequestResource>(`/fhir/R4/MedicationRequest/${id}`, {
@@ -121,7 +112,9 @@ export const FhirRepository = {
     }),
 
   searchMedicationAdministrations: (query: string) =>
-    request<FhirBundle<MedicationAdministrationResource>>(`/fhir/R4/MedicationAdministration?${query}`),
+    request<FhirBundle<MedicationAdministrationResource>>(
+      `/fhir/R4/MedicationAdministration?${query}`,
+    ),
 
   createMedicationAdministration: (resource: Omit<MedicationAdministrationResource, 'id'>) =>
     request<MedicationAdministrationResource>('/fhir/R4/MedicationAdministration', {
@@ -132,18 +125,29 @@ export const FhirRepository = {
   deleteMedicationAdministration: (id: string) =>
     request<void>(`/fhir/R4/MedicationAdministration/${id}`, { method: 'DELETE' }),
 
-  searchConsents: (query: string) => request<FhirBundle<ConsentResource>>(`/fhir/R4/Consent?${query}`),
+  searchConsents: (query: string) =>
+    request<FhirBundle<ConsentResource>>(`/fhir/R4/Consent?${query}`),
 
   createConsent: (resource: ConsentResource) =>
-    request<ConsentResource>('/fhir/R4/Consent', { method: 'POST', body: JSON.stringify(resource) }),
+    request<ConsentResource>('/fhir/R4/Consent', {
+      method: 'POST',
+      body: JSON.stringify(resource),
+    }),
 
   updateConsent: (id: string, resource: ConsentResource) =>
-    request<ConsentResource>(`/fhir/R4/Consent/${id}`, { method: 'PUT', body: JSON.stringify(resource) }),
+    request<ConsentResource>(`/fhir/R4/Consent/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(resource),
+    }),
 
-  searchRelatedPeople: (query: string) => request<FhirBundle<RelatedPersonResource>>(`/fhir/R4/RelatedPerson?${query}`),
+  searchRelatedPeople: (query: string) =>
+    request<FhirBundle<RelatedPersonResource>>(`/fhir/R4/RelatedPerson?${query}`),
 
   createRelatedPerson: (resource: RelatedPersonResource) =>
-    request<RelatedPersonResource>('/fhir/R4/RelatedPerson', { method: 'POST', body: JSON.stringify(resource) }),
+    request<RelatedPersonResource>('/fhir/R4/RelatedPerson', {
+      method: 'POST',
+      body: JSON.stringify(resource),
+    }),
 
   updateRelatedPerson: (id: string, resource: RelatedPersonResource) =>
     request<RelatedPersonResource>(`/fhir/R4/RelatedPerson/${id}`, {

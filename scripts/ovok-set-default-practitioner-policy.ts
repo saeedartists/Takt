@@ -134,10 +134,16 @@ function clientCredentialsTokenProvider(options: ClientCredentialsOptions): Toke
   };
 }
 
+/** Minimum shape create/update rely on (resourceType + id for the URL). */
+type FhirResource = { resourceType: string; id?: string };
+
 interface FhirClient {
-  search<T>(resourceType: string, params?: Record<string, string | number | boolean | undefined>): Promise<T>;
+  search<T>(
+    resourceType: string,
+    params?: Record<string, string | number | boolean | undefined>,
+  ): Promise<T>;
   read<T>(path: string): Promise<T>;
-  update<T>(resource: T): Promise<T>;
+  update<T extends FhirResource>(resource: T): Promise<T>;
 }
 
 class HttpFhirClient implements FhirClient {
@@ -179,7 +185,10 @@ class HttpFhirClient implements FhirClient {
     }
   }
 
-  async search<T>(resourceType: string, params: Record<string, string | number | boolean | undefined> = {}): Promise<T> {
+  async search<T>(
+    resourceType: string,
+    params: Record<string, string | number | boolean | undefined> = {},
+  ): Promise<T> {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
       if (value === undefined) continue;
@@ -193,8 +202,8 @@ class HttpFhirClient implements FhirClient {
     return this.request<T>(path);
   }
 
-  async update<T>(resource: T): Promise<T> {
-    if (!('id' in resource) || !resource.id) throw new Error('Update requires an id.');
+  async update<T extends FhirResource>(resource: T): Promise<T> {
+    if (!resource.id) throw new Error('Update requires an id.');
     return this.request<T>(`/fhir/R4/${resource.resourceType}/${resource.id}`, {
       method: 'PUT',
       body: JSON.stringify(resource),
@@ -218,10 +227,7 @@ interface AccessPolicy {
   name?: string;
 }
 
-const requiredEnv = [
-  'OVOK_API_URL',
-  'OVOK_TENANT_CODE',
-] as const;
+const requiredEnv = ['OVOK_API_URL', 'OVOK_TENANT_CODE'] as const;
 
 function missingEnv() {
   for (const key of requiredEnv) {
@@ -230,10 +236,13 @@ function missingEnv() {
   return null;
 }
 
-const authByClientCredentials =
-  !!(process.env.OVOK_CLIENT_ID && process.env.OVOK_CLIENT_SECRET && process.env.OVOK_TOKEN_URL);
+const authByClientCredentials = !!(
+  process.env.OVOK_CLIENT_ID &&
+  process.env.OVOK_CLIENT_SECRET &&
+  process.env.OVOK_TOKEN_URL
+);
 
-const authByToken = !!(process.env.OVOK_ACCESS_TOKEN);
+const authByToken = !!process.env.OVOK_ACCESS_TOKEN;
 
 function envOrDie(key: string): string {
   const value = process.env[key];
@@ -245,13 +254,17 @@ const main = async () => {
   const missing = missingEnv();
   if (missing) {
     console.error(`Missing env: ${missing}`);
-    console.error('Required: OVOK_API_URL, OVOK_TENANT_CODE, and one auth path (client credentials OR OVOK_ACCESS_TOKEN).');
+    console.error(
+      'Required: OVOK_API_URL, OVOK_TENANT_CODE, and one auth path (client credentials OR OVOK_ACCESS_TOKEN).',
+    );
     process.exitCode = 1;
     return;
   }
 
   if (!authByClientCredentials && !authByToken) {
-    console.error('No auth path configured. Set either OVOK_ACCESS_TOKEN, or OVOK_CLIENT_ID + OVOK_CLIENT_SECRET + OVOK_TOKEN_URL.');
+    console.error(
+      'No auth path configured. Set either OVOK_ACCESS_TOKEN, or OVOK_CLIENT_ID + OVOK_CLIENT_SECRET + OVOK_TOKEN_URL.',
+    );
     process.exitCode = 1;
     return;
   }
@@ -259,16 +272,15 @@ const main = async () => {
   const apiUrl = envOrDie('OVOK_API_URL').replace(/\/+$/, '');
   const tenantCode = envOrDie('OVOK_TENANT_CODE');
 
-  const token: TokenProvider =
-    authByToken
-      ? () => process.env.OVOK_ACCESS_TOKEN!
-      : clientCredentialsTokenProvider({
-          tokenUrl: envOrDie('OVOK_TOKEN_URL'),
-          clientId: envOrDie('OVOK_CLIENT_ID'),
-          clientSecret: envOrDie('OVOK_CLIENT_SECRET'),
-          tenantCode,
-          scope: process.env.OVOK_SCOPE ?? undefined,
-        });
+  const token: TokenProvider = authByToken
+    ? () => process.env.OVOK_ACCESS_TOKEN!
+    : clientCredentialsTokenProvider({
+        tokenUrl: envOrDie('OVOK_TOKEN_URL'),
+        clientId: envOrDie('OVOK_CLIENT_ID'),
+        clientSecret: envOrDie('OVOK_CLIENT_SECRET'),
+        tenantCode,
+        scope: process.env.OVOK_SCOPE ?? undefined,
+      });
 
   const fhir = new HttpFhirClient(apiUrl, tenantCode, token);
 
@@ -276,10 +288,11 @@ const main = async () => {
 
   // 1. List existing AccessPolicies.
   console.log('Listing AccessPolicy resources in the project...');
-  const policies = (await fhir.search<{ resourceType: string; entry?: Array<{ resource: AccessPolicy }>; total?: number }>(
-    'AccessPolicy',
-    { _count: 100 },
- ));
+  const policies = await fhir.search<{
+    resourceType: string;
+    entry?: Array<{ resource: AccessPolicy }>;
+    total?: number;
+  }>('AccessPolicy', { _count: 100 });
 
   const list = policies.entry?.map((e) => e.resource) ?? [];
   console.log(`Found ${list.length} AccessPolicy resource(s):`);
@@ -289,8 +302,12 @@ const main = async () => {
 
   if (list.length === 0) {
     console.log('\nNo AccessPolicy resources found in this project.');
-    console.log('The setting DEFAULT_PRACTITIONER_ACCESS_POLICY cannot be set to an AccessPolicy that does not exist.');
-    console.log('Next step: create one in FHIR Explorer (or via API), then come back and run this script again.');
+    console.log(
+      'The setting DEFAULT_PRACTITIONER_ACCESS_POLICY cannot be set to an AccessPolicy that does not exist.',
+    );
+    console.log(
+      'Next step: create one in FHIR Explorer (or via API), then come back and run this script again.',
+    );
     return;
   }
 
@@ -299,7 +316,9 @@ const main = async () => {
   if (!desiredName) {
     console.log('\nNo OVOK_DEFAULT_POLICY_NAME set.');
     console.log('To set the default practitioner policy, re-run with:');
-    console.log('  OVOK_DEFAULT_POLICY_NAME=<exact policy name> npx tsx scripts/ovok-set-default-practitioner-policy.ts');
+    console.log(
+      '  OVOK_DEFAULT_POLICY_NAME=<exact policy name> npx tsx scripts/ovok-set-default-practitioner-policy.ts',
+    );
     console.log('\nUse one of the policy ids/names printed above.');
     return;
   }

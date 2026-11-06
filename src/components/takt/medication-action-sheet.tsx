@@ -1,12 +1,34 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState, type ComponentProps } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AnimatedPressable, Button, CONTENT_MAX_WIDTH, Input, font, radius, spacing, typography, useTokens } from '@/components/ui';
+import {
+  AnimatedPressable,
+  Button,
+  CONTENT_MAX_WIDTH,
+  Input,
+  font,
+  radius,
+  spacing,
+  typography,
+  useTokens,
+} from '@/components/ui';
 import { Chip } from '@/components/takt/form/_form-fields';
 import { TimeField } from '@/components/takt/time-field';
-import { planToInput, useUpdateMedicationPlan } from '@/lib/hooks/use-takt-mutations';
+import {
+  planToInput,
+  useUpdateMedicationPlan,
+  writeSupplyAnchor,
+} from '@/lib/hooks/use-takt-mutations';
 import { useLocale } from '@/lib/takt/l10n';
 import { normalizeDateInput, parseSupply } from '@/lib/takt/medication-form';
 import { isoDateKey } from '@/lib/takt/time';
@@ -32,7 +54,8 @@ export const duplicateParams = (plan: MedicationPlan): Record<string, string> =>
       intervalDays: plan.intervalDays ? String(plan.intervalDays) : undefined,
       intervalStart: plan.intervalStart,
       // A duplicate starts fresh: copying a past start date would backdate missed doses into history.
-      startDate: plan.startDate && plan.startDate >= isoDateKey(new Date()) ? plan.startDate : undefined,
+      startDate:
+        plan.startDate && plan.startDate >= isoDateKey(new Date()) ? plan.startDate : undefined,
       endDate: plan.endDate,
       dosageQuantity: plan.dosageQuantity !== undefined ? String(plan.dosageQuantity) : undefined,
       dosageUnit: plan.dosageUnit,
@@ -41,7 +64,9 @@ export const duplicateParams = (plan: MedicationPlan): Record<string, string> =>
       instructionNote: plan.instructionNote,
       shape: plan.appearance?.shape,
       color: plan.appearance?.color,
-    }).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1] !== ''),
+    }).filter(
+      (entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1] !== '',
+    ),
   );
 
 /** End of the current pause when one was set, so rows can say "Paused until 30 Sep". */
@@ -94,7 +119,13 @@ type Props = {
  * the list and from the cards on the detail screen. React Native's own
  * Modal, so it works on iOS, Android and web without a dependency.
  */
-export function MedicationActionSheet({ plan, patientRef, initialStep = 'root', onClose, onChanged }: Props) {
+export function MedicationActionSheet({
+  plan,
+  patientRef,
+  initialStep = 'root',
+  onClose,
+  onChanged,
+}: Props) {
   const { c } = useTokens();
   const { t } = useLocale();
   const router = useRouter();
@@ -142,9 +173,15 @@ export function MedicationActionSheet({ plan, patientRef, initialStep = 'root', 
     setError(null);
     setPending('refill');
     try {
-      await setSupplyCount(medicationId, ((await getSupplyCount(medicationId)) ?? 0) + refillAmount);
+      const next = ((await getSupplyCount(medicationId)) ?? 0) + refillAmount;
+      // S-04: server first. The refill becomes the new anchor; if that write fails the
+      // local count is left alone, otherwise the next sync would silently undo the refill.
+      await writeSupplyAnchor(plan.request.id, next);
+      await setSupplyCount(medicationId, next);
       onChanged?.();
       onClose();
+    } catch {
+      setError(t('medicationRefillError'));
     } finally {
       setPending(null);
     }
@@ -164,27 +201,56 @@ export function MedicationActionSheet({ plan, patientRef, initialStep = 'root', 
       accessibilityLabel={`${label}, ${plan.label}`}
       style={[styles.item, { borderTopColor: c.separator }]}
     >
-      <View style={[styles.itemIcon, { backgroundColor: destructive ? c.tones.rose.bg : c.surfaceRaised }]}>
+      <View
+        style={[
+          styles.itemIcon,
+          { backgroundColor: destructive ? c.tones.rose.bg : c.surfaceRaised },
+        ]}
+      >
         <Ionicons name={icon} size={22} color={destructive ? c.tones.rose.fg : c.textPrimary} />
       </View>
-      <Text style={[typography.body, { color: destructive ? c.destructive : c.textPrimary, fontFamily: font.semibold, flex: 1 }]}>{label}</Text>
+      <Text
+        style={[
+          typography.body,
+          {
+            color: destructive ? c.destructive : c.textPrimary,
+            fontFamily: font.semibold,
+            flex: 1,
+          },
+        ]}
+      >
+        {label}
+      </Text>
     </AnimatedPressable>
   );
 
   const backButton = (
-    <Button kind="secondary" label={t('back')} onPress={() => setStep('root')} disabled={pending !== null} />
+    <Button
+      kind="secondary"
+      label={t('back')}
+      onPress={() => setStep('root')}
+      disabled={pending !== null}
+    />
   );
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.fill}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.fill}
+      >
         <Pressable
           style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(21,23,28,0.45)' }]}
           onPress={onClose}
           accessibilityRole="button"
           accessibilityLabel={t('cancel')}
         />
-        <View style={[styles.sheet, { backgroundColor: c.surface, paddingBottom: spacing(4) + insets.bottom }]}>
+        <View
+          style={[
+            styles.sheet,
+            { backgroundColor: c.surface, paddingBottom: spacing(4) + insets.bottom },
+          ]}
+        >
           <View style={[styles.handle, { backgroundColor: c.separator }]} />
           <View style={styles.header}>
             <Text numberOfLines={1} style={[typography.title2, { color: c.textPrimary, flex: 1 }]}>
@@ -195,21 +261,38 @@ export function MedicationActionSheet({ plan, patientRef, initialStep = 'root', 
 
           {step === 'root' ? (
             <View>
-              {planStatus === 'active' ? item('pause-circle-outline', t('pauseCta'), () => setStep('pause')) : null}
-              {planStatus === 'on-hold' ? item('play-circle-outline', t('resumeCta'), () => void changeStatus('active')) : null}
-              {planStatus === 'stopped' ? item('refresh-circle-outline', t('restoreCta'), () => void changeStatus('active')) : null}
-              {planStatus !== 'stopped' ? item('add-circle-outline', t('refillCta'), () => setStep('refill')) : null}
+              {planStatus === 'active'
+                ? item('pause-circle-outline', t('pauseCta'), () => setStep('pause'))
+                : null}
+              {planStatus === 'on-hold'
+                ? item('play-circle-outline', t('resumeCta'), () => void changeStatus('active'))
+                : null}
+              {planStatus === 'stopped'
+                ? item('refresh-circle-outline', t('restoreCta'), () => void changeStatus('active'))
+                : null}
+              {planStatus !== 'stopped'
+                ? item('add-circle-outline', t('refillCta'), () => setStep('refill'))
+                : null}
               {item('copy-outline', t('duplicateCta'), duplicate)}
-              {planStatus !== 'stopped' ? item('archive-outline', t('archiveCta'), () => setStep('archive'), true) : null}
+              {planStatus !== 'stopped'
+                ? item('archive-outline', t('archiveCta'), () => setStep('archive'), true)
+                : null}
               <View style={styles.footer}>
-                <Button kind="secondary" label={t('cancel')} onPress={onClose} disabled={pending !== null} />
+                <Button
+                  kind="secondary"
+                  label={t('cancel')}
+                  onPress={onClose}
+                  disabled={pending !== null}
+                />
               </View>
             </View>
           ) : null}
 
           {step === 'refill' ? (
             <View style={styles.stepBody}>
-              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('refillAmountLabel')}</Text>
+              <Text style={[typography.subhead, { color: c.textSecondary }]}>
+                {t('refillAmountLabel')}
+              </Text>
               <View style={styles.wrapRow}>
                 {REFILL_PRESETS.map((amount) => (
                   <Chip
@@ -221,7 +304,11 @@ export function MedicationActionSheet({ plan, patientRef, initialStep = 'root', 
                 ))}
               </View>
               <Input
-                value={REFILL_PRESETS.some((amount) => amount.toString() === refillInput) ? '' : refillInput}
+                value={
+                  REFILL_PRESETS.some((amount) => amount.toString() === refillInput)
+                    ? ''
+                    : refillInput
+                }
                 onChangeText={(next) => setRefillInput(next.replace(/[^\d]/g, ''))}
                 keyboardType="number-pad"
                 inputMode="numeric"
@@ -232,7 +319,9 @@ export function MedicationActionSheet({ plan, patientRef, initialStep = 'root', 
                 <View style={styles.grow}>{backButton}</View>
                 <View style={styles.grow}>
                   <Button
-                    label={refillAmount ? `${t('logRefillCta')} (+${refillAmount})` : t('logRefillCta')}
+                    label={
+                      refillAmount ? `${t('logRefillCta')} (+${refillAmount})` : t('logRefillCta')
+                    }
                     onPress={() => void logRefill()}
                     loading={pending === 'refill'}
                     disabled={!refillAmount || pending !== null}
@@ -245,9 +334,18 @@ export function MedicationActionSheet({ plan, patientRef, initialStep = 'root', 
 
           {step === 'pause' ? (
             <View style={styles.stepBody}>
-              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('pauseUntilHint')}</Text>
-              <Text style={[typography.footnote, { color: c.textSecondary }]}>{t('pauseUntilLabel')}</Text>
-              <TimeField mode="date" value={pauseUntil} onChange={setPauseUntil} accessibilityLabel={t('pauseUntilLabel')} />
+              <Text style={[typography.subhead, { color: c.textSecondary }]}>
+                {t('pauseUntilHint')}
+              </Text>
+              <Text style={[typography.footnote, { color: c.textSecondary }]}>
+                {t('pauseUntilLabel')}
+              </Text>
+              <TimeField
+                mode="date"
+                value={pauseUntil}
+                onChange={setPauseUntil}
+                accessibilityLabel={t('pauseUntilLabel')}
+              />
               <View style={styles.actionRow}>
                 <View style={styles.grow}>
                   <Button
@@ -275,8 +373,12 @@ export function MedicationActionSheet({ plan, patientRef, initialStep = 'root', 
 
           {step === 'archive' ? (
             <View style={styles.stepBody} accessibilityRole="alert">
-              <Text style={[typography.headline, { color: c.textPrimary }]}>{t('archiveConfirmTitle')}</Text>
-              <Text style={[typography.subhead, { color: c.textSecondary }]}>{t('archiveConfirmBody')}</Text>
+              <Text style={[typography.headline, { color: c.textPrimary }]}>
+                {t('archiveConfirmTitle')}
+              </Text>
+              <Text style={[typography.subhead, { color: c.textSecondary }]}>
+                {t('archiveConfirmBody')}
+              </Text>
               <View style={styles.actionRow}>
                 <View style={styles.grow}>{backButton}</View>
                 <View style={styles.grow}>
@@ -294,7 +396,10 @@ export function MedicationActionSheet({ plan, patientRef, initialStep = 'root', 
           ) : null}
 
           {error ? (
-            <Text accessibilityRole="alert" style={[typography.footnote, { color: c.destructive, marginTop: spacing(2) }]}>
+            <Text
+              accessibilityRole="alert"
+              style={[typography.footnote, { color: c.destructive, marginTop: spacing(2) }]}
+            >
               {error}
             </Text>
           ) : null}
@@ -315,8 +420,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing(5),
     paddingTop: spacing(2),
   },
-  handle: { width: 36, height: 4, borderRadius: radius.full, alignSelf: 'center', marginBottom: spacing(3) },
-  header: { flexDirection: 'row', alignItems: 'baseline', gap: spacing(2), paddingBottom: spacing(3) },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: radius.full,
+    alignSelf: 'center',
+    marginBottom: spacing(3),
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: spacing(2),
+    paddingBottom: spacing(3),
+  },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -324,7 +440,13 @@ const styles = StyleSheet.create({
     minHeight: 64,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  itemIcon: { width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  itemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   footer: { paddingTop: spacing(3) },
   stepBody: { gap: spacing(3), paddingTop: spacing(1) },
   wrapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) },

@@ -37,3 +37,6 @@ scripts/store-shots/
 
 # Gradle output of local native modules
 modules/*/android/build/
+
+# Agent session transcripts (may contain credentials)
+session-ses_*.md

@@ -8,6 +8,7 @@ import { env } from '@/lib/env';
 import { ovokClient } from '@/lib/ovok-client';
 import { CONSENT_STORAGE_KEY } from '@/lib/takt/constants';
 import { mapAuthError } from '@/lib/takt/auth-errors';
+import { beginUserSession } from '@/lib/takt/session-reset';
 import { useLocale } from '@/lib/takt/l10n';
 import { AuthBanner, AuthBlock, AuthHero, AuthLinkRow, PasswordInput } from './auth-shared';
 
@@ -44,6 +45,7 @@ export default function SignInScreen() {
           ? { reference: authenticated.profile.reference, display: authenticated.profile.display }
           : authenticated.profile.reference,
     });
+    await beginUserSession(ovokClient.getActiveLogin()?.profile?.reference ?? '');
 
     const consent = await AsyncStorage.getItem(CONSENT_STORAGE_KEY);
     router.replace(consent === 'accepted' ? '/(tabs)/today' : '/consent');
@@ -106,9 +108,7 @@ export default function SignInScreen() {
             <Field label={t('authMfaCodeLabel')} hint={t('authMfaHint')}>
               <Input
                 value={mfaCode}
-                onChangeText={(next) =>
-                  setMfaCode(next.replace(/[^\d]/g, '').slice(0, 6))
-                }
+                onChangeText={(next) => setMfaCode(next.replace(/[^\d]/g, '').slice(0, 6))}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="number-pad"
@@ -181,8 +181,18 @@ export default function SignInScreen() {
               </>
             ) : (
               <>
-                <Button size="lg" accentIcon="arrow-forward" label={t('authSignInTitle')} loading={busy} onPress={() => void submit()} />
-                <Button kind="outline" label={t('authCreateAccountCta')} onPress={() => router.push('/auth/register' as never)} />
+                <Button
+                  size="lg"
+                  accentIcon="arrow-forward"
+                  label={t('authSignInTitle')}
+                  loading={busy}
+                  onPress={() => void submit()}
+                />
+                <Button
+                  kind="outline"
+                  label={t('authCreateAccountCta')}
+                  onPress={() => router.push('/auth/register' as never)}
+                />
               </>
             )}
           </View>

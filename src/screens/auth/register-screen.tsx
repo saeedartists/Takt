@@ -6,7 +6,8 @@ import { Button, Field, Input, PageShell, spacing } from '@/components/ui';
 import { env } from '@/lib/env';
 import { ovokClient } from '@/lib/ovok-client';
 import { mapAuthError } from '@/lib/takt/auth-errors';
-import { CONSENT_STORAGE_KEY } from '@/lib/takt/constants';
+import { beginUserSession } from '@/lib/takt/session-reset';
+import { CONSENT_STORAGE_KEY, MIN_PASSWORD_LENGTH } from '@/lib/takt/constants';
 import { useLocale } from '@/lib/takt/l10n';
 import { AuthBanner, AuthBlock, AuthHero, AuthLinkRow, PasswordInput } from './auth-shared';
 
@@ -28,7 +29,12 @@ export default function RegisterScreen() {
     name: submitted && !name.trim() ? t('authFieldRequired') : null,
     surname: submitted && !surname.trim() ? t('authFieldRequired') : null,
     email: submitted && !email.trim() ? t('authEmailRequired') : null,
-    password: submitted && !password ? t('authPasswordRequired') : null,
+    password:
+      submitted && !password
+        ? t('authPasswordRequired')
+        : submitted && password.length < MIN_PASSWORD_LENGTH
+          ? t('authPasswordTooShort')
+          : null,
     passwordConfirm:
       submitted && !passwordConfirm
         ? t('authPasswordRequired')
@@ -48,8 +54,8 @@ export default function RegisterScreen() {
       return;
     }
 
-    if (password !== passwordConfirm) {
-      return; // shown inline on the confirm field
+    if (password.length < MIN_PASSWORD_LENGTH || password !== passwordConfirm) {
+      return; // shown inline on the password / confirm field
     }
 
     setBusy(true);
@@ -73,13 +79,16 @@ export default function RegisterScreen() {
       await ovokClient.setActiveLogin({
         accessToken: response.accessToken,
         refreshToken: response.refreshToken,
-        project: typeof response.project.reference === 'string'
-          ? { reference: response.project.reference, display: response.project.display }
-          : response.project.reference,
-        profile: typeof response.profile.reference === 'string'
-          ? { reference: response.profile.reference, display: response.profile.display }
-          : response.profile.reference,
+        project:
+          typeof response.project.reference === 'string'
+            ? { reference: response.project.reference, display: response.project.display }
+            : response.project.reference,
+        profile:
+          typeof response.profile.reference === 'string'
+            ? { reference: response.profile.reference, display: response.profile.display }
+            : response.profile.reference,
       });
+      await beginUserSession(ovokClient.getActiveLogin()?.profile?.reference ?? '');
       const consent = await AsyncStorage.getItem(CONSENT_STORAGE_KEY);
       router.replace(consent === 'accepted' ? '/(tabs)/today' : '/consent');
     } catch (error) {
@@ -158,7 +167,13 @@ export default function RegisterScreen() {
         </AuthBlock>
 
         <AuthBlock index={4}>
-          <Button size="lg" accentIcon="arrow-forward" label={t('authRegisterTitle')} loading={busy} onPress={() => void submit()} />
+          <Button
+            size="lg"
+            accentIcon="arrow-forward"
+            label={t('authRegisterTitle')}
+            loading={busy}
+            onPress={() => void submit()}
+          />
           <AuthLinkRow
             prompt={t('authHaveAccount')}
             label={t('authSignInTitle')}

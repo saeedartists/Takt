@@ -77,18 +77,26 @@ const reminderCopy = {
     low: (label: string, days: number) =>
       days <= 1 ? `${label} runs out in about a day.` : `${label} runs out in about ${days} days.`,
     lowPrivate: (days: number) =>
-      days <= 1 ? 'A medication runs out in about a day.' : `A medication runs out in about ${days} days.`,
+      days <= 1
+        ? 'A medication runs out in about a day.'
+        : `A medication runs out in about ${days} days.`,
     out: (label: string) => `${label} has run out. Log a refill once you have a new pack.`,
     outPrivate: 'A medication has run out. Log a refill once you have a new pack.',
   },
   de: {
     title: 'Zeit zum Nachfüllen',
     low: (label: string, days: number) =>
-      days <= 1 ? `${label} reicht noch etwa einen Tag.` : `${label} reicht noch etwa ${days} Tage.`,
+      days <= 1
+        ? `${label} reicht noch etwa einen Tag.`
+        : `${label} reicht noch etwa ${days} Tage.`,
     lowPrivate: (days: number) =>
-      days <= 1 ? 'Ein Medikament reicht noch etwa einen Tag.' : `Ein Medikament reicht noch etwa ${days} Tage.`,
-    out: (label: string) => `${label} ist aufgebraucht. Tragen Sie die Nachfüllung ein, sobald Sie eine neue Packung haben.`,
-    outPrivate: 'Ein Medikament ist aufgebraucht. Tragen Sie die Nachfüllung ein, sobald Sie eine neue Packung haben.',
+      days <= 1
+        ? 'Ein Medikament reicht noch etwa einen Tag.'
+        : `Ein Medikament reicht noch etwa ${days} Tage.`,
+    out: (label: string) =>
+      `${label} ist aufgebraucht. Tragen Sie die Nachfüllung ein, sobald Sie eine neue Packung haben.`,
+    outPrivate:
+      'Ein Medikament ist aufgebraucht. Tragen Sie die Nachfüllung ein, sobald Sie eine neue Packung haben.',
   },
 } as const;
 
@@ -116,11 +124,16 @@ const ensureSupplyChannel = async (): Promise<void> => {
  * One refill reminder, named and dated ("Ramipril runs out in about 5 days"),
  * at the next 10:00. Returns the notification id so a refill can cancel it.
  */
-const scheduleRefillReminder = async (input: { label?: string; days: number; out: boolean }): Promise<string | undefined> => {
+const scheduleRefillReminder = async (input: {
+  label?: string;
+  days: number;
+  out: boolean;
+}): Promise<string | undefined> => {
   if (Platform.OS === 'web') return undefined;
   const permissions = await Notifications.getPermissionsAsync();
   const granted =
-    permissions.granted || permissions.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
+    permissions.granted ||
+    permissions.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
   if (!granted) return undefined;
 
   await ensureSupplyChannel();
@@ -152,7 +165,8 @@ const scheduleRefillReminder = async (input: { label?: string; days: number; out
 };
 
 const cancelNudge = async (row: SupplyState | undefined): Promise<void> => {
-  if (row?.nudgeId) await Notifications.cancelScheduledNotificationAsync(row.nudgeId).catch(() => undefined);
+  if (row?.nudgeId)
+    await Notifications.cancelScheduledNotificationAsync(row.nudgeId).catch(() => undefined);
 };
 
 /** Everything a screen shows about supply, in one read. Null when no count was ever set. */
@@ -186,11 +200,13 @@ export const setSupplyCount = async (medicationId: string, count: number): Promi
   store[medicationId] = {
     ...(previous ?? {}),
     count: nextCount,
-    capacity: refilled || !hasCount(previous) ? nextCount : Math.max(previous.capacity ?? 0, nextCount),
+    capacity:
+      refilled || !hasCount(previous) ? nextCount : Math.max(previous.capacity ?? 0, nextCount),
     lastRefilledAt: refilled
       ? new Date().toISOString()
       : (previous?.lastRefilledAt ?? (nextCount > 0 ? new Date().toISOString() : undefined)),
-    lowSupplyNudgedAt: refilled || nextCount > LOW_SUPPLY_THRESHOLD ? undefined : previous?.lowSupplyNudgedAt,
+    lowSupplyNudgedAt:
+      refilled || nextCount > LOW_SUPPLY_THRESHOLD ? undefined : previous?.lowSupplyNudgedAt,
     // A refill (or a higher count) makes any pending reminder moot.
     nudgeId: refilled || nextCount > LOW_SUPPLY_THRESHOLD ? undefined : previous?.nudgeId,
     outNudgedAt: nextCount > 0 ? undefined : previous?.outNudgedAt,
@@ -221,7 +237,11 @@ export const clearSupplyCount = async (medicationId: string): Promise<void> => {
  * about a week left (by days at the current rate, or the unit threshold),
  * and once more if it runs out. `label` names the medicine in the reminder.
  */
-export const deductSupply = async (medicationId: string, label?: string, quantity = 1): Promise<number | null> => {
+export const deductSupply = async (
+  medicationId: string,
+  label?: string,
+  quantity = 1,
+): Promise<number | null> => {
   const store = await readStore();
   const row = store[medicationId];
   if (!hasCount(row)) return null;
@@ -238,7 +258,9 @@ export const deductSupply = async (medicationId: string, label?: string, quantit
   let nudgeId = row.nudgeId;
   if (nudgeLow || nudgeOut) {
     await cancelNudge(row);
-    nudgeId = await scheduleRefillReminder({ label, days: nextDays, out: nudgeOut }).catch(() => undefined);
+    nudgeId = await scheduleRefillReminder({ label, days: nextDays, out: nudgeOut }).catch(
+      () => undefined,
+    );
   }
 
   store[medicationId] = {
@@ -285,7 +307,10 @@ export const getDaysUntilRefill = async (medicationId: string): Promise<number |
   return snapshot ? snapshot.daysUntilRefill : null;
 };
 
-export const setDailyConsumptionRate = async (medicationId: string, rate: number): Promise<void> => {
+export const setDailyConsumptionRate = async (
+  medicationId: string,
+  rate: number,
+): Promise<void> => {
   const store = await readStore();
   store[medicationId] = {
     ...(store[medicationId] ?? {}),
@@ -299,11 +324,44 @@ export const getLastRefilledAt = async (medicationId: string): Promise<string | 
   return store[medicationId]?.lastRefilledAt ?? null;
 };
 
-export const setLastRefilledAt = async (medicationId: string, isoDate: string | null): Promise<void> => {
+export const setLastRefilledAt = async (
+  medicationId: string,
+  isoDate: string | null,
+): Promise<void> => {
   const store = await readStore();
   store[medicationId] = {
     ...(store[medicationId] ?? {}),
     lastRefilledAt: isoDate ?? undefined,
   };
   await writeStore(store);
+};
+
+/**
+ * Cache write from the server-derived count (S-04 sync). Not a refill: keeps the
+ * refill date and nudge history, only clears nudge flags the new count makes moot.
+ * Fills rate / refill date on a fresh device. Returns true when something changed.
+ */
+export const syncSupplyCount = async (
+  medicationId: string,
+  count: number,
+  fallback: { dailyRate?: number; lastRefilledAt?: string } = {},
+): Promise<boolean> => {
+  const store = await readStore();
+  const previous = store[medicationId];
+  const next = toInt(count);
+  if (previous?.count === next && previous.dailyRate) return false;
+  const aboveLow = next > LOW_SUPPLY_THRESHOLD;
+  if (aboveLow) await cancelNudge(previous);
+  store[medicationId] = {
+    ...(previous ?? {}),
+    count: next,
+    capacity: Math.max(toInt(previous?.capacity ?? next), next),
+    dailyRate: previous?.dailyRate ?? fallback.dailyRate,
+    lastRefilledAt: previous?.lastRefilledAt ?? fallback.lastRefilledAt,
+    lowSupplyNudgedAt: aboveLow ? undefined : previous?.lowSupplyNudgedAt,
+    nudgeId: aboveLow ? undefined : previous?.nudgeId,
+    outNudgedAt: next > 0 ? undefined : previous?.outNudgedAt,
+  };
+  await writeStore(store);
+  return true;
 };

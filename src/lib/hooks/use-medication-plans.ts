@@ -4,17 +4,22 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FhirRepository } from '@/lib/takt/fhir-repository';
 import { TAKT_EXT } from '@/lib/takt/constants';
-import { parseDosageQuantity, splitDosage } from '@/lib/takt/medication-form';
-import { fromTimeOfDay, normalizeWeekdayCodes, sortTimes, WEEKDAY_ORDER, WEEKDAYS_ONLY } from '@/lib/takt/time';
+import { readDoseQuantity } from '@/lib/takt/medication-form';
+import { readAppearance, readPauseHistory } from '@/lib/takt/structured-extensions';
+import {
+  fromTimeOfDay,
+  normalizeWeekdayCodes,
+  sortTimes,
+  WEEKDAY_ORDER,
+  WEEKDAYS_ONLY,
+} from '@/lib/takt/time';
 import type {
   FhirBundle,
   IntakeInstruction,
-  MedicationAppearance,
   MedicationCadence,
   MedicationPlan,
   MedicationRequestResource,
   MedicationResource,
-  PausePeriod,
   WeekdayCode,
 } from '@/lib/takt/types';
 
@@ -27,34 +32,15 @@ const readStrength = (medication: MedicationResource | null): string => {
   return match?.[1] ?? '';
 };
 
-const readRequestExtensionString = (request: MedicationRequestResource, url: string): string | undefined =>
-  request.extension?.find((x) => x.url === url)?.valueString;
+const readRequestExtensionString = (
+  request: MedicationRequestResource,
+  url: string,
+): string | undefined => request.extension?.find((x) => x.url === url)?.valueString;
 
-const readRequestExtensionDateTime = (request: MedicationRequestResource, url: string): string | undefined =>
-  request.extension?.find((x) => x.url === url)?.valueDateTime;
-
-const readPauseHistory = (request: MedicationRequestResource): PausePeriod[] => {
-  const raw = readRequestExtensionString(request, TAKT_EXT.pauseHistory);
-  if (!raw) return [];
-
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed
-      .filter((item): item is PausePeriod => {
-        if (!item || typeof item !== 'object') return false;
-        const candidate = item as { start?: unknown; end?: unknown };
-        if (typeof candidate.start !== 'string') return false;
-        if (candidate.end !== undefined && typeof candidate.end !== 'string') return false;
-        return true;
-      })
-      .map((item) => ({ start: item.start, end: item.end }))
-      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-  } catch {
-    return [];
-  }
-};
+const readRequestExtensionDateTime = (
+  request: MedicationRequestResource,
+  url: string,
+): string | undefined => request.extension?.find((x) => x.url === url)?.valueDateTime;
 
 const readCreatedAt = (request: MedicationRequestResource): string | undefined => {
   const ext = readRequestExtensionDateTime(request, TAKT_EXT.requestCreatedAt);
@@ -64,21 +50,7 @@ const readCreatedAt = (request: MedicationRequestResource): string | undefined =
   return undefined;
 };
 
-const SHAPES = new Set(['round', 'oval', 'capsule', 'drops', 'inhaler', 'injection', 'other']);
 const INSTRUCTIONS = new Set(['with-food', 'empty-stomach', 'before-bed']);
-
-const readAppearance = (medication: MedicationResource | null): MedicationAppearance | undefined => {
-  const raw = medication?.extension?.find((x) => x.url === TAKT_EXT.appearance)?.valueString;
-  if (!raw) return undefined;
-  try {
-    const parsed = JSON.parse(raw) as { shape?: unknown; color?: unknown };
-    if (typeof parsed.shape !== 'string' || !SHAPES.has(parsed.shape)) return undefined;
-    if (typeof parsed.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(parsed.color)) return undefined;
-    return { shape: parsed.shape as MedicationAppearance['shape'], color: parsed.color };
-  } catch {
-    return undefined;
-  }
-};
 
 const readInstruction = (request: MedicationRequestResource): IntakeInstruction | undefined => {
   const code = request.dosageInstruction?.[0]?.additionalInstruction
@@ -87,15 +59,14 @@ const readInstruction = (request: MedicationRequestResource): IntakeInstruction 
   return code && INSTRUCTIONS.has(code) ? (code as IntakeInstruction) : undefined;
 };
 
-/** Stored as the Takt extension "2 tablets"; split back into quantity + unit. */
-const readDosage = (request: MedicationRequestResource): Pick<MedicationPlan, 'dosageQuantity' | 'dosageUnit'> => {
-  const raw = readRequestExtensionString(request, TAKT_EXT.dosageQuantity);
-  if (!raw) return {};
-  const split = splitDosage(raw);
-  const quantity = parseDosageQuantity(split.dosageQuantity);
-  if (quantity === undefined) return {};
-  return { dosageQuantity: quantity, dosageUnit: split.dosageUnit || undefined };
-};
+/** Standard `doseAndRate` first, legacy "2 tablets" extension as fallback. */
+const readDosage = (
+  request: MedicationRequestResource,
+): Pick<MedicationPlan, 'dosageQuantity' | 'dosageUnit'> =>
+  readDoseQuantity(
+    request.dosageInstruction?.[0]?.doseAndRate?.[0]?.doseQuantity,
+    readRequestExtensionString(request, TAKT_EXT.dosageQuantity),
+  );
 
 const readTimes = (request: MedicationRequestResource): string[] => {
   if (request.dosageInstruction?.[0]?.asNeededBoolean) return [];
@@ -111,7 +82,10 @@ const readDayOfWeek = (request: MedicationRequestResource): WeekdayCode[] => {
   return normalized.length > 0 ? normalized : WEEKDAY_ORDER;
 };
 
-const readCadence = (request: MedicationRequestResource, dayOfWeek: WeekdayCode[]): MedicationCadence => {
+const readCadence = (
+  request: MedicationRequestResource,
+  dayOfWeek: WeekdayCode[],
+): MedicationCadence => {
   const dosage = request.dosageInstruction?.[0];
   if (dosage?.asNeededBoolean) return 'as-needed';
   if ((dosage?.timing?.repeat?.period ?? 1) > 1) return 'interval';
@@ -130,7 +104,9 @@ export const useMedicationPlans = (patientRef?: string) => {
     enabled: Boolean(patientRef),
     queryKey: ['takt', 'MedicationRequest', patientRef],
     queryFn: () =>
-      FhirRepository.searchMedicationRequests(`subject=${encodeURIComponent(patientRef ?? '')}&_count=200&_sort=-_lastUpdated`),
+      FhirRepository.searchMedicationRequests(
+        `subject=${encodeURIComponent(patientRef ?? '')}&_count=200&_sort=-_lastUpdated`,
+      ),
   });
 
   const medicationsQuery = useQuery<FhirBundle<MedicationResource>>({
@@ -145,7 +121,7 @@ export const useMedicationPlans = (patientRef?: string) => {
 
     return (requestsQuery.data?.entry ?? []).map(({ resource: request }) => {
       const ref = request.medicationReference?.reference?.split('/')[1];
-      const medication = ref ? medicationById.get(ref) ?? null : null;
+      const medication = ref ? (medicationById.get(ref) ?? null) : null;
       const dayOfWeek = readDayOfWeek(request);
       const dosage = request.dosageInstruction?.[0];
       const repeat = dosage?.timing?.repeat;
@@ -161,7 +137,8 @@ export const useMedicationPlans = (patientRef?: string) => {
         cadence,
         dayOfWeek,
         intervalDays: cadence === 'interval' ? repeat?.period : undefined,
-        intervalStart: cadence === 'interval' ? repeat?.boundsPeriod?.start?.slice(0, 10) : undefined,
+        intervalStart:
+          cadence === 'interval' ? repeat?.boundsPeriod?.start?.slice(0, 10) : undefined,
         startDate: readRequestExtensionString(request, TAKT_EXT.startDate)?.slice(0, 10),
         endDate: repeat?.boundsPeriod?.end?.slice(0, 10),
         asNeeded: cadence === 'as-needed',
@@ -169,11 +146,11 @@ export const useMedicationPlans = (patientRef?: string) => {
         ...readDosage(request),
         instruction: readInstruction(request),
         instructionNote: dosage?.patientInstruction?.trim() || undefined,
-        appearance: readAppearance(medication),
+        appearance: readAppearance(medication?.extension),
         supplyCount: request.dispenseRequest?.quantity?.value,
         createdAt: readCreatedAt(request),
         archivedAt: readRequestExtensionDateTime(request, TAKT_EXT.archivedAt),
-        pauseHistory: readPauseHistory(request),
+        pauseHistory: readPauseHistory(request.extension),
       };
     });
   }, [medicationsQuery.data?.entry, requestsQuery.data?.entry]);

@@ -1,5 +1,12 @@
 import { isoDateKey, sortTimes, WEEKDAY_ORDER, WEEKDAYS_ONLY } from './time';
-import type { IntakeInstruction, MedicationCadence, MedicationPlan, MedicationShape, MedicationUnit, WeekdayCode } from './types';
+import type {
+  IntakeInstruction,
+  MedicationCadence,
+  MedicationPlan,
+  MedicationShape,
+  MedicationUnit,
+  WeekdayCode,
+} from './types';
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -53,7 +60,16 @@ type CadenceLabelKey =
   | 'daySat'
   | 'daySun';
 
-export const SHAPE_LABEL_KEY: Record<MedicationShape, 'shapeRound' | 'shapeOval' | 'shapeCapsule' | 'shapeDrops' | 'shapeInhaler' | 'shapeInjection' | 'shapeOther'> = {
+export const SHAPE_LABEL_KEY: Record<
+  MedicationShape,
+  | 'shapeRound'
+  | 'shapeOval'
+  | 'shapeCapsule'
+  | 'shapeDrops'
+  | 'shapeInhaler'
+  | 'shapeInjection'
+  | 'shapeOther'
+> = {
   round: 'shapeRound',
   oval: 'shapeOval',
   capsule: 'shapeCapsule',
@@ -63,7 +79,10 @@ export const SHAPE_LABEL_KEY: Record<MedicationShape, 'shapeRound' | 'shapeOval'
   other: 'shapeOther',
 };
 
-export const INSTRUCTION_LABEL_KEY: Record<IntakeInstruction, 'instructionWithFood' | 'instructionEmptyStomach' | 'instructionBeforeBed'> = {
+export const INSTRUCTION_LABEL_KEY: Record<
+  IntakeInstruction,
+  'instructionWithFood' | 'instructionEmptyStomach' | 'instructionBeforeBed'
+> = {
   'with-food': 'instructionWithFood',
   'empty-stomach': 'instructionEmptyStomach',
   'before-bed': 'instructionBeforeBed',
@@ -74,7 +93,10 @@ export const describeInstruction = (
   plan: { instruction?: IntakeInstruction; instructionNote?: string },
   t: (key: 'instructionWithFood' | 'instructionEmptyStomach' | 'instructionBeforeBed') => string,
 ): string | undefined => {
-  const parts = [plan.instruction ? t(INSTRUCTION_LABEL_KEY[plan.instruction]) : undefined, plan.instructionNote].filter(Boolean);
+  const parts = [
+    plan.instruction ? t(INSTRUCTION_LABEL_KEY[plan.instruction]) : undefined,
+    plan.instructionNote,
+  ].filter(Boolean);
   return parts.length ? parts.join(' · ') : undefined;
 };
 
@@ -84,7 +106,8 @@ export const describeCadence = (
   t: (key: CadenceLabelKey) => string,
 ): string => {
   if (plan.cadence === 'as-needed') return t('cadenceAsNeeded');
-  if (plan.cadence === 'interval') return t('cadenceEveryDays').replace('{days}', String(plan.intervalDays ?? 2));
+  if (plan.cadence === 'interval')
+    return t('cadenceEveryDays').replace('{days}', String(plan.intervalDays ?? 2));
   if (plan.cadence === 'daily') return t('cadenceDaily');
   if (plan.cadence === 'weekdays') return t('cadenceWeekdays');
   return plan.dayOfWeek.map((day) => formatDayLabel(day, t)).join(', ');
@@ -129,7 +152,15 @@ export type MedicationFormValues = {
 
 export type MedicationFormErrors = Partial<
   Record<
-    'name' | 'times' | 'days' | 'lastRefilled' | 'interval' | 'endDate' | 'maxPerDay' | 'startDate' | 'dosageQuantity',
+    | 'name'
+    | 'times'
+    | 'days'
+    | 'lastRefilled'
+    | 'interval'
+    | 'endDate'
+    | 'maxPerDay'
+    | 'startDate'
+    | 'dosageQuantity',
     string
   >
 >;
@@ -138,24 +169,57 @@ export const FORM_PRESETS = ['Tablet', 'Capsule', 'Drops', 'Inhaler', 'Syrup'] a
 export const TIME_PRESETS = ['08:00', '12:00', '18:00', '22:00'];
 export const SUPPLY_PRESETS = ['14', '28', '30', '60', '90'];
 export const INTERVAL_PRESETS = ['2', '3', '7', '14'];
-export const INSTRUCTION_OPTIONS: IntakeInstruction[] = ['with-food', 'empty-stomach', 'before-bed'];
-export const SHAPE_OPTIONS: MedicationShape[] = ['round', 'oval', 'capsule', 'drops', 'inhaler', 'injection', 'other'];
+export const INSTRUCTION_OPTIONS: IntakeInstruction[] = [
+  'with-food',
+  'empty-stomach',
+  'before-bed',
+];
+export const SHAPE_OPTIONS: MedicationShape[] = [
+  'round',
+  'oval',
+  'capsule',
+  'drops',
+  'inhaler',
+  'injection',
+  'other',
+];
 /** Real tablet colours for identification, not UI accents. */
-export const COLOR_OPTIONS = ['#F1ECE2', '#E9C46A', '#E07D2C', '#C0392B', '#E8A0BF', '#4A78C2', '#3F8F5F', '#8B5E3C', '#8E8E93'];
+export const COLOR_OPTIONS = [
+  '#F1ECE2',
+  '#E9C46A',
+  '#E07D2C',
+  '#C0392B',
+  '#E8A0BF',
+  '#4A78C2',
+  '#3F8F5F',
+  '#8B5E3C',
+  '#8E8E93',
+];
 export const DEFAULT_COLOR = COLOR_OPTIONS[0];
 
 /* ---- Standard units (chosen from a selector, never free text) ---- */
 
 /** Locale keys for the standard units; must exist in every locale file. */
 export type UnitLabelKey =
-  | 'unitMg' | 'unitMcg' | 'unitG' | 'unitMl' | 'unitTablets' | 'unitCapsules' | 'unitDrops'
-  | 'unitTsp' | 'unitTbsp' | 'unitPuffs' | 'unitSprays' | 'unitUnits' | 'unitOther';
+  | 'unitMg'
+  | 'unitMcg'
+  | 'unitG'
+  | 'unitMl'
+  | 'unitTablets'
+  | 'unitCapsules'
+  | 'unitDrops'
+  | 'unitTsp'
+  | 'unitTbsp'
+  | 'unitPuffs'
+  | 'unitSprays'
+  | 'unitUnits'
+  | 'unitOther';
 
 /** Locale key per standard unit; `MEDICATION_UNIT_LABELS[unit]` feeds `t(...)`. */
 export const MEDICATION_UNIT_LABELS: Record<MedicationUnit, UnitLabelKey> = {
   mg: 'unitMg',
   mcg: 'unitMcg',
-  'µg': 'unitMcg',
+  µg: 'unitMcg',
   g: 'unitG',
   ml: 'unitMl',
   tablets: 'unitTablets',
@@ -172,7 +236,18 @@ export const MEDICATION_UNIT_LABELS: Record<MedicationUnit, UnitLabelKey> = {
 /** Units the strength can be expressed in (e.g. mg, ml). */
 export const STRENGTH_UNIT_OPTIONS: MedicationUnit[] = ['mg', 'mcg', 'µg', 'g', 'ml', 'units'];
 /** Units for the per-intake amount (e.g. 2 tablets, 2 teaspoons). */
-export const DOSAGE_UNIT_OPTIONS: MedicationUnit[] = ['tablets', 'capsules', 'drops', 'tsp', 'tbsp', 'puffs', 'sprays', 'ml', 'units', 'other'];
+export const DOSAGE_UNIT_OPTIONS: MedicationUnit[] = [
+  'tablets',
+  'capsules',
+  'drops',
+  'tsp',
+  'tbsp',
+  'puffs',
+  'sprays',
+  'ml',
+  'units',
+  'other',
+];
 
 export const DEFAULT_UNIT: MedicationUnit = 'mg';
 export const DEFAULT_DOSAGE_UNIT: MedicationUnit = 'tablets';
@@ -209,7 +284,9 @@ export const parseDosageQuantity = (raw: string): number | undefined => {
 };
 
 /** Stored dosage is "2 tablets"; the form keeps quantity and unit apart. */
-export const splitDosage = (raw: string): { dosageQuantity: string; dosageUnit: MedicationUnit | '' } => {
+export const splitDosage = (
+  raw: string,
+): { dosageQuantity: string; dosageUnit: MedicationUnit | '' } => {
   const match = /^(\d+(?:\.\d+)?)\s+(\S+)$/.exec(raw.trim());
   // `other` must survive the round trip too: the mutation writes it verbatim ("2 other").
   if (match && isStandardUnit(match[2])) {
@@ -217,6 +294,50 @@ export const splitDosage = (raw: string): { dosageQuantity: string; dosageUnit: 
   }
   const quantity = parseDosageQuantity(raw);
   return { dosageQuantity: quantity !== undefined ? String(quantity) : raw.trim(), dosageUnit: '' };
+};
+
+/** UCUM codes for mass/volume units; countable forms (tablets, puffs…) have no fitting UCUM code. */
+const UCUM: Partial<Record<MedicationUnit, string>> = {
+  mg: 'mg',
+  mcg: 'ug',
+  µg: 'ug',
+  g: 'g',
+  ml: 'mL',
+};
+
+export type DoseQuantity = { value: number; unit?: string; system?: string; code?: string };
+
+/** FHIR `dosageInstruction.doseAndRate[].doseQuantity` for a per-intake amount. */
+export const toDoseQuantity = (value: number, unit?: MedicationUnit): DoseQuantity => {
+  const code = unit ? UCUM[unit] : undefined;
+  return {
+    value,
+    ...(unit ? { unit } : {}),
+    ...(code ? { system: 'http://unitsofmeasure.org', code } : {}),
+  };
+};
+
+/**
+ * Per-intake amount: the standard `doseAndRate` field wins; the legacy Takt
+ * extension string ("2 tablets") is the fallback for plans written before it.
+ */
+export const readDoseQuantity = (
+  doseQuantity: { value?: number; unit?: string } | undefined,
+  legacyExtension: string | undefined,
+): { dosageQuantity?: number; dosageUnit?: MedicationUnit } => {
+  if (typeof doseQuantity?.value === 'number' && doseQuantity.value > 0) {
+    const unit =
+      doseQuantity.unit && isStandardUnit(doseQuantity.unit) ? doseQuantity.unit : undefined;
+    return { dosageQuantity: doseQuantity.value, ...(unit ? { dosageUnit: unit } : {}) };
+  }
+  if (!legacyExtension) return {};
+  const split = splitDosage(legacyExtension);
+  const quantity = parseDosageQuantity(split.dosageQuantity);
+  if (quantity === undefined) return {};
+  return {
+    dosageQuantity: quantity,
+    ...(split.dosageUnit ? { dosageUnit: split.dosageUnit } : {}),
+  };
 };
 
 export const EMPTY_MEDICATION_FORM: MedicationFormValues = {
@@ -254,7 +375,11 @@ export const normalizeDateInput = (value: string): string | null => {
   const day = Number(match[3]);
   const asDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
   // Round-trip check in UTC: Feb 30 would otherwise silently roll into March.
-  if (Number.isNaN(asDate.getTime()) || asDate.getUTCMonth() !== month - 1 || asDate.getUTCDate() !== day) {
+  if (
+    Number.isNaN(asDate.getTime()) ||
+    asDate.getUTCMonth() !== month - 1 ||
+    asDate.getUTCDate() !== day
+  ) {
     return null;
   }
   return asDate.toISOString();
@@ -290,7 +415,9 @@ export const scheduleFieldsFromForm = (values: MedicationFormValues) => ({
   asNeeded: values.cadence === 'as-needed',
   maxPerDay: values.cadence === 'as-needed' ? toPositiveInt(values.maxPerDay) : undefined,
   dosageQuantity: parseDosageQuantity(values.dosageQuantity),
-  dosageUnit: parseDosageQuantity(values.dosageQuantity) ? values.dosageUnit || DEFAULT_DOSAGE_UNIT : undefined,
+  dosageUnit: parseDosageQuantity(values.dosageQuantity)
+    ? values.dosageUnit || DEFAULT_DOSAGE_UNIT
+    : undefined,
   instruction: values.instruction || undefined,
   instructionNote: values.instructionNote.trim() || undefined,
   appearance: { shape: values.shape, color: values.color },
@@ -315,11 +442,18 @@ export const validateMedicationForm = (
   const errors: MedicationFormErrors = {};
   const asNeeded = values.cadence === 'as-needed';
   if (!values.name.trim()) errors.name = t('addMedicationNameError');
-  if (!asNeeded && (values.times.length === 0 || !values.times.every(isClockTime))) errors.times = t('invalidTimesError');
-  if (values.cadence === 'custom' && values.days.length === 0) errors.days = t('selectAtLeastOneDayError');
+  if (!asNeeded && (values.times.length === 0 || !values.times.every(isClockTime)))
+    errors.times = t('invalidTimesError');
+  if (values.cadence === 'custom' && values.days.length === 0)
+    errors.days = t('selectAtLeastOneDayError');
   if (values.cadence === 'interval') {
     const every = toPositiveInt(values.intervalDays);
-    if (!every || every < 2 || every > 90 || (values.intervalStart.trim() && !normalizeDateInput(values.intervalStart))) {
+    if (
+      !every ||
+      every < 2 ||
+      every > 90 ||
+      (values.intervalStart.trim() && !normalizeDateInput(values.intervalStart))
+    ) {
       errors.interval = t('intervalDaysError');
     }
   }
@@ -327,12 +461,20 @@ export const validateMedicationForm = (
   const endDate = values.endDate.trim();
   if (startDate && !normalizeDateInput(startDate)) errors.startDate = t('startDateError');
   // A regimen that starts after it ends would silently produce zero doses forever.
-  if (!errors.startDate && startDate && endDate && normalizeDateInput(endDate) && startDate > endDate) {
+  if (
+    !errors.startDate &&
+    startDate &&
+    endDate &&
+    normalizeDateInput(endDate) &&
+    startDate > endDate
+  ) {
     errors.startDate = t('startDateAfterEndDateError');
   }
-  if (values.dosageQuantity.trim() && !parseDosageQuantity(values.dosageQuantity)) errors.dosageQuantity = t('dosageQuantityError');
+  if (values.dosageQuantity.trim() && !parseDosageQuantity(values.dosageQuantity))
+    errors.dosageQuantity = t('dosageQuantityError');
   if (endDate && !normalizeDateInput(endDate)) errors.endDate = t('endDateError');
-  if (asNeeded && values.maxPerDay.trim() && !toPositiveInt(values.maxPerDay)) errors.maxPerDay = t('maxPerDayError');
+  if (asNeeded && values.maxPerDay.trim() && !toPositiveInt(values.maxPerDay))
+    errors.maxPerDay = t('maxPerDayError');
   if (values.lastRefilled.trim() && !normalizeDateInput(values.lastRefilled)) {
     errors.lastRefilled = t('supplyLastRefilledInvalid');
   }

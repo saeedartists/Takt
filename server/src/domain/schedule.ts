@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon';
 import { DEFAULT_GRACE_HOURS, TAKT_EXT } from './constants.js';
 import { normalizeReference } from './references.js';
+import { readPauseHistory } from './structured-extensions.js';
 import {
   addDays,
   atClockTime,
@@ -31,11 +32,15 @@ import type {
   WeekdayCode,
 } from './types.js';
 
-const readExtensionString = (extensions: FhirExtension[] | undefined, url: string): string | undefined =>
-  extensions?.find((extension) => extension.url === url)?.valueString;
+const readExtensionString = (
+  extensions: FhirExtension[] | undefined,
+  url: string,
+): string | undefined => extensions?.find((extension) => extension.url === url)?.valueString;
 
-const readExtensionDateTime = (extensions: FhirExtension[] | undefined, url: string): string | undefined =>
-  extensions?.find((extension) => extension.url === url)?.valueDateTime;
+const readExtensionDateTime = (
+  extensions: FhirExtension[] | undefined,
+  url: string,
+): string | undefined => extensions?.find((extension) => extension.url === url)?.valueDateTime;
 
 const readStrength = (medication: MedicationResource | null): string => {
   if (!medication) return '';
@@ -44,27 +49,6 @@ const readStrength = (medication: MedicationResource | null): string => {
   const codeText = medication.code?.text ?? '';
   const match = codeText.match(/\b(\d+\s?(mg|mcg|µg|g|ml))\b/i);
   return match?.[1] ?? '';
-};
-
-const readPauseHistory = (request: MedicationRequestResource): PausePeriod[] => {
-  const raw = readExtensionString(request.extension, TAKT_EXT.pauseHistory);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((item): item is PausePeriod => {
-        if (!item || typeof item !== 'object') return false;
-        const candidate = item as { start?: unknown; end?: unknown };
-        if (typeof candidate.start !== 'string') return false;
-        if (candidate.end !== undefined && typeof candidate.end !== 'string') return false;
-        return true;
-      })
-      .map((item) => ({ start: item.start, end: item.end }))
-      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-  } catch {
-    return [];
-  }
 };
 
 const readCreatedAt = (request: MedicationRequestResource, zone: string): string | undefined => {
@@ -89,7 +73,10 @@ const readDayOfWeek = (request: MedicationRequestResource): WeekdayCode[] => {
   return normalized.length > 0 ? normalized : WEEKDAY_ORDER;
 };
 
-const readCadence = (request: MedicationRequestResource, dayOfWeek: WeekdayCode[]): MedicationCadence => {
+const readCadence = (
+  request: MedicationRequestResource,
+  dayOfWeek: WeekdayCode[],
+): MedicationCadence => {
   const dosage = request.dosageInstruction?.[0];
   if (dosage?.asNeededBoolean) return 'as-needed';
   const period = dosage?.timing?.repeat?.period ?? 1;
@@ -97,7 +84,10 @@ const readCadence = (request: MedicationRequestResource, dayOfWeek: WeekdayCode[
   if (period > 1 && ['d', 'day', 'days'].includes(periodUnit)) return 'interval';
   if (['wk', 'week', 'weeks'].includes(periodUnit)) return 'interval';
   if (dayOfWeek.length === WEEKDAY_ORDER.length) return 'daily';
-  if (dayOfWeek.length === WEEKDAYS_ONLY.length && WEEKDAYS_ONLY.every((day, index) => dayOfWeek[index] === day)) {
+  if (
+    dayOfWeek.length === WEEKDAYS_ONLY.length &&
+    WEEKDAYS_ONLY.every((day, index) => dayOfWeek[index] === day)
+  ) {
     return 'weekdays';
   }
   return 'custom';
@@ -144,7 +134,7 @@ export const readPlan = (
     maxPerDay: dosage?.maxDosePerPeriod?.numerator?.value,
     createdAt: readCreatedAt(request, zone),
     archivedAt: readExtensionDateTime(request.extension, TAKT_EXT.archivedAt),
-    pauseHistory: readPauseHistory(request),
+    pauseHistory: readPauseHistory(request.extension),
     status: request.status,
   };
 };
@@ -157,7 +147,9 @@ export const planDueOnDay = (plan: MedicationPlan, day: DateTime, zone = 'UTC'):
 
   if (plan.cadence === 'interval') {
     const every = Math.max(1, plan.intervalDays ?? 1);
-    const start = parseDateOnly(plan.intervalStart, zone) ?? (plan.createdAt ? parseInstant(plan.createdAt, zone) : null);
+    const start =
+      parseDateOnly(plan.intervalStart, zone) ??
+      (plan.createdAt ? parseInstant(plan.createdAt, zone) : null);
     if (!start) return true;
     const diff = Math.round(dayStart.diff(start.startOf('day'), 'days').days);
     return diff >= 0 && diff % every === 0;
@@ -181,7 +173,11 @@ const isWithinPausePeriod = (scheduledAt: DateTime, period: PausePeriod, zone: s
   return scheduledAt >= start;
 };
 
-export const doseSuppressed = (plan: MedicationPlan, scheduledAt: DateTime, zone = 'UTC'): boolean => {
+export const doseSuppressed = (
+  plan: MedicationPlan,
+  scheduledAt: DateTime,
+  zone = 'UTC',
+): boolean => {
   const createdAt = plan.createdAt ? parseInstant(plan.createdAt, zone) : null;
   if (createdAt && scheduledAt < createdAt) return true;
 
@@ -195,7 +191,8 @@ export const doseSuppressed = (plan: MedicationPlan, scheduledAt: DateTime, zone
 
   if (plan.request.status !== 'active' && plan.request.status !== 'on-hold') return true;
 
-  if (plan.pauseHistory.some((period) => isWithinPausePeriod(scheduledAt, period, zone))) return true;
+  if (plan.pauseHistory.some((period) => isWithinPausePeriod(scheduledAt, period, zone)))
+    return true;
 
   if (plan.request.status === 'on-hold') return true;
 
@@ -209,7 +206,8 @@ const eventState = (event: MedicationAdministrationResource): DoseState => {
 };
 
 const skipReasonOf = (event?: MedicationAdministrationResource): SkipReason | undefined =>
-  event?.statusReason?.[0]?.coding?.find((coding) => coding.system === TAKT_EXT.skipReason)?.code as SkipReason | undefined;
+  event?.statusReason?.[0]?.coding?.find((coding) => coding.system === TAKT_EXT.skipReason)
+    ?.code as SkipReason | undefined;
 
 const eventTimestamp = (event: MedicationAdministrationResource): number =>
   event.effectiveDateTime ? new Date(event.effectiveDateTime).getTime() : 0;
@@ -223,7 +221,9 @@ const indexEvents = (
   const map = new Map<string, MedicationAdministrationResource>();
   for (const event of events) {
     const requestRef = normalizeReference(event.request?.reference);
-    const scheduledRaw = event.extension?.find((extension) => extension.url === TAKT_EXT.scheduledTime)?.valueDateTime;
+    const scheduledRaw = event.extension?.find(
+      (extension) => extension.url === TAKT_EXT.scheduledTime,
+    )?.valueDateTime;
     if (!requestRef || !scheduledRaw) continue;
     const scheduled = parseInstant(scheduledRaw, zone);
     if (!scheduled) continue;
@@ -308,6 +308,8 @@ export const patientTimezone = (
   fallbackZone = 'UTC',
 ): string => {
   const safeFallback = DateTime.now().setZone(fallbackZone).isValid ? fallbackZone : 'UTC';
-  const zone = zoneOrUtc(readExtensionString(patient.extension, TAKT_EXT.patientTimezone) ?? safeFallback);
+  const zone = zoneOrUtc(
+    readExtensionString(patient.extension, TAKT_EXT.patientTimezone) ?? safeFallback,
+  );
   return DateTime.now().setZone(zone).isValid ? zone : safeFallback;
 };

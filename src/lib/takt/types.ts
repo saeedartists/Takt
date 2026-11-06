@@ -12,7 +12,11 @@ export type FhirExtension = {
   url?: string;
   valueString?: string;
   valueInteger?: number;
+  valueDecimal?: number;
+  valueCode?: string;
   valueDateTime?: string;
+  /** Sub-extensions of a complex extension (e.g. takt/supply-anchor). */
+  extension?: FhirExtension[];
 };
 
 export type WeekdayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
@@ -39,6 +43,8 @@ export type MedicationResource = {
 export type MedicationRequestResource = {
   resourceType: 'MedicationRequest';
   id: string;
+  /** Server-stamped; versionId drives If-Match on concurrent writes. */
+  meta?: { versionId?: string; lastUpdated?: string };
   status: 'active' | 'on-hold' | 'stopped' | string;
   intent: string;
   subject: FhirReference;
@@ -61,8 +67,18 @@ export type MedicationRequestResource = {
     asNeededBoolean?: boolean;
     /** Free-text intake note, e.g. "with a full glass of water". */
     patientInstruction?: string;
-    additionalInstruction?: { coding?: { system?: string; code?: string; display?: string }[]; text?: string }[];
-    maxDosePerPeriod?: { numerator?: { value?: number }; denominator?: { value?: number; unit?: string } };
+    additionalInstruction?: {
+      coding?: { system?: string; code?: string; display?: string }[];
+      text?: string;
+    }[];
+    maxDosePerPeriod?: {
+      numerator?: { value?: number };
+      denominator?: { value?: number; unit?: string };
+    };
+    /** Per-intake amount (standard FHIR); supersedes the legacy `takt/dosage-quantity` extension. */
+    doseAndRate?: {
+      doseQuantity?: { value?: number; unit?: string; system?: string; code?: string };
+    }[];
   }[];
   dispenseRequest?: {
     quantity?: {
@@ -96,6 +112,8 @@ export type ConsentResource = {
   status: 'active' | 'inactive' | 'draft' | string;
   patient: FhirReference;
   dateTime: string;
+  /** Server-stamped; the trusted "recorded at" (dateTime is the device clock). */
+  meta?: { lastUpdated?: string; versionId?: string };
   scope: { coding: { system: string; code: string }[] };
   category: { coding: { system: string; code: string; display?: string }[] }[];
   policyRule?: {
@@ -162,9 +180,24 @@ export type MedicationCadence = 'daily' | 'weekdays' | 'custom' | 'interval' | '
 export type IntakeInstruction = 'with-food' | 'empty-stomach' | 'before-bed';
 
 /** Standard dosage units a patient can pick instead of free text. */
-export type MedicationUnit = 'mg' | 'mcg' | 'µg' | 'g' | 'ml' | 'tablets' | 'capsules' | 'drops' | 'tsp' | 'tbsp' | 'puffs' | 'sprays' | 'units' | 'other';
+export type MedicationUnit =
+  | 'mg'
+  | 'mcg'
+  | 'µg'
+  | 'g'
+  | 'ml'
+  | 'tablets'
+  | 'capsules'
+  | 'drops'
+  | 'tsp'
+  | 'tbsp'
+  | 'puffs'
+  | 'sprays'
+  | 'units'
+  | 'other';
 
-export type MedicationShape = 'round' | 'oval' | 'capsule' | 'drops' | 'inhaler' | 'injection' | 'other';
+export type MedicationShape =
+  'round' | 'oval' | 'capsule' | 'drops' | 'inhaler' | 'injection' | 'other';
 
 /** What the tablet looks like, so the row icon matches the real thing. */
 export type MedicationAppearance = { shape: MedicationShape; color: string };

@@ -26,8 +26,8 @@
       "env": {
         "EXPO_PUBLIC_OVOK_MOCK": "0",
         "EXPO_PUBLIC_OVOK_API_URL": "https://api.sandbox.ovok.com",
-        "EXPO_PUBLIC_OVOK_TENANT_CODE": "practice-stdi",
-        "EXPO_PUBLIC_OVOK_CLIENT_ID": "82876711-5145-4562-9659-64922e5f3173"
+        "EXPO_PUBLIC_OVOK_TENANT_CODE": "saeeds-workspace",
+        "EXPO_PUBLIC_OVOK_CLIENT_ID": "a823f2d1-6a98-4fea-b8ec-e6cb71084772"
       }
     },
     "production": {
@@ -61,8 +61,8 @@
       "env": {
         "EXPO_PUBLIC_OVOK_MOCK": "0",
         "EXPO_PUBLIC_OVOK_API_URL": "https://api.sandbox.ovok.com",
-        "EXPO_PUBLIC_OVOK_TENANT_CODE": "practice-stdi",
-        "EXPO_PUBLIC_OVOK_CLIENT_ID": "82876711-5145-4562-9659-64922e5f3173"
+        "EXPO_PUBLIC_OVOK_TENANT_CODE": "saeeds-workspace",
+        "EXPO_PUBLIC_OVOK_CLIENT_ID": "a823f2d1-6a98-4fea-b8ec-e6cb71084772"
       }
     },
     "play-internal-live": {
@@ -75,8 +75,8 @@
       "env": {
         "EXPO_PUBLIC_OVOK_MOCK": "0",
         "EXPO_PUBLIC_OVOK_API_URL": "https://api.sandbox.ovok.com",
-        "EXPO_PUBLIC_OVOK_TENANT_CODE": "practice-stdi",
-        "EXPO_PUBLIC_OVOK_CLIENT_ID": "82876711-5145-4562-9659-64922e5f3173"
+        "EXPO_PUBLIC_OVOK_TENANT_CODE": "saeeds-workspace",
+        "EXPO_PUBLIC_OVOK_CLIENT_ID": "a823f2d1-6a98-4fea-b8ec-e6cb71084772"
       }
     }
   },

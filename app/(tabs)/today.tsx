@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { CLOCK_SKEW_WARN_MS, getClockSkewMs } from '@/lib/ovok-fetch';
 import {
   AnimatedDoseRow,
   AnimatedNumber,
@@ -117,7 +118,14 @@ export default function TodayScreen() {
   );
 
   const selectedDoses = useMemo(
-    () => buildDoseOccurrencesForDay(plans.plans, eventResources, startOfDay(selectedDate), now, graceHours),
+    () =>
+      buildDoseOccurrencesForDay(
+        plans.plans,
+        eventResources,
+        startOfDay(selectedDate),
+        now,
+        graceHours,
+      ),
     [eventResources, graceHours, now, plans.plans, selectedDate],
   );
 
@@ -134,7 +142,13 @@ export default function TodayScreen() {
     const map: Record<string, { total: number; taken: number; missed: number }> = {};
     for (let offset = -7; offset <= 7; offset++) {
       const d = addDays(selectedDate, offset);
-      const doses = buildDoseOccurrencesForDay(plans.plans, eventResources, startOfDay(d), now, graceHours);
+      const doses = buildDoseOccurrencesForDay(
+        plans.plans,
+        eventResources,
+        startOfDay(d),
+        now,
+        graceHours,
+      );
       const taken = doses.filter((x) => x.state === 'taken').length;
       const missed = doses.filter((x) => x.state === 'missed').length;
       map[isoDateKey(d)] = { total: doses.length, taken, missed };
@@ -181,7 +195,11 @@ export default function TodayScreen() {
   );
 
   // The one medication closest to running out (at or under the low-supply line), for the bento tile.
-  const [lowSupply, setLowSupply] = useState<{ label: string; count: number; requestId: string } | null>(null);
+  const [lowSupply, setLowSupply] = useState<{
+    label: string;
+    count: number;
+    requestId: string;
+  } | null>(null);
   useFocusEffect(
     useCallback(() => {
       let active = true;
@@ -192,7 +210,8 @@ export default function TodayScreen() {
           if (!id || plan.request.status !== 'active') continue;
           const snap = await getSupplySnapshot(id);
           if (!snap || snap.count > LOW_SUPPLY_THRESHOLD) continue;
-          if (!lowest || snap.count < lowest.count) lowest = { label: plan.label, count: snap.count, requestId: plan.request.id };
+          if (!lowest || snap.count < lowest.count)
+            lowest = { label: plan.label, count: snap.count, requestId: plan.request.id };
         }
         if (active) setLowSupply(lowest);
       })();
@@ -213,7 +232,10 @@ export default function TodayScreen() {
     return days;
   }, [adherenceMap, now]);
 
-  const planByRequest = useMemo(() => new Map(plans.plans.map((plan) => [plan.request.id, plan])), [plans.plans]);
+  const planByRequest = useMemo(
+    () => new Map(plans.plans.map((plan) => [plan.request.id, plan])),
+    [plans.plans],
+  );
 
   // VoiceOver / TalkBack: answer "what now, and did I already?" the moment Today is shown.
   const takenToday = todayDoses.filter((dose) => dose.state === 'taken').length;
@@ -258,7 +280,11 @@ export default function TodayScreen() {
   }, [isSelectedToday, patientRef, recordDose, selectedDoses]);
 
   /** Records a taken/skipped event; a missed dose's auto-record is replaced, as History does. */
-  const takeAction = async (dose: DoseOccurrence, action: 'taken' | 'skipped', reason?: SkipReason) => {
+  const takeAction = async (
+    dose: DoseOccurrence,
+    action: 'taken' | 'skipped',
+    reason?: SkipReason,
+  ) => {
     if (!patientRef) return;
     setActionError(null);
 
@@ -374,7 +400,11 @@ export default function TodayScreen() {
     }
   };
 
-  const runHeroAction = async (kind: Exclude<HeroPending, null>, dose: DoseOccurrence, reason?: SkipReason) => {
+  const runHeroAction = async (
+    kind: Exclude<HeroPending, null>,
+    dose: DoseOccurrence,
+    reason?: SkipReason,
+  ) => {
     setHeroPending(kind);
     try {
       if (kind === 'snooze') await snoozeDose(dose, defaultSnoozeMinutes);
@@ -413,11 +443,13 @@ export default function TodayScreen() {
 
   const patientFirstName = patient.data?.name?.[0]?.given?.[0];
   const hour = now.getHours();
-  const greeting = hour < 12 ? t('greetingMorning') : hour < 18 ? t('greetingAfternoon') : t('greetingEvening');
+  const greeting =
+    hour < 12 ? t('greetingMorning') : hour < 18 ? t('greetingAfternoon') : t('greetingEvening');
   const todayTotal = todayDoses.length;
   const todayTaken = takenToday;
   // The dose after the one the hero is showing: what the next reminder will be about.
-  const heroDose = todayDoses.find((d) => d.state === 'due') ?? todayDoses.find((d) => d.state === 'scheduled');
+  const heroDose =
+    todayDoses.find((d) => d.state === 'due') ?? todayDoses.find((d) => d.state === 'scheduled');
   const nextReminder = todayDoses.find((d) => d.state === 'scheduled' && d.id !== heroDose?.id);
   const hasSecondTile = Boolean(lowSupply) || rhythmDays >= 2 || Boolean(nextReminder);
   let rowIndex = 0;
@@ -428,24 +460,41 @@ export default function TodayScreen() {
         {/* Greeting row: who, and a one-tap way to the doctor report. */}
         <View style={styles.greetingRow}>
           <View style={[styles.avatar, { backgroundColor: c.tones.lilac.bg }]}>
-            <Text style={[typography.headline, { color: INK, fontFamily: font.bold }]}>{(patientFirstName ?? 'T').slice(0, 1).toUpperCase()}</Text>
+            <Text style={[typography.headline, { color: INK, fontFamily: font.bold }]}>
+              {(patientFirstName ?? 'T').slice(0, 1).toUpperCase()}
+            </Text>
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text numberOfLines={1} style={[typography.subhead, { color: c.textSecondary }]}>
               {patientFirstName ? `${greeting},` : greeting}
             </Text>
             {patientFirstName ? (
-              <Text numberOfLines={1} style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>
+              <Text
+                numberOfLines={1}
+                style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}
+              >
                 {patientFirstName}
               </Text>
             ) : null}
           </View>
-          <IconButton size={44} icon="document-text-outline" accessibilityLabel={t('openReport')} onPress={() => router.push('/report')} />
+          <IconButton
+            size={44}
+            icon="document-text-outline"
+            accessibilityLabel={t('openReport')}
+            onPress={() => router.push('/report')}
+          />
         </View>
 
-        <Text accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit style={[typography.title1, styles.dateTitle, { color: c.textPrimary }]}>
+        <Text
+          accessibilityRole="header"
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          style={[typography.title1, styles.dateTitle, { color: c.textPrimary }]}
+        >
           {`${formatDate(now, { weekday: 'long' })}, `}
-          <Text style={{ color: c.textTertiary }}>{formatDate(now, { day: 'numeric', month: 'long' })}</Text>
+          <Text style={{ color: c.textTertiary }}>
+            {formatDate(now, { day: 'numeric', month: 'long' })}
+          </Text>
         </Text>
 
         <Stack>
@@ -498,18 +547,37 @@ export default function TodayScreen() {
                       tone="sage"
                       style={styles.bentoTile}
                       onPress={() => router.push('/history')}
-                      accessibilityLabel={t('takenOfTotal').replace('{taken}', String(todayTaken)).replace('{total}', String(todayTotal))}
+                      accessibilityLabel={t('takenOfTotal')
+                        .replace('{taken}', String(todayTaken))
+                        .replace('{total}', String(todayTotal))}
                     >
                       <View style={styles.bentoHead}>
-                        <Text style={[typography.subhead, { color: INK, fontFamily: font.semibold }]}>{t('todayTakenTile')}</Text>
-                        <ProgressRing progress={todayTaken / todayTotal} size={36} stroke={5} color={c.tones.sage.fg} track="rgba(255,255,255,0.8)" />
+                        <Text
+                          style={[typography.subhead, { color: INK, fontFamily: font.semibold }]}
+                        >
+                          {t('todayTakenTile')}
+                        </Text>
+                        <ProgressRing
+                          progress={todayTaken / todayTotal}
+                          size={36}
+                          stroke={5}
+                          color={c.tones.sage.fg}
+                          track="rgba(255,255,255,0.8)"
+                        />
                       </View>
                       <View style={styles.metricRow}>
-                        <AnimatedNumber value={todayTaken} style={[typography.metric, { color: INK }]} />
-                        <Text style={[typography.title3, { color: c.tones.sage.fg }]}>{` / ${todayTotal}`}</Text>
+                        <AnimatedNumber
+                          value={todayTaken}
+                          style={[typography.metric, { color: INK }]}
+                        />
+                        <Text
+                          style={[typography.title3, { color: c.tones.sage.fg }]}
+                        >{` / ${todayTotal}`}</Text>
                       </View>
                       <Text style={[typography.subhead, { color: c.tones.sage.fg }]}>
-                        {t('takenOfTotal').replace('{taken}', String(todayTaken)).replace('{total}', String(todayTotal))}
+                        {t('takenOfTotal')
+                          .replace('{taken}', String(todayTaken))
+                          .replace('{total}', String(todayTotal))}
                       </Text>
                     </Tile>
                   ) : (
@@ -518,15 +586,30 @@ export default function TodayScreen() {
                       tone="sage"
                       style={[styles.bentoTile, styles.bentoStrip]}
                       onPress={() => router.push('/history')}
-                      accessibilityLabel={t('takenOfTotal').replace('{taken}', String(todayTaken)).replace('{total}', String(todayTotal))}
+                      accessibilityLabel={t('takenOfTotal')
+                        .replace('{taken}', String(todayTaken))
+                        .replace('{total}', String(todayTotal))}
                     >
-                      <ProgressRing progress={todayTaken / todayTotal} size={52} stroke={6} color={c.tones.sage.fg} track="rgba(255,255,255,0.8)">
-                        <AnimatedNumber value={todayTaken} style={[typography.headline, { color: INK, fontFamily: font.bold }]} />
+                      <ProgressRing
+                        progress={todayTaken / todayTotal}
+                        size={52}
+                        stroke={6}
+                        color={c.tones.sage.fg}
+                        track="rgba(255,255,255,0.8)"
+                      >
+                        <AnimatedNumber
+                          value={todayTaken}
+                          style={[typography.headline, { color: INK, fontFamily: font.bold }]}
+                        />
                       </ProgressRing>
                       <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={[typography.headline, { color: INK, fontFamily: font.bold }]}>{t('todayTakenTile')}</Text>
+                        <Text style={[typography.headline, { color: INK, fontFamily: font.bold }]}>
+                          {t('todayTakenTile')}
+                        </Text>
                         <Text style={[typography.subhead, { color: c.tones.sage.fg }]}>
-                          {t('takenOfTotal').replace('{taken}', String(todayTaken)).replace('{total}', String(todayTotal))}
+                          {t('takenOfTotal')
+                            .replace('{taken}', String(todayTaken))
+                            .replace('{total}', String(todayTotal))}
                         </Text>
                       </View>
                       <Ionicons name="chevron-forward" size={20} color={c.tones.sage.fg} />
@@ -540,35 +623,75 @@ export default function TodayScreen() {
                       accessibilityLabel={`${t('todayRefillTile')}, ${lowSupply.label}, ${t('supplyLeft').replace('{count}', String(lowSupply.count))}`}
                     >
                       <View style={styles.bentoHead}>
-                        <Text style={[typography.subhead, { color: INK, fontFamily: font.semibold }]}>{t('todayRefillTile')}</Text>
+                        <Text
+                          style={[typography.subhead, { color: INK, fontFamily: font.semibold }]}
+                        >
+                          {t('todayRefillTile')}
+                        </Text>
                         <TileIcon name="add-circle-outline" />
                       </View>
                       <View style={styles.metricRow}>
-                        <AnimatedNumber value={lowSupply.count} style={[typography.metric, { color: INK }]} />
+                        <AnimatedNumber
+                          value={lowSupply.count}
+                          style={[typography.metric, { color: INK }]}
+                        />
                       </View>
-                      <Text numberOfLines={1} style={[typography.subhead, { color: c.tones.butter.fg }]}>
+                      <Text
+                        numberOfLines={1}
+                        style={[typography.subhead, { color: c.tones.butter.fg }]}
+                      >
                         {`${lowSupply.label} · ${t('supplyLeft').replace('{count}', String(lowSupply.count))}`}
                       </Text>
                     </Tile>
                   ) : rhythmDays >= 2 ? (
-                    <Tile tone="lilac" style={styles.bentoTile} accessibilityLabel={`${t('todayInRhythmTile')}, ${rhythmDays}`}>
+                    <Tile
+                      tone="lilac"
+                      style={styles.bentoTile}
+                      accessibilityLabel={`${t('todayInRhythmTile')}, ${rhythmDays}`}
+                    >
                       <View style={styles.bentoHead}>
-                        <Text style={[typography.subhead, { color: INK, fontFamily: font.semibold }]}>{t('todayInRhythmTile')}</Text>
+                        <Text
+                          style={[typography.subhead, { color: INK, fontFamily: font.semibold }]}
+                        >
+                          {t('todayInRhythmTile')}
+                        </Text>
                         <TileIcon name="pulse" />
                       </View>
                       <View style={styles.metricRow}>
-                        <AnimatedNumber value={rhythmDays} style={[typography.metric, { color: INK }]} />
+                        <AnimatedNumber
+                          value={rhythmDays}
+                          style={[typography.metric, { color: INK }]}
+                        />
                       </View>
-                      <Text style={[typography.subhead, { color: c.tones.lilac.fg }]}>{t('todayInRhythmHint')}</Text>
+                      <Text style={[typography.subhead, { color: c.tones.lilac.fg }]}>
+                        {t('todayInRhythmHint')}
+                      </Text>
                     </Tile>
                   ) : nextReminder ? (
-                    <Tile tone="sky" style={styles.bentoTile} accessibilityLabel={`${t('todayNextReminderTile')}, ${formatTime(nextReminder.scheduledAt)}, ${nextReminder.label}`}>
+                    <Tile
+                      tone="sky"
+                      style={styles.bentoTile}
+                      accessibilityLabel={`${t('todayNextReminderTile')}, ${formatTime(nextReminder.scheduledAt)}, ${nextReminder.label}`}
+                    >
                       <View style={styles.bentoHead}>
-                        <Text style={[typography.subhead, { color: INK, fontFamily: font.semibold }]}>{t('todayNextReminderTile')}</Text>
+                        <Text
+                          style={[typography.subhead, { color: INK, fontFamily: font.semibold }]}
+                        >
+                          {t('todayNextReminderTile')}
+                        </Text>
                         <TileIcon name="notifications-outline" />
                       </View>
-                      <Text style={[typography.metricSm, { color: INK, fontVariant: ['tabular-nums'] }]}>{formatTime(nextReminder.scheduledAt)}</Text>
-                      <Text numberOfLines={1} style={[typography.subhead, { color: c.tones.sky.fg }]}>{nextReminder.label}</Text>
+                      <Text
+                        style={[typography.metricSm, { color: INK, fontVariant: ['tabular-nums'] }]}
+                      >
+                        {formatTime(nextReminder.scheduledAt)}
+                      </Text>
+                      <Text
+                        numberOfLines={1}
+                        style={[typography.subhead, { color: c.tones.sky.fg }]}
+                      >
+                        {nextReminder.label}
+                      </Text>
                     </Tile>
                   ) : null}
                 </Animated.View>
@@ -583,12 +706,30 @@ export default function TodayScreen() {
                 </Animated.View>
               ) : null}
 
+              {Math.abs(getClockSkewMs()) > CLOCK_SKEW_WARN_MS ? (
+                <Card>
+                  <View style={styles.noticeRow} accessibilityRole="alert">
+                    <Ionicons name="time-outline" size={20} color={c.textSecondary} />
+                    <Text
+                      style={[typography.subhead, { color: c.textSecondary, flex: 1, minWidth: 0 }]}
+                    >
+                      {t('clockSkewNotice').replace(
+                        '{minutes}',
+                        String(Math.round(Math.abs(getClockSkewMs()) / 60_000)),
+                      )}
+                    </Text>
+                  </View>
+                </Card>
+              ) : null}
+
               {/* Auto-marked misses are fixable on the rows below, so the notice goes once none is left. */}
               {autoMissedCount > 0 && todayDoses.some((dose) => dose.state === 'missed') ? (
                 <Card>
                   <View style={styles.noticeRow}>
                     <Ionicons name="information-circle-outline" size={20} color={c.textSecondary} />
-                    <Text style={[typography.subhead, { color: c.textSecondary, flex: 1, minWidth: 0 }]}>
+                    <Text
+                      style={[typography.subhead, { color: c.textSecondary, flex: 1, minWidth: 0 }]}
+                    >
                       {autoMissedCount === 1
                         ? t('autoMissedNoticeOne')
                         : t('autoMissedNoticeMany').replace('{count}', String(autoMissedCount))}
@@ -601,7 +742,10 @@ export default function TodayScreen() {
                 <Animated.Text
                   entering={FadeInDown.duration(200)}
                   accessibilityRole="alert"
-                  style={[typography.subhead, { color: c.destructive, paddingHorizontal: spacing(1) }]}
+                  style={[
+                    typography.subhead,
+                    { color: c.destructive, paddingHorizontal: spacing(1) },
+                  ]}
                 >
                   {actionError}
                 </Animated.Text>
@@ -641,17 +785,33 @@ export default function TodayScreen() {
                 ) : (
                   <View style={styles.groups}>
                     {grouped.map((bucket) => {
-                      const timeIcon = getTimeIcon(bucket.doses[0]?.scheduledAt.getHours() ?? 12, c);
+                      const timeIcon = getTimeIcon(
+                        bucket.doses[0]?.scheduledAt.getHours() ?? 12,
+                        c,
+                      );
                       const actionable = bucket.doses.filter(isActionable);
 
                       return (
-                        <Animated.View key={bucket.time} layout={LinearTransition.springify().damping(24).stiffness(200)} style={styles.group}>
+                        <Animated.View
+                          key={bucket.time}
+                          layout={LinearTransition.springify().damping(24).stiffness(200)}
+                          style={styles.group}
+                        >
                           <View style={styles.timeHeader}>
                             <View style={styles.timeHeaderLeft}>
                               <View style={[styles.timeIcon, { backgroundColor: c.surface }]}>
                                 <Ionicons name={timeIcon.name} size={16} color={timeIcon.color} />
                               </View>
-                              <Text style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold, fontVariant: ['tabular-nums'] }]}>
+                              <Text
+                                style={[
+                                  typography.headline,
+                                  {
+                                    color: c.textPrimary,
+                                    fontFamily: font.bold,
+                                    fontVariant: ['tabular-nums'],
+                                  },
+                                ]}
+                              >
                                 {bucket.time}
                               </Text>
                             </View>
@@ -659,7 +819,10 @@ export default function TodayScreen() {
                               <Button
                                 size="sm"
                                 fullWidth={false}
-                                label={t('confirmAllAt').replace('{count}', String(actionable.length))}
+                                label={t('confirmAllAt').replace(
+                                  '{count}',
+                                  String(actionable.length),
+                                )}
                                 icon={<Ionicons name="checkmark-done" size={18} color={c.onInk} />}
                                 loading={bulkPending}
                                 disabled={heroPending !== null}
@@ -673,11 +836,17 @@ export default function TodayScreen() {
                             const isFocused =
                               typeof params.focus === 'string' &&
                               params.focus === reminderDoseKey(dose.requestId, dose.scheduledAt);
-                            const entering = firstLoadDone.current ? undefined : enter(3 + rowIndex++);
+                            const entering = firstLoadDone.current
+                              ? undefined
+                              : enter(3 + rowIndex++);
                             const plan = planByRequest.get(dose.requestId);
 
                             return (
-                              <Animated.View key={dose.id} entering={entering} layout={LinearTransition.springify().damping(24).stiffness(200)}>
+                              <Animated.View
+                                key={dose.id}
+                                entering={entering}
+                                layout={LinearTransition.springify().damping(24).stiffness(200)}
+                              >
                                 <AnimatedDoseRow
                                   dose={dose}
                                   isFirst={index === 0}
@@ -686,7 +855,13 @@ export default function TodayScreen() {
                                   stateLabel={stateLabel(dose.state)}
                                   instruction={describeInstruction(dose, t)}
                                   detail={doseDetail(dose)}
-                                  leading={<MedicationGlyph appearance={plan?.appearance} form={plan?.form} size={44} />}
+                                  leading={
+                                    <MedicationGlyph
+                                      appearance={plan?.appearance}
+                                      form={plan?.form}
+                                      size={44}
+                                    />
+                                  }
                                   onTake={() => takeAction(dose, 'taken')}
                                   onSkip={(reason) => takeAction(dose, 'skipped', reason)}
                                   skipReasons={skipReasons}
@@ -747,15 +922,30 @@ export default function TodayScreen() {
                           layout={LinearTransition}
                           style={[styles.prnCard, { borderColor: c.separator }]}
                         >
-                          <MedicationGlyph appearance={entry.plan.appearance} form={entry.plan.form} size={44} />
+                          <MedicationGlyph
+                            appearance={entry.plan.appearance}
+                            form={entry.plan.form}
+                            size={44}
+                          />
                           <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                            <Text numberOfLines={2} style={[typography.headline, { color: c.textPrimary, fontFamily: font.bold }]}>
+                            <Text
+                              numberOfLines={2}
+                              style={[
+                                typography.headline,
+                                { color: c.textPrimary, fontFamily: font.bold },
+                              ]}
+                            >
                               {entry.plan.label}
                             </Text>
                             <Text style={[typography.subhead, { color: c.textSecondary }]}>
                               {[
                                 entry.plan.strength,
-                                entry.plan.maxPerDay ? t('asNeededUpTo').replace('{count}', String(entry.plan.maxPerDay)) : undefined,
+                                entry.plan.maxPerDay
+                                  ? t('asNeededUpTo').replace(
+                                      '{count}',
+                                      String(entry.plan.maxPerDay),
+                                    )
+                                  : undefined,
                                 describeInstruction(entry.plan, t),
                               ]
                                 .filter(Boolean)
@@ -764,7 +954,13 @@ export default function TodayScreen() {
                             <Animated.Text
                               key={line}
                               entering={FadeInDown.duration(200)}
-                              style={[typography.subhead, { color: last ? c.success : c.textSecondary, fontFamily: font.semibold }]}
+                              style={[
+                                typography.subhead,
+                                {
+                                  color: last ? c.success : c.textSecondary,
+                                  fontFamily: font.semibold,
+                                },
+                              ]}
                             >
                               {entry.atMax ? t('asNeededMaxReached') : line}
                             </Animated.Text>
@@ -807,12 +1003,29 @@ export default function TodayScreen() {
 
 const styles = StyleSheet.create({
   greetingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
-  avatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   dateTitle: { marginTop: spacing(4), marginBottom: spacing(4) },
   bento: { flexDirection: 'row', gap: spacing(3) },
   bentoTile: { flex: 1, gap: spacing(1.5), padding: spacing(4) },
-  bentoStrip: { flexDirection: 'row', alignItems: 'center', gap: spacing(3.5), paddingVertical: spacing(3) },
-  bentoHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing(2), minHeight: 40 },
+  bentoStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(3.5),
+    paddingVertical: spacing(3),
+  },
+  bentoHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing(2),
+    minHeight: 40,
+  },
   metricRow: { flexDirection: 'row', alignItems: 'baseline' },
   groups: { gap: spacing(2.5) },
   group: { gap: spacing(2.5), marginBottom: spacing(2) },
@@ -845,5 +1058,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing(2.5),
   },
-  timeIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  timeIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

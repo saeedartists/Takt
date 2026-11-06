@@ -36,7 +36,8 @@ const nativeCopy = {
     channel: 'Dose reminders',
     channelSilent: 'Dose reminders (silent)',
     exactTitle: 'Get reminders on time',
-    exactMessage: 'Without this, Android can delay dose reminders by up to an hour. On the next screen, turn on "Allow setting alarms and reminders" for Takt.',
+    exactMessage:
+      'Without this, Android can delay dose reminders by up to an hour. On the next screen, turn on "Allow setting alarms and reminders" for Takt.',
     allow: 'Allow',
     deny: 'Not now',
   },
@@ -44,7 +45,8 @@ const nativeCopy = {
     channel: 'Dosis-Erinnerungen',
     channelSilent: 'Dosis-Erinnerungen (lautlos)',
     exactTitle: 'Erinnerungen pünktlich erhalten',
-    exactMessage: 'Ohne diese Einstellung kann Android Dosis-Erinnerungen bis zu einer Stunde verzögern. Aktiviere auf dem nächsten Bildschirm „Wecker und Erinnerungen erlauben“ für Takt.',
+    exactMessage:
+      'Ohne diese Einstellung kann Android Dosis-Erinnerungen bis zu einer Stunde verzögern. Aktiviere auf dem nächsten Bildschirm „Wecker und Erinnerungen erlauben“ für Takt.',
     allow: 'Erlauben',
     deny: 'Jetzt nicht',
   },
@@ -172,8 +174,16 @@ export const REMINDER_ACTION_SNOOZE = 'snooze';
 const ensureCategory = async (copy: ReminderCopy): Promise<void> => {
   if (Platform.OS === 'web' || !copy.actionTaken || !copy.actionSnooze) return;
   await Notifications.setNotificationCategoryAsync(CATEGORY_ID, [
-    { identifier: REMINDER_ACTION_TAKEN, buttonTitle: copy.actionTaken, options: { opensAppToForeground: false } },
-    { identifier: REMINDER_ACTION_SNOOZE, buttonTitle: copy.actionSnooze, options: { opensAppToForeground: false } },
+    {
+      identifier: REMINDER_ACTION_TAKEN,
+      buttonTitle: copy.actionTaken,
+      options: { opensAppToForeground: false },
+    },
+    {
+      identifier: REMINDER_ACTION_SNOOZE,
+      buttonTitle: copy.actionSnooze,
+      options: { opensAppToForeground: false },
+    },
   ]);
 };
 
@@ -205,7 +215,10 @@ const buildReminderSeeds = (
       for (const time of plan.times) {
         const triggerAt = atClockTime(day, time);
         if (triggerAt <= floor) continue;
-        const detail = [plan.strength, plan.instruction ? copy.instructionLabels?.[plan.instruction] : undefined]
+        const detail = [
+          plan.strength,
+          plan.instruction ? copy.instructionLabels?.[plan.instruction] : undefined,
+        ]
           .filter(Boolean)
           .join(', ');
         const suffix = detail ? ` (${detail})` : '';
@@ -226,7 +239,10 @@ const buildReminderSeeds = (
           kind: 'dose',
           triggerAt,
           title: copy.title,
-          body: hideNames && copy.bodyPrivate ? formatTemplate(copy.bodyPrivate, vars) : formatTemplate(copy.body, vars),
+          body:
+            hideNames && copy.bodyPrivate
+              ? formatTemplate(copy.bodyPrivate, vars)
+              : formatTemplate(copy.body, vars),
         });
         // One follow-up, never a stream (brief §11): skipped once the dose has been confirmed.
         if (followUpMinutes > 0 && copy.followUpBody && !confirmedDoseKeys.has(doseKey)) {
@@ -401,7 +417,10 @@ const canScheduleWithoutPrompt = async (): Promise<boolean> => {
     return true;
   }
 
-  const remembered = await readJson<ReminderPermissionState | null>(REMINDER_PERMISSION_STATE_KEY, null);
+  const remembered = await readJson<ReminderPermissionState | null>(
+    REMINDER_PERMISSION_STATE_KEY,
+    null,
+  );
   if (remembered && remembered.granted === false) {
     await appendDiagnosticEvent('schedule.reconcile.blocked', 'permission-denied-remembered');
     return false;
@@ -426,8 +445,16 @@ const ensureChannel = async (): Promise<void> => {
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   };
   await Notifications.deleteNotificationChannelAsync(LEGACY_CHANNEL_ID).catch(() => undefined);
-  await Notifications.setNotificationChannelAsync(CHANNEL_ID, { ...base, name: copy.channel, sound: ALARM_SOUND });
-  await Notifications.setNotificationChannelAsync(SILENT_CHANNEL_ID, { ...base, name: copy.channelSilent, sound: null });
+  await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
+    ...base,
+    name: copy.channel,
+    sound: ALARM_SOUND,
+  });
+  await Notifications.setNotificationChannelAsync(SILENT_CHANNEL_ID, {
+    ...base,
+    name: copy.channelSilent,
+    sound: null,
+  });
 };
 
 /** Android 12+: may reminders fire on time? Old builds without the native check count as yes. */
@@ -514,23 +541,42 @@ const reconcileSchedule = async (
   }
 
   const hasExactAlarm = await checkExactAlarmPermission();
-  if (!hasExactAlarm) await appendDiagnosticEvent('schedule.reconcile.warning', 'exact-alarm-denied:using-inexact-alarms');
+  if (!hasExactAlarm)
+    await appendDiagnosticEvent(
+      'schedule.reconcile.warning',
+      'exact-alarm-denied:using-inexact-alarms',
+    );
 
   await ensureChannel();
   await ensureCategory(copy);
   const prefs = await readReminderPreferences();
-  const seeds = buildReminderSeeds(plans, copy, prefs.hideNamesInReminders, prefs.followUpMinutes, confirmedDoseKeys);
+  const seeds = buildReminderSeeds(
+    plans,
+    copy,
+    prefs.hideNamesInReminders,
+    prefs.followUpMinutes,
+    confirmedDoseKeys,
+  );
 
   // iOS 26+: dose reminders also ring as AlarmKit alarms, which break through silent mode and Focus.
   // The notification for the same dose stays (Taken / Snooze buttons, history) but goes silent.
   const alarmAuth = await getAlarmAuthorization();
-  const useAlarms = Platform.OS === 'ios' && prefs.alarm && prefs.sound && alarmAuth === 'authorized';
+  const useAlarms =
+    Platform.OS === 'ios' && prefs.alarm && prefs.sound && alarmAuth === 'authorized';
   const sound = (seed: ReminderSeed): string | false =>
     prefs.sound && !(useAlarms && seed.kind === 'dose') ? ALARM_SOUND : false;
   // The exact flag is part of the key: Android keeps an alarm inexact until it is scheduled again,
   // so granting "Alarms & reminders" must re-add every pending reminder.
   const keyOf = (seed: ReminderSeed): string =>
-    [seed.kind, seed.doseKey, seed.triggerAt.toISOString(), String(sound(seed)), seed.title, seed.body, hasExactAlarm ? 'exact' : 'inexact'].join('|');
+    [
+      seed.kind,
+      seed.doseKey,
+      seed.triggerAt.toISOString(),
+      String(sound(seed)),
+      seed.title,
+      seed.body,
+      hasExactAlarm ? 'exact' : 'inexact',
+    ].join('|');
   const wanted = new Map(seeds.map((seed) => [keyOf(seed), seed]));
 
   // Diff, don't rebuild: reconciles run on every resume and data refresh, and cancelling and
@@ -543,8 +589,13 @@ const reconcileSchedule = async (
   for (const request of pending) {
     const data = request.content.data as Partial<ReminderNotificationData> | undefined;
     // The weekly summary has its own sync (syncWeeklySummaryReminder); never touch it here.
-    if ((data as { kind?: string } | undefined)?.kind === WEEKLY_SUMMARY_KIND || request.identifier === WEEKLY_SUMMARY_ID) continue;
-    const ours = storedIds.has(request.identifier) || data?.kind === 'dose' || data?.kind === 'follow-up';
+    if (
+      (data as { kind?: string } | undefined)?.kind === WEEKLY_SUMMARY_KIND ||
+      request.identifier === WEEKLY_SUMMARY_ID
+    )
+      continue;
+    const ours =
+      storedIds.has(request.identifier) || data?.kind === 'dose' || data?.kind === 'follow-up';
     if (!ours) continue; // snoozes and test reminders
     if (data?.key && wanted.has(data.key)) {
       wanted.delete(data.key);
@@ -553,7 +604,9 @@ const reconcileSchedule = async (
       stale.push(request.identifier);
     }
   }
-  await Promise.all(stale.map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => undefined)));
+  await Promise.all(
+    stale.map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => undefined)),
+  );
   await appendDiagnosticEvent('schedule.cancelled', `count:${stale.length.toString()}`);
 
   for (const [key, seed] of wanted) {
@@ -592,10 +645,16 @@ const reconcileSchedule = async (
     appendDiagnosticEvent('alarms.unavailable', `error:${String(error)}`),
   );
   if (Platform.OS === 'ios' && !useAlarms) {
-    await appendDiagnosticEvent('alarms.unavailable', `auth:${alarmAuth} alarm:${String(prefs.alarm)} sound:${String(prefs.sound)}`);
+    await appendDiagnosticEvent(
+      'alarms.unavailable',
+      `auth:${alarmAuth} alarm:${String(prefs.alarm)} sound:${String(prefs.sound)}`,
+    );
   }
 
-  await appendDiagnosticEvent('schedule.reconcile.done', `scheduled:${nextIds.length.toString()} new:${wanted.size.toString()}`);
+  await appendDiagnosticEvent(
+    'schedule.reconcile.done',
+    `scheduled:${nextIds.length.toString()} new:${wanted.size.toString()}`,
+  );
 };
 
 /** Same diff for AlarmKit: keep alarms whose dose, time and title are unchanged. One week ahead. */
@@ -606,7 +665,10 @@ const reconcileAlarms = async (seeds: ReminderSeed[], copy: ReminderCopy): Promi
   const wanted = new Map(
     seeds
       .filter((seed) => seed.kind === 'dose' && seed.triggerAt.getTime() <= horizon)
-      .map((seed) => [[seed.doseKey, seed.triggerAt.toISOString(), seed.alarmTitle].join('|'), seed]),
+      .map((seed) => [
+        [seed.doseKey, seed.triggerAt.toISOString(), seed.alarmTitle].join('|'),
+        seed,
+      ]),
   );
   const stored = await readJson<Record<string, string>>(ALARM_IDS_KEY, {});
   const live = new Set(await listAlarms());
@@ -630,7 +692,11 @@ const reconcileAlarms = async (seeds: ReminderSeed[], copy: ReminderCopy): Promi
     if (id) next[key] = id;
   }
   await writeJson(ALARM_IDS_KEY, next);
-  if (seeds.length) await appendDiagnosticEvent('alarms.scheduled', `count:${Object.keys(next).length.toString()} new:${wanted.size.toString()}`);
+  if (seeds.length)
+    await appendDiagnosticEvent(
+      'alarms.scheduled',
+      `count:${Object.keys(next).length.toString()} new:${wanted.size.toString()}`,
+    );
 };
 
 /** Ask once for AlarmKit access (iOS 26+); a no-op when unavailable or already decided. */
@@ -695,10 +761,18 @@ export const scheduleSnoozeReminder = async (
     },
   });
 
-  if (Platform.OS === 'ios' && prefs.alarm && prefs.sound && alarmsAvailable() && (await getAlarmAuthorization()) === 'authorized') {
+  if (
+    Platform.OS === 'ios' &&
+    prefs.alarm &&
+    prefs.sound &&
+    alarmsAvailable() &&
+    (await getAlarmAuthorization()) === 'authorized'
+  ) {
     await scheduleAlarm({
       epochSeconds: Date.now() / 1000 + delayMinutes * 60,
-      title: prefs.hideNamesInReminders ? (copy?.alarmTitlePrivate ?? copy?.title ?? 'Takt') : input.label,
+      title: prefs.hideNamesInReminders
+        ? (copy?.alarmTitlePrivate ?? copy?.title ?? 'Takt')
+        : input.label,
       stopLabel: copy?.alarmStop ?? 'Done',
       openLabel: copy?.alarmOpen ?? 'Open',
       soundName: ALARM_SOUND,
@@ -725,7 +799,11 @@ export const handleBootComplete = async (): Promise<void> => {
 };
 
 /** Dose keys (`requestId|YYYY-MM-DD|HH:MM`) that already have a taken/skipped record; their follow-ups are not scheduled. */
-export const useReminderSync = (plans: MedicationPlan[], enabled: boolean, confirmedDoseKeys: string[] = []): void => {
+export const useReminderSync = (
+  plans: MedicationPlan[],
+  enabled: boolean,
+  confirmedDoseKeys: string[] = [],
+): void => {
   const { t } = useLocale();
   const prefs = useReminderPreferences();
   const signature = useMemo(
@@ -790,7 +868,16 @@ export const useReminderSync = (plans: MedicationPlan[], enabled: boolean, confi
       new Set(confirmedSignature ? confirmedSignature.split(',') : []),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, signature, t, prefs.data?.sound, prefs.data?.hideNamesInReminders, prefs.data?.followUpMinutes, prefs.data?.alarm, confirmedSignature]);
+  }, [
+    enabled,
+    signature,
+    t,
+    prefs.data?.sound,
+    prefs.data?.hideNamesInReminders,
+    prefs.data?.followUpMinutes,
+    prefs.data?.alarm,
+    confirmedSignature,
+  ]);
 
   useEffect(() => {
     void sync();
@@ -833,13 +920,19 @@ export type WeeklySummaryCopy = {
  * `hideNamesInReminders` needs no special case. Quiet: the system default sound (or none
  * when reminder sound is off), never the alarm sound, never AlarmKit.
  */
-export const syncWeeklySummaryReminder = async (enabled: boolean, copy: WeeklySummaryCopy): Promise<void> => {
+export const syncWeeklySummaryReminder = async (
+  enabled: boolean,
+  copy: WeeklySummaryCopy,
+): Promise<void> => {
   // ponytail: expo-notifications has no web scheduler
   if (Platform.OS === 'web') return;
   const pending = await Notifications.getAllScheduledNotificationsAsync().catch(() => []);
   const existing = pending.find((request) => request.identifier === WEEKLY_SUMMARY_ID);
   if (!enabled) {
-    if (existing) await Notifications.cancelScheduledNotificationAsync(WEEKLY_SUMMARY_ID).catch(() => undefined);
+    if (existing)
+      await Notifications.cancelScheduledNotificationAsync(WEEKLY_SUMMARY_ID).catch(
+        () => undefined,
+      );
     return;
   }
   const prefs = await readReminderPreferences();
@@ -911,7 +1004,8 @@ const parseReminderNavigation = (
   if (!data) return null;
   if (data.route !== '/(tabs)/today') return null;
 
-  const str = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
+  const str = (value: unknown): string | undefined =>
+    typeof value === 'string' ? value : undefined;
   return {
     route: '/(tabs)/today',
     doseKey: str(data.doseKey),
@@ -940,7 +1034,10 @@ export type ReminderActionHandlers = {
  * Routes reminder taps to Today and dispatches lock-screen actions.
  * Handlers are read through a ref so callers may pass fresh closures.
  */
-export const useReminderResponseRouting = (router: ReminderRouter, handlers?: ReminderActionHandlers): void => {
+export const useReminderResponseRouting = (
+  router: ReminderRouter,
+  handlers?: ReminderActionHandlers,
+): void => {
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
   // A response is handled once; the focus-time "last response" check must not replay an action.
@@ -949,7 +1046,9 @@ export const useReminderResponseRouting = (router: ReminderRouter, handlers?: Re
   const handle = useCallback(
     (response: Notifications.NotificationResponse, navigate: 'push' | 'replace') => {
       const id = `${response.notification.request.identifier}|${response.actionIdentifier}`;
-      const route = (response.notification.request.content.data as Record<string, unknown> | undefined)?.route;
+      const route = (
+        response.notification.request.content.data as Record<string, unknown> | undefined
+      )?.route;
       const direct = DIRECT_ROUTES.find((r) => r === route);
       if (direct) {
         if (handled.current.has(id)) return;
@@ -991,7 +1090,9 @@ export const useReminderResponseRouting = (router: ReminderRouter, handlers?: Re
       handlersRef.current?.onReceived?.(target);
     });
 
-    const responseSub = Notifications.addNotificationResponseReceivedListener((response) => handle(response, 'push'));
+    const responseSub = Notifications.addNotificationResponseReceivedListener((response) =>
+      handle(response, 'push'),
+    );
 
     return () => {
       receivedSub.remove();
@@ -1039,3 +1140,11 @@ export const useReminderDiagnostics = (limit = 20) => {
 };
 
 export const reminderDoseKey = buildDoseKey;
+
+/** Sign-out / user switch: no reminder naming the previous user's medicines may fire. */
+export const cancelAllReminders = async (): Promise<void> => {
+  await Notifications.cancelAllScheduledNotificationsAsync().catch(() => undefined);
+  if (!alarmsAvailable()) return;
+  const live = await listAlarms().catch(() => [] as string[]);
+  await Promise.all(live.map((id) => cancelAlarm(id).catch(() => undefined)));
+};

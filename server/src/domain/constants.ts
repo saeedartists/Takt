@@ -18,6 +18,12 @@ export const TAKT_EXT = {
   intakeInstruction: 'https://actimi.com/fhir/takt/intake-instruction',
   appearance: 'https://actimi.com/fhir/takt/appearance',
   patientTimezone: 'https://actimi.com/fhir/takt/patient-timezone',
+  /** S-04 (app): complex { count, at } on the MedicationRequest. Mirrors src/lib/takt/constants.ts. */
+  supplyAnchor: 'https://actimi.com/fhir/takt/supply-anchor',
+  /** S-08: one complex { start, end? } per pause; supersedes the pause-history JSON string. */
+  pausePeriod: 'https://actimi.com/fhir/takt/pause-period',
+  /** S-08: complex { shape (code), color } on the Medication; supersedes the appearance JSON string. */
+  medicationAppearance: 'https://actimi.com/fhir/takt/medication-appearance',
 } as const;
 
 export const FAMILY_SHARE_POLICY = 'takt-family-sharing-v1';
@@ -31,7 +37,8 @@ export const PATIENT_SCOPE_SYSTEM = 'https://actimi.com/fhir/takt/patient-scope'
 export const EXPO_PUSH_TOKEN_SYSTEM = 'https://actimi.com/fhir/takt/push/expo';
 
 export const FAMILY_SHARE_PUSH_IDENTIFIER_SYSTEM = 'https://actimi.com/fhir/takt/family-share/push';
-export const FAMILY_SHARE_CLAIM_IDENTIFIER_SYSTEM = 'https://actimi.com/fhir/takt/family-share/claim';
+export const FAMILY_SHARE_CLAIM_IDENTIFIER_SYSTEM =
+  'https://actimi.com/fhir/takt/family-share/claim';
 
 export const FAMILY_SHARE_PUSH_CHANNEL_ID = 'family-share';
 
@@ -39,4 +46,8 @@ export const DEFAULT_QUIET_HOURS_START = 21;
 
 export const DEFAULT_QUIET_HOURS_END = 8;
 
-export const FAMILY_SHARE_BLOCKED_CAPABILITIES = ['edit-regimen', 'view-diary', 'export-doctor-report'] as const;
+export const FAMILY_SHARE_BLOCKED_CAPABILITIES = [
+  'edit-regimen',
+  'view-diary',
+  'export-doctor-report',
+] as const;

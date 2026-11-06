@@ -410,12 +410,12 @@ server/src/
 | Question | Answer |
 |---|---|
 | Who owns the dose record? | The patient's Ovok tenant; written by the app as `MedicationAdministration`. |
-| Who owns supply counts? | The device. AsyncStorage only. Never synced, never on Ovok. |
+| Who owns supply counts? | Ovok. The MedicationRequest holds a `takt/supply-anchor` `{count, at}` written on set/refill; remaining = count − completed doses since. AsyncStorage keeps a synced cache plus nudge state (S-04). |
 | Who owns consent? | Stored as FHIR `Consent` on Ovok, plus a device-local ask-once flag. |
 | Who owns family links? | `RelatedPerson` + `Consent` on Ovok, validated by server bots. |
 | Can another device see my doses? | Yes — same patient, same Ovok tenant, refreshed on foreground via `focusManager`. |
 | Can a relative see my doses? | Only if an active family-share `Consent` exists and the bots validate it. |
-| What happens on undo? | DELETE the `MedicationAdministration` from Ovok; refund supply locally. Undo is the mirror of record. |
+| What happens on undo? | DELETE the `MedicationAdministration` from Ovok; the derived supply count comes back by itself (local cache refunded immediately). |
 
 ---
 

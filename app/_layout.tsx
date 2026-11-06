@@ -161,6 +161,27 @@ export default function RootLayout() {
     if (ready) void SplashScreen.hideAsync().catch(() => undefined);
   }, [ready]);
 
+  // Global safety net for unhandled promise rejections / runtime errors outside
+  // React's component tree (e.g. fire-and-forget void calls).
+  useEffect(() => {
+    const handler = (error: unknown) => {
+      captureError('global', error instanceof Error ? error : new Error(String(error)));
+    };
+    const ErrorUtilsAny = (global as { ErrorUtils?: { setGlobalHandler?: (h: (e: unknown) => void) => void } }).ErrorUtils;
+    ErrorUtilsAny?.setGlobalHandler?.(handler);
+    const onUnhandled = (event: PromiseRejectionEvent) => {
+      captureError('global', event.reason instanceof Error ? event.reason : new Error(String(event.reason)));
+    };
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('unhandledrejection', onUnhandled);
+    }
+    return () => {
+      if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+        window.removeEventListener('unhandledrejection', onUnhandled);
+      }
+    };
+  }, []);
+
   // A font failure falls back to system type rather than blocking the app.
   if (!ready) return null;
 

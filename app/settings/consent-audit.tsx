@@ -59,6 +59,9 @@ export default function ConsentAuditScreen() {
 
     const latestActive = active[0]?.dateTime ? new Date(active[0].dateTime) : null;
     const latestInactive = inactive[0]?.dateTime ? new Date(inactive[0].dateTime) : null;
+    // dateTime is the device clock; meta.lastUpdated is the server's own stamp (trusted audit time).
+    const savedAt = (row?: (typeof rows)[number]) =>
+      row?.meta?.lastUpdated ? new Date(row.meta.lastUpdated) : null;
 
     return {
       total: rows.length,
@@ -66,13 +69,16 @@ export default function ConsentAuditScreen() {
       inactiveCount: inactive.length,
       latestActive,
       latestInactive,
+      latestActiveSavedAt: savedAt(active[0]),
+      latestInactiveSavedAt: savedAt(inactive[0]),
       traceable: active.length > 0 && inactive.length > 0,
     };
   }, [consents.data?.entry]);
 
   const allChecksDone = audit.done === audit.total;
   const verdictPass = audit.data.verdict === 'pass' || audit.data.verdict === 'minor-edits';
-  const releasePass = allChecksDone && audit.metadataComplete && verdictPass && consentStats.traceable;
+  const releasePass =
+    allChecksDone && audit.metadataComplete && verdictPass && consentStats.traceable;
 
   useEffect(() => {
     if (readiness.isLoading) return;
@@ -90,11 +96,29 @@ export default function ConsentAuditScreen() {
             <LoadingState label={t('consentAuditLoading')} />
           ) : (
             <ListGroup>
-              <ListRow isFirst title={t('consentAuditTotalEvents')} value={consentStats.total.toString()} />
-              <ListRow title={t('consentAuditGrantEvents')} value={consentStats.activeCount.toString()} />
-              <ListRow title={t('consentAuditWithdrawEvents')} value={consentStats.inactiveCount.toString()} />
+              <ListRow
+                isFirst
+                title={t('consentAuditTotalEvents')}
+                value={consentStats.total.toString()}
+              />
+              <ListRow
+                title={t('consentAuditGrantEvents')}
+                value={consentStats.activeCount.toString()}
+              />
+              <ListRow
+                title={t('consentAuditWithdrawEvents')}
+                value={consentStats.inactiveCount.toString()}
+              />
               <ListRow
                 title={t('consentAuditLatestGrant')}
+                subtitle={
+                  consentStats.latestActiveSavedAt
+                    ? t('consentAuditRecordedAt').replace(
+                        '{date}',
+                        formatDateTime(consentStats.latestActiveSavedAt),
+                      )
+                    : undefined
+                }
                 value={
                   consentStats.latestActive
                     ? formatDateTime(consentStats.latestActive)
@@ -103,6 +127,14 @@ export default function ConsentAuditScreen() {
               />
               <ListRow
                 title={t('consentAuditLatestWithdraw')}
+                subtitle={
+                  consentStats.latestInactiveSavedAt
+                    ? t('consentAuditRecordedAt').replace(
+                        '{date}',
+                        formatDateTime(consentStats.latestInactiveSavedAt),
+                      )
+                    : undefined
+                }
                 value={
                   consentStats.latestInactive
                     ? formatDateTime(consentStats.latestInactive)
@@ -126,7 +158,9 @@ export default function ConsentAuditScreen() {
           <SectionHeader title={t('consentAuditVerdict')} />
           <AnimatedSegmentedControl
             value={audit.data.verdict}
-            onChange={(next) => void audit.setVerdict(next as 'pending' | 'pass' | 'minor-edits' | 'fail')}
+            onChange={(next) =>
+              void audit.setVerdict(next as 'pending' | 'pass' | 'minor-edits' | 'fail')
+            }
             options={[
               { value: 'pending', label: t('reportReviewVerdictPending') },
               { value: 'pass', label: t('reportReviewVerdictPass') },
@@ -140,8 +174,16 @@ export default function ConsentAuditScreen() {
           <SectionHeader title={t('consentAuditChecklist')} />
           <Card style={{ marginBottom: spacing(3) }}>
             <View style={{ padding: spacing(4), gap: spacing(2.5) }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={[typography.headline, { color: c.textPrimary }]}>{t('consentAuditChecklist')}</Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={[typography.headline, { color: c.textPrimary }]}>
+                  {t('consentAuditChecklist')}
+                </Text>
                 <Text style={[typography.subhead, { color: c.accent, fontFamily: font.bold }]}>
                   {audit.completionPct}%
                 </Text>
@@ -219,7 +261,11 @@ export default function ConsentAuditScreen() {
           label={releasePass ? t('consentAuditGatePass') : t('consentAuditGateBlocked')}
         />
 
-        {consents.error ? <Text style={[typography.footnote, { color: c.destructive }]}>{t('consentAuditLoadError')}</Text> : null}
+        {consents.error ? (
+          <Text style={[typography.footnote, { color: c.destructive }]}>
+            {t('consentAuditLoadError')}
+          </Text>
+        ) : null}
 
         <Button
           kind="secondary"

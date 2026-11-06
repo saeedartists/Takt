@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { Button, Field, Input, PageShell, spacing } from '@/components/ui';
 import { ovokClient } from '@/lib/ovok-client';
+import { MIN_PASSWORD_LENGTH } from '@/lib/takt/constants';
 import { mapAuthError } from '@/lib/takt/auth-errors';
 import { useLocale } from '@/lib/takt/l10n';
 import { AuthBanner, AuthBlock, AuthHero, AuthLinkRow } from './auth-shared';
@@ -30,13 +31,13 @@ export default function ResetCompleteScreen() {
   const [done, setDone] = useState(false);
 
   const passwordError =
-    submitted && password.length < 8 ? t('authPasswordTooShort') : null;
-  const mismatchError = submitted && password.length >= 8 && password !== confirm ? t('authPasswordMismatch') : null;
+    submitted && password.length < MIN_PASSWORD_LENGTH ? t('authPasswordTooShort') : null;
+  const mismatchError = submitted && password.length >= MIN_PASSWORD_LENGTH && password !== confirm ? t('authPasswordMismatch') : null;
 
   const submit = async () => {
     setSubmitted(true);
     setErrorText(null);
-    if (!linkValid || password.length < 8 || password !== confirm) return;
+    if (!linkValid || password.length < MIN_PASSWORD_LENGTH || password !== confirm) return;
 
     setBusy(true);
     try {
